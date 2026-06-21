@@ -1,0 +1,33 @@
+# Root
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+
+# Next.js build output
+.next/
+web/.next/
+out/
+
+# Supabase
+supabase/.temp/
+
+# AI tools
+.aider*
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Vim swap files
+*.swp
+*.swo
+
+# Node
+node_modules/
+
+# Google service account (secrets)
+google-play-service-account.json

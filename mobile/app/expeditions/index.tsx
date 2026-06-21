@@ -1,0 +1,297 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useExpeditionStore } from '@/stores/expeditionStore';
+import ExpeditionCard from '@/components/ExpeditionCard';
+
+const DIFFICULTY_FILTERS = [
+  { label: 'All', value: null },
+  { label: 'Easy', value: 'easy' },
+  { label: 'Moderate', value: 'moderate' },
+  { label: 'Challenging', value: 'challenging' },
+  { label: 'Expert', value: 'expert' },
+];
+
+export default function BrowseExpeditionsScreen() {
+  const { expeditions, loading, error, fetchExpeditions, setFilters, filters } =
+    useExpeditionStore();
+  const [activeDifficulty, setActiveDifficulty] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchExpeditions();
+  }, []);
+
+  const handleDifficultyFilter = (value: string | null) => {
+    setActiveDifficulty(value);
+    setFilters({ ...filters, difficulty: value ?? undefined });
+  };
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchExpeditions();
+    setRefreshing(false);
+  }, [fetchExpeditions]);
+
+  return (
+    <View style={styles.container}>
+      {/* Header gradient */}
+      <LinearGradient
+        colors={['#8CC63F', '#080C14']}
+        style={styles.headerGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 0.35 }}
+      />
+
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Expeditions</Text>
+            <Text style={styles.headerSubtitle}>Join guided group adventures</Text>
+          </View>
+          <View style={{ width: 44 }} />
+        </View>
+
+        {/* Difficulty Filter Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersScroll}
+          style={styles.filtersContainer}
+        >
+          {DIFFICULTY_FILTERS.map((filter) => {
+            const isActive = activeDifficulty === filter.value;
+            return (
+              <TouchableOpacity
+                key={filter.label}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => handleDifficultyFilter(filter.value)}
+              >
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                  {filter.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Content */}
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#8CC63F" />
+            <Text style={styles.loadingText}>Finding expeditions...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={56} color="rgba(255,255,255,0.15)" />
+            <Text style={styles.errorText}>Failed to load expeditions</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => fetchExpeditions()}>
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor="#8CC63F"
+              />
+            }
+          >
+            {expeditions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="map-outline" size={72} color="rgba(255,255,255,0.07)" />
+                <Text style={styles.emptyTitle}>No expeditions found</Text>
+                <Text style={styles.emptySubtitle}>
+                  {activeDifficulty
+                    ? `No ${activeDifficulty} expeditions available right now.`
+                    : 'Check back soon — new adventures are added regularly!'}
+                </Text>
+                {activeDifficulty && (
+                  <TouchableOpacity
+                    style={styles.clearFilterBtn}
+                    onPress={() => handleDifficultyFilter(null)}
+                  >
+                    <Text style={styles.clearFilterBtnText}>Clear Filter</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View style={styles.cardList}>
+                {expeditions.map((expedition) => (
+                  <ExpeditionCard key={expedition.id} expedition={expedition} onPress={() => router.push(`/expeditions/${expedition.id}` as any)} />
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#080C14',
+  },
+  headerGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  filtersContainer: {
+    maxHeight: 52,
+    marginBottom: 8,
+  },
+  filtersScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  filterChipActive: {
+    backgroundColor: '#8CC63F',
+    borderColor: '#8CC63F',
+  },
+  filterChipText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+    fontWeight: '700',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+  },
+  loadingText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 14,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+  },
+  errorText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 15,
+  },
+  retryBtn: {
+    backgroundColor: '#8CC63F',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  retryBtnText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  cardList: {
+    gap: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+    gap: 12,
+  },
+  emptyTitle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 20,
+  },
+  clearFilterBtn: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#8CC63F',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  clearFilterBtnText: {
+    color: '#8CC63F',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+});

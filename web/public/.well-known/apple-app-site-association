@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.trekriderz.app",
+        "paths": ["/trip/*", "/post/*", "/user/*"]
+      }
+    ]
+  }
+}

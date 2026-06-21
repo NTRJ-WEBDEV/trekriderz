@@ -113,13 +113,13 @@ export default function CommunityDetailScreen() {
     }
     // Notify owner
     if (community?.created_by) {
-      await supabase.from('notifications').insert({
+      supabase.from('notifications').insert({
         user_id: community.created_by,
         type: 'community_join_request',
         title: 'New Join Request',
         message: `${user?.user_metadata?.full_name || 'Someone'} wants to join "${community.name}"`,
         data: { community_id: id },
-      }).throwOnError().catch(() => {});
+      });
     }
     Alert.alert('Request Sent', 'The community owner will review your request.');
   };

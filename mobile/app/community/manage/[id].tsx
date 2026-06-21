@@ -47,8 +47,8 @@ export default function CommunityManageScreen() {
       ]);
 
       setCommunity(comm);
-      setRequests((allMembers || []).filter((m: any) => m.status === 'pending') as MemberRow[]);
-      setMembers((allMembers || []).filter((m: any) => m.status === 'approved') as MemberRow[]);
+      setRequests((allMembers || []).filter((m: any) => m.status === 'pending') as unknown as MemberRow[]);
+      setMembers((allMembers || []).filter((m: any) => m.status === 'approved') as unknown as MemberRow[]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -69,16 +69,16 @@ export default function CommunityManageScreen() {
         .eq('user_id', memberId);
 
       // Increment member count
-      await supabase.rpc('increment_community_members', { community_id: id }).catch(() => {});
+      supabase.rpc('increment_community_members', { community_id: id });
 
       // Notify the user they were approved
-      await supabase.from('notifications').insert({
+      supabase.from('notifications').insert({
         user_id: memberId,
         type: 'community_approved',
         title: 'Request Approved! 🎉',
         message: `You're now a member of "${community?.name}"`,
         data: { community_id: id },
-      }).throwOnError().catch(() => {});
+      });
     } catch {
       // Revert
       fetchData();
@@ -95,13 +95,13 @@ export default function CommunityManageScreen() {
         .eq('community_id', id)
         .eq('user_id', memberId);
 
-      await supabase.from('notifications').insert({
+      supabase.from('notifications').insert({
         user_id: memberId,
         type: 'community_rejected',
         title: 'Join Request Declined',
         message: `Your request to join "${community?.name}" was not approved.`,
         data: { community_id: id },
-      }).throwOnError().catch(() => {});
+      });
     } catch {
       fetchData();
     }

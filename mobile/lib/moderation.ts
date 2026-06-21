@@ -95,7 +95,7 @@ async function applyStrike(
     resource_type: type,
     violation_type: violation,
     severity: priorStrikes >= 2 ? 'high' : 'medium',
-  }).throwOnError().catch(() => {});
+  });
 
   // 3rd strike → flag account for admin review
   if (priorStrikes >= 2) {
@@ -104,8 +104,7 @@ async function applyStrike(
         is_flagged: true,
         flag_reason: `Repeated violations (${violation}) — pending admin review`,
       })
-      .eq('id', userId)
-      .throwOnError().catch(() => {});
+      .eq('id', userId);
   }
 
   return { strikes: priorStrikes + 1 };
@@ -119,7 +118,7 @@ async function checkImageWithAI(localUri: string): Promise<{ safe: boolean; reas
   try {
     // Read image as base64
     const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64' as any,
     });
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {

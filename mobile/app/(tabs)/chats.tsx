@@ -50,7 +50,8 @@ export default function ChatsScreen() {
       const convos: Conversation[] = [];
 
       for (const msg of (data || [])) {
-        const partner = msg.sender_id === user.id ? msg.receiver : msg.sender;
+        const partnerRaw = msg.sender_id === user.id ? msg.receiver : msg.sender;
+        const partner = (Array.isArray(partnerRaw) ? partnerRaw[0] : partnerRaw) as any;
         if (!partner || seen.has(partner.id)) continue;
         seen.add(partner.id);
 

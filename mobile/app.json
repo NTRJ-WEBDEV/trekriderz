@@ -72,7 +72,15 @@
     "plugins": [
       "expo-router",
       "expo-location",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.1.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -82,9 +90,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "a9d50042-5001-4ae1-bc30-64371685b157"
+        "projectId": "946b44e9-cee5-4d14-93c3-0492cbb2dd9f"
       }
     },
-    "owner": "natrajriderz"
+    "owner": "ntrj_webdev"
   }
 }

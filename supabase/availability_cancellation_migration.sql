@@ -35,7 +35,7 @@ ALTER TABLE homestay_availability ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Owners manage own homestay availability"
   ON homestay_availability FOR ALL
   USING (
-    homestay_id IN (SELECT id FROM homestays WHERE user_id = auth.uid())
+    homestay_id IN (SELECT id FROM homestays WHERE owner_id = auth.uid())
   );
 
 CREATE POLICY "Anyone can read homestay availability"

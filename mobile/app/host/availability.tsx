@@ -35,7 +35,7 @@ export default function HostAvailabilityScreen() {
       const { data: homestay } = await supabase
         .from('homestays')
         .select('id, name, cancellation_policy')
-        .eq('user_id', user.id)
+        .eq('owner_id', user.id)
         .single();
 
       if (!homestay) { Alert.alert('No property found', 'Register a homestay first.'); router.back(); return; }

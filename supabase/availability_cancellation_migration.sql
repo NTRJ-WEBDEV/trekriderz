@@ -1,3 +1,14 @@
+-- Rename bookings.type → resource_type to match app code (safe no-op if already renamed)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'bookings' AND column_name = 'type'
+  ) THEN
+    ALTER TABLE bookings RENAME COLUMN "type" TO resource_type;
+  END IF;
+END $$;
+
 -- Guide Availability
 CREATE TABLE IF NOT EXISTS guide_availability (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -62,7 +73,6 @@ ALTER TABLE bookings
 -- Function: get blocked dates for a guide (booked + owner-blocked)
 CREATE OR REPLACE FUNCTION get_guide_blocked_dates(p_guide_id UUID)
 RETURNS TABLE(date DATE, reason TEXT) AS $$
-  -- Confirmed bookings
   SELECT generate_series(b.start_date::DATE, b.end_date::DATE - 1, '1 day'::INTERVAL)::DATE AS date,
          'booked' AS reason
   FROM bookings b
@@ -70,7 +80,6 @@ RETURNS TABLE(date DATE, reason TEXT) AS $$
     AND b.resource_type = 'guide'
     AND b.status IN ('pending', 'confirmed')
   UNION
-  -- Owner-blocked dates
   SELECT ga.date, 'unavailable' AS reason
   FROM guide_availability ga
   WHERE ga.guide_id = p_guide_id

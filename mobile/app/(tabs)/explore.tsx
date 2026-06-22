@@ -211,7 +211,7 @@ export default function ExploreScreen() {
   };
 
   const { user } = useAuthStore();
-  const [posts, setPosts] = useState<any[]>(MOCK_POSTS);
+  const [posts, setPosts] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchPosts = useCallback(async () => {
@@ -279,7 +279,7 @@ export default function ExploreScreen() {
           showsHorizontalScrollIndicator={false}
           data={[
             { id: 'add', name: 'Your Story', isAdd: true },
-            ...MOCK_POSTS.map((p) => ({ id: p.id, name: p.user.name, avatar: p.user.avatar, isAdd: false })),
+            ...posts.map((p: any) => ({ id: p.id, name: p.user?.name, avatar: p.user?.avatar, isAdd: false })),
           ]}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.storiesList}

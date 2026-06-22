@@ -10,6 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { fetchWeatherByCoords } from '@/lib/weather';
+import * as Location from 'expo-location';
 
 interface WeatherWidgetProps {
   location: string;
@@ -80,12 +82,36 @@ export default function WeatherWidget({ location }: WeatherWidgetProps) {
           isUserReport: true,
         });
       } else {
-        setWeather({ ...MOCK_WEATHER, location });
+        await fetchLiveWeather();
       }
     } catch (e) {
-      setWeather({ ...MOCK_WEATHER, location });
+      await fetchLiveWeather();
     }
     setLoading(false);
+  };
+
+  const fetchLiveWeather = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setWeather({ ...MOCK_WEATHER, location }); return; }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+      const live = await fetchWeatherByCoords(loc.coords.latitude, loc.coords.longitude);
+      if (live) {
+        setWeather({
+          temp: live.currentTemp,
+          condition: live.condition,
+          icon: live.icon,
+          humidity: live.humidity,
+          wind: live.wind,
+          forecast: live.forecast,
+          isUserReport: false,
+        });
+      } else {
+        setWeather({ ...MOCK_WEATHER, location });
+      }
+    } catch {
+      setWeather({ ...MOCK_WEATHER, location });
+    }
   };
 
   const submitReport = async (condition: string) => {

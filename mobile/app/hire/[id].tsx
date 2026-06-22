@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { Calendar } from 'react-native-calendars';
 
+const TODAY = new Date().toISOString().split('T')[0];
+
 export default function HireGuideScreen() {
   const { id, name, price, type } = useLocalSearchParams<{
     id: string;
@@ -30,8 +32,43 @@ export default function HireGuideScreen() {
   const [guests, setGuests] = useState(1);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+  const [cancellationPolicy, setCancellationPolicy] = useState('moderate');
+
+  useEffect(() => {
+    if (!id) return;
+    const loadBlocked = async () => {
+      const [{ data: avail }, { data: bookings }, { data: guide }] = await Promise.all([
+        supabase.from('guide_availability').select('date').eq('guide_id', id).eq('is_available', false),
+        supabase.from('bookings').select('start_date, end_date')
+          .eq('resource_id', id).eq('resource_type', 'guide').in('status', ['pending', 'confirmed']),
+        supabase.from('guides').select('cancellation_policy').eq('id', id).single(),
+      ]);
+      const blocked = new Set<string>();
+      (avail || []).forEach((r: any) => blocked.add(r.date));
+      (bookings || []).forEach((b: any) => {
+        const d = new Date(b.start_date);
+        const end = new Date(b.end_date);
+        while (d < end) { blocked.add(d.toISOString().split('T')[0]); d.setDate(d.getDate() + 1); }
+      });
+      setBlockedDates(blocked);
+      if (guide?.cancellation_policy) setCancellationPolicy(guide.cancellation_policy);
+    };
+    loadBlocked();
+  }, [id]);
+
+  const blockedMarks = useMemo(() => {
+    const marks: { [key: string]: any } = {};
+    blockedDates.forEach(d => {
+      marks[d] = { disabled: true, disableTouchEvent: true, color: 'rgba(239,68,68,0.25)', textColor: '#EF4444' };
+    });
+    return marks;
+  }, [blockedDates]);
+
+  const markedDates = useMemo(() => ({ ...blockedMarks, ...selectedDates }), [blockedMarks, selectedDates]);
 
   const onDayPress = (day: { dateString: string }) => {
+    if (blockedDates.has(day.dateString)) return;
     if (!startDate || (startDate && endDate)) {
       setStartDate(day.dateString);
       setEndDate(null);
@@ -46,11 +83,23 @@ export default function HireGuideScreen() {
           [day.dateString]: { startingDay: true, color: '#8CC63F', textColor: 'white' },
         });
       } else {
+        // Reject range if it crosses blocked dates
+        const rangeBlocked = [];
+        let cur = new Date(startDate);
+        const last = new Date(day.dateString);
+        while (cur <= last) {
+          const ds = cur.toISOString().split('T')[0];
+          if (blockedDates.has(ds)) { rangeBlocked.push(ds); }
+          cur.setDate(cur.getDate() + 1);
+        }
+        if (rangeBlocked.length > 0) {
+          Alert.alert('Dates Unavailable', 'Your selected range includes blocked or booked dates. Please choose different dates.');
+          return;
+        }
         setEndDate(day.dateString);
         const range: { [key: string]: any } = {};
         let currentDate = new Date(startDate);
-        const lastDate = new Date(day.dateString);
-        while (currentDate <= lastDate) {
+        while (currentDate <= last) {
           const dateStr = currentDate.toISOString().split('T')[0];
           if (dateStr === startDate) {
             range[dateStr] = { startingDay: true, color: '#8CC63F', textColor: 'white' };
@@ -164,7 +213,7 @@ export default function HireGuideScreen() {
           <View style={styles.calendarWrap}>
             <Calendar
               onDayPress={onDayPress}
-              markedDates={selectedDates}
+              markedDates={markedDates}
               markingType="period"
               theme={{
                 backgroundColor: 'transparent',
@@ -179,8 +228,26 @@ export default function HireGuideScreen() {
                 monthTextColor: '#FFF',
                 arrowColor: '#8CC63F',
               }}
-              minDate={new Date().toISOString().split('T')[0]}
+              minDate={TODAY}
             />
+          </View>
+          <View style={styles.calendarLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#8CC63F' }]} />
+              <Text style={styles.legendText}>Selected</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+              <Text style={styles.legendText}>Unavailable</Text>
+            </View>
+          </View>
+          <View style={styles.policyNote}>
+            <Ionicons name="shield-checkmark-outline" size={14} color="#8CC63F" />
+            <Text style={styles.policyNoteText}>
+              {cancellationPolicy === 'flexible' ? 'Free cancellation up to 24h before start'
+                : cancellationPolicy === 'moderate' ? 'Free cancellation up to 48h before start'
+                : 'Non-refundable after booking'}
+            </Text>
           </View>
         </View>
 
@@ -498,5 +565,41 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  calendarLegend: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingHorizontal: 4,
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+  },
+  policyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: 'rgba(140,198,63,0.08)',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(140,198,63,0.2)',
+  },
+  policyNoteText: {
+    color: '#8CC63F',
+    fontSize: 12,
+    flex: 1,
   },
 });

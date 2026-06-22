@@ -98,27 +98,69 @@ export default function BookingDetailsScreen() {
     }
   };
 
+  const getCancellationWindow = (policy: string) => {
+    if (policy === 'flexible') return 24;
+    if (policy === 'strict') return null;
+    return 48;
+  };
+
+  const canCancelFree = (policy: string, startDate: string): { allowed: boolean; message: string } => {
+    const hoursWindow = getCancellationWindow(policy);
+    if (!hoursWindow) return { allowed: false, message: 'This booking is non-refundable.' };
+    const start = new Date(startDate);
+    const now = new Date();
+    const hoursUntilStart = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursUntilStart >= hoursWindow) {
+      return { allowed: true, message: `Free cancellation available (${hoursWindow}h window)` };
+    }
+    return { allowed: false, message: `Cancellation window has passed (required ${hoursWindow}h before start).` };
+  };
+
   const handleCancelBooking = async () => {
     if (!booking) return;
 
+    const resourceType = booking.resource_type;
+    const table = resourceType === 'guide' ? 'guides' : 'homestays';
+    const { data: resourceData } = await supabase
+      .from(table).select('cancellation_policy').eq('id', booking.resource_id).single();
+    const policy = resourceData?.cancellation_policy || 'moderate';
+    const { allowed, message } = canCancelFree(policy, booking.start_date);
+
+    const policyLabel = policy === 'flexible' ? 'Flexible (free cancel 24h before)'
+      : policy === 'strict' ? 'Strict (non-refundable)'
+      : 'Moderate (free cancel 48h before)';
+
     Alert.alert(
       'Cancel Booking',
-      'Are you sure you want to cancel this booking?',
+      `Policy: ${policyLabel}\n\n${message}\n\nDo you want to proceed with cancellation?`,
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Keep Booking', style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: allowed ? 'Cancel (Free)' : 'Cancel Anyway',
           style: 'destructive',
           onPress: async () => {
             setActionLoading(true);
             try {
               const { error } = await supabase
                 .from('bookings')
-                .update({ status: 'cancelled' })
+                .update({
+                  status: 'cancelled',
+                  cancelled_by: 'user',
+                  cancellation_reason: allowed ? 'User cancelled within free window' : 'User cancelled outside free window',
+                })
                 .eq('id', booking.id);
 
               if (error) throw error;
-              Alert.alert('Cancelled', 'Your booking has been cancelled.');
+
+              // Notify host/guide
+              await supabase.from('notifications').insert({
+                user_id: booking.user_id,
+                title: 'Booking Cancelled',
+                body: `Your booking has been cancelled. ${allowed ? 'No charges apply.' : 'Check with the host for refund details.'}`,
+                type: 'booking_cancelled',
+              });
+
+              Alert.alert('Cancelled', `Your booking has been cancelled. ${allowed ? 'No charges apply.' : 'Contact the host for refund details.'}`);
               router.back();
             } catch (error) {
               Alert.alert('Error', 'Failed to cancel booking. Please try again.');
@@ -331,7 +373,7 @@ export default function BookingDetailsScreen() {
             </TouchableOpacity>
           )}
 
-          {booking.status === 'pending' && (
+          {(booking.status === 'pending' || booking.status === 'confirmed') && (
             <TouchableOpacity
               style={[styles.cancelBtn, actionLoading && { opacity: 0.6 }]}
               onPress={handleCancelBooking}

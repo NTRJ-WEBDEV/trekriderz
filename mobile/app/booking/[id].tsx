@@ -60,32 +60,30 @@ export default function BookingScreen() {
     }
   };
 
+  const [cancellationPolicy, setCancellationPolicy] = useState('moderate');
+
   const fetchBlockedDates = async () => {
     try {
-      const { data } = await supabase
-        .from('bookings')
-        .select('start_date, end_date')
-        .eq('resource_id', id)
-        .eq('status', 'confirmed');
+      const [{ data: bookings }, { data: avail }, { data: homestay }] = await Promise.all([
+        supabase.from('bookings').select('start_date, end_date')
+          .eq('resource_id', id).in('status', ['pending', 'confirmed']),
+        supabase.from('homestay_availability').select('date')
+          .eq('homestay_id', id).eq('is_available', false),
+        supabase.from('homestays').select('cancellation_policy').eq('id', id).single(),
+      ]);
 
-      if (data) {
-        const blocked: { [key: string]: any } = {};
-        data.forEach((booking) => {
-          let current = new Date(booking.start_date);
-          const end = new Date(booking.end_date);
-          while (current <= end) {
-            const dateStr = current.toISOString().split('T')[0];
-            blocked[dateStr] = {
-              disabled: true,
-              disableTouchEvent: true,
-              color: '#374151',
-              textColor: '#9CA3AF',
-            };
-            current.setDate(current.getDate() + 1);
-          }
-        });
-        setBlockedDates(blocked);
-      }
+      const blocked: { [key: string]: any } = {};
+      const markBlocked = (dateStr: string) => {
+        blocked[dateStr] = { disabled: true, disableTouchEvent: true, color: '#374151', textColor: '#9CA3AF' };
+      };
+      (bookings || []).forEach((b: any) => {
+        let current = new Date(b.start_date);
+        const end = new Date(b.end_date);
+        while (current <= end) { markBlocked(current.toISOString().split('T')[0]); current.setDate(current.getDate() + 1); }
+      });
+      (avail || []).forEach((r: any) => markBlocked(r.date));
+      setBlockedDates(blocked);
+      if (homestay?.cancellation_policy) setCancellationPolicy(homestay.cancellation_policy);
     } catch (e) {
       console.log('Error fetching blocked dates', e);
     }
@@ -254,6 +252,14 @@ export default function BookingScreen() {
               }}
               minDate={new Date().toISOString().split('T')[0]}
             />
+          </View>
+          <View style={styles.policyNote}>
+            <Ionicons name="shield-checkmark-outline" size={14} color="#8CC63F" />
+            <Text style={styles.policyNoteText}>
+              {cancellationPolicy === 'flexible' ? 'Free cancellation up to 24h before check-in'
+                : cancellationPolicy === 'moderate' ? 'Free cancellation up to 48h before check-in'
+                : 'Non-refundable after booking'}
+            </Text>
           </View>
         </View>
 
@@ -543,5 +549,21 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  policyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: 'rgba(140,198,63,0.08)',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(140,198,63,0.2)',
+  },
+  policyNoteText: {
+    color: '#8CC63F',
+    fontSize: 12,
+    flex: 1,
   },
 });

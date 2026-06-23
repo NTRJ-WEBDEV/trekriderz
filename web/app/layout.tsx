@@ -1,22 +1,37 @@
-import '@/app/globals.css';
-import type { Metadata } from 'next';
-import { Inter, Outfit } from 'next/font/google';
-import { Providers } from './providers';
+import "@/app/globals.css";
+import type { Metadata } from "next";
+import { Inter, Bebas_Neue } from "next/font/google";
+import { Providers } from "./providers";
+import VideoBackground from "@/components/VideoBackground";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-inter',
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
-const outfit = Outfit({ 
-  subsets: ['latin'],
-  variable: '--font-outfit',
+const bebasNeue = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-bebas",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: 'TrekRiderz - Plan Your Next Adventure',
-  description: 'The ultimate platform for planning treks, finding homestays, connecting with guides, and exploring outdoor adventures.',
-  keywords: 'trekking, adventure, homestays, travel planning, outdoor activities, guides, hiking',
+  title: "TrekRiderz — Trek. Travel. Connect.",
+  description:
+    "India's premier trekking & tour company. Western Ghats treks, international tours to Nepal, Bhutan, Philippines, Indonesia, Cambodia. Custom group travel packages.",
+  keywords:
+    "trekking India, Western Ghats trek, Nepal trek, Bhutan tour, Philippines tour, group travel, adventure travel India",
+  openGraph: {
+    title: "TrekRiderz — Trek. Travel. Connect.",
+    description: "Western Ghats & international adventures curated for you.",
+    url: "https://trekriderz.com",
+    siteName: "TrekRiderz",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -26,8 +41,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${outfit.variable} font-sans`}>
-        <Providers>{children}</Providers>
+      <body
+        className={`${inter.variable} ${bebasNeue.variable} font-sans bg-dark-900 text-white overflow-x-hidden`}
+      >
+        <VideoBackground />
+        <div className="relative z-10 min-h-screen flex flex-col">
+          <Navbar />
+          <main className="flex-1">
+            <Providers>{children}</Providers>
+          </main>
+          <Footer />
+        </div>
       </body>
     </html>
   );

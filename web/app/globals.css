@@ -8,37 +8,131 @@
     padding: 0;
     box-sizing: border-box;
   }
-  
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    background: #080c14;
+    color: white;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #080c14;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #adff2f40;
+    border-radius: 4px;
   }
 }
 
-/* Glassmorphism utility classes */
 @layer components {
+  /* Frosted glass panels over video */
   .glass {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(5, 10, 5, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
-  
-  .glass-dark {
-    background: rgba(26, 31, 58, 0.4);
+
+  .glass-card {
+    background: rgba(5, 10, 5, 0.7);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-accent {
+    background: rgba(173, 255, 47, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(173, 255, 47, 0.15);
+  }
+
+  /* Accent button */
+  .btn-accent {
+    background: #adff2f;
+    color: #080c14;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+  .btn-accent:hover {
+    background: #c5ff5a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 24px rgba(173, 255, 47, 0.3);
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s;
+  }
+  .btn-ghost:hover {
+    border-color: rgba(173, 255, 47, 0.4);
+    color: #adff2f;
+  }
+
+  /* Display font */
+  .font-display {
+    font-family: var(--font-bebas), Impact, sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  /* Section overlay for non-hero sections (slightly darker) */
+  .section-overlay {
+    background: rgba(5, 10, 5, 0.5);
+  }
+
+  /* Form input */
+  .form-input {
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: rgba(173, 255, 47, 0.4);
+  }
+  .form-input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* Image placeholder */
+  .img-placeholder {
+    background: rgba(173, 255, 47, 0.04);
+    border: 2px dashed rgba(173, 255, 47, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(173, 255, 47, 0.5);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: center;
   }
 }
 
-/* Custom scrollbar */
 @layer utilities {
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  .text-accent {
+    color: #adff2f;
   }
-  
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  .border-accent {
+    border-color: #adff2f;
+  }
+  .bg-accent {
+    background-color: #adff2f;
   }
 }

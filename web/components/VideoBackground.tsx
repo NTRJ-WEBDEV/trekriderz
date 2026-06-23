@@ -3,14 +3,35 @@
 import { useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
+function getVideoSrc(pathname: string): string {
+  // Home — tight 9s landscape loop
+  if (pathname === "/") return "/videos/hero-bg.mp4";
+
+  // Trips & Destinations — 14s vertical trail footage
+  if (pathname.startsWith("/trips") || pathname.startsWith("/destinations"))
+    return "/videos/trek-bg.mp4";
+
+  // Expeditions — 12s vertical discovery footage
+  if (pathname.startsWith("/expeditions"))
+    return "/videos/discover-bg.mp4";
+
+  // Special packages & Custom planner — 10s vertical adventure footage
+  if (pathname.startsWith("/special") || pathname.startsWith("/plan"))
+    return "/videos/special-bg.mp4";
+
+  // About & Videos pages — 42s vertical nature/scenic footage
+  if (pathname.startsWith("/about") || pathname.startsWith("/videos"))
+    return "/videos/nature-bg.mp4";
+
+  // Admin & everything else — 40s landscape scenic loop
+  return "/videos/section-bg.mp4";
+}
+
 export default function VideoBackground() {
   const pathname = usePathname();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const src = getVideoSrc(pathname);
 
-  // Home page uses the tight 9s loop; every other page uses the 40s scenic video
-  const src = pathname === "/" ? "/videos/hero-bg.mp4" : "/videos/section-bg.mp4";
-
-  // When the route changes, reload + play the new source
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;

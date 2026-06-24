@@ -165,6 +165,7 @@ export default function RootLayout() {
         <Stack.Screen name="legal/privacy-policy" />
         <Stack.Screen name="legal/terms-of-service" />
         <Stack.Screen name="notification-preferences" />
+        <Stack.Screen name="ai-planner" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

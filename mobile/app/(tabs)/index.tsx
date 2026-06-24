@@ -168,6 +168,33 @@ export default function HomeScreen() {
             ))}
           </View>
 
+          {/* ── AI PLANNER BANNER ── */}
+          <TouchableOpacity
+            style={styles.aiBanner}
+            onPress={() => { haptic.medium(); router.push('/ai-planner' as any); }}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['rgba(140,198,63,0.25)', 'rgba(30,136,229,0.2)']}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            />
+            <View style={styles.aiBannerLeft}>
+              <View style={styles.aiBannerBadge}>
+                <Ionicons name="sparkles" size={11} color={GREEN} />
+                <Text style={styles.aiBannerBadgeText}>AI POWERED</Text>
+              </View>
+              <Text style={styles.aiBannerTitle}>Plan Your Dream Trip</Text>
+              <Text style={styles.aiBannerSub}>
+                Birthday · Anniversary · Women Trek · Custom
+              </Text>
+            </View>
+            <View style={styles.aiBannerRight}>
+              <Text style={styles.aiBannerEmoji}>✨</Text>
+              <Ionicons name="arrow-forward" size={20} color={GREEN} />
+            </View>
+          </TouchableOpacity>
+
           {/* ── YOUR UPCOMING TRIPS ── */}
           {trips.length > 0 && (
             <View style={{ marginTop: 28 }}>
@@ -282,6 +309,31 @@ const styles = StyleSheet.create({
   tripEmoji: { fontSize: 20 },
   tripTitle: { fontSize: 14, fontWeight: '700', color: '#FFF', marginBottom: 3 },
   tripMeta: { fontSize: 12, color: 'rgba(255,255,255,0.45)' },
+
+  aiBanner: {
+    marginTop: 24,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: GREEN + '40',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 18,
+    backgroundColor: 'rgba(140,198,63,0.06)',
+  },
+  aiBannerLeft: { flex: 1, gap: 4 },
+  aiBannerBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: GREEN + '18', borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  aiBannerBadgeText: { fontSize: 9, fontWeight: '900', color: GREEN, letterSpacing: 1 },
+  aiBannerTitle: { fontSize: 17, fontWeight: '900', color: '#FFF' },
+  aiBannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  aiBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 12 },
+  aiBannerEmoji: { fontSize: 32 },
 
   footer: { alignItems: 'center', marginTop: 48, gap: 2 },
   footerBold: { fontSize: 20, fontWeight: '900', color: '#FFF', letterSpacing: 3 },

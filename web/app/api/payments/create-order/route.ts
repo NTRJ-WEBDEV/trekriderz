@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Razorpay from 'razorpay';
 
-/**
- * OFFLINE MODE: Order creation disabled
- * This API is kept for compatibility but returns offline payment mode response
- * POST /api/payments/create-order
- */
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID!,
+  key_secret: process.env.RAZORPAY_KEY_SECRET!,
+});
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -17,19 +18,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In offline mode, return mock order ID
-    return NextResponse.json({
-      orderId: `offline_order_${booking_id}_${Date.now()}`,
-      amount,
+    const amountInPaise = Math.round(amount * 100);
+    if (amountInPaise < 100) {
+      return NextResponse.json(
+        { error: 'Amount must be at least ₹1' },
+        { status: 400 }
+      );
+    }
+
+    const order = await razorpay.orders.create({
+      amount: amountInPaise,
       currency: 'INR',
-      mode: 'offline',
-      paymentMethod: 'offline',
-      message: 'Offline mode - payment will be collected offline',
+      receipt: booking_id,
+      notes: { description: description || 'TrekRiderz Expedition Booking' },
     });
-  } catch (error) {
+
+    return NextResponse.json({
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+    });
+  } catch (error: any) {
     console.error('Create order error:', error);
     return NextResponse.json(
-      { error: 'Failed to create payment order' },
+      { error: error?.message || 'Failed to create payment order' },
       { status: 500 }
     );
   }

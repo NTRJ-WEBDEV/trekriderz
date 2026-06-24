@@ -1,49 +1,22 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
-  Dimensions,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { reverseGeocode } from '@/lib/geocoding';
-
-// react-native-maps requires native modules not bundled in Expo Go SDK 53+.
-// Lazy-require so the module still loads and exports a default component.
-let MapView: any = null;
-let Marker: any = null;
-let PROVIDER_DEFAULT: any = null;
-try {
-  const RNMaps = require('react-native-maps');
-  MapView = RNMaps.default;
-  Marker = RNMaps.Marker;
-  PROVIDER_DEFAULT = RNMaps.PROVIDER_DEFAULT;
-} catch (_) {}
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const INITIAL_REGION = {
-  latitude: 28.6139,
-  longitude: 77.2090,
-  latitudeDelta: 10,
-  longitudeDelta: 10,
-};
 
 export default function TripMapScreen() {
   const { tripId } = useLocalSearchParams();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [region, setRegion] = useState(INITIAL_REGION);
-  const [markers, setMarkers] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const mapRef = useRef<any>(null);
 
   useEffect(() => {
     loadTripData();
@@ -82,44 +55,11 @@ export default function TripMapScreen() {
       })).filter((m: any) => m.latitude && m.longitude);
 
       setMembers(activeMembers);
-      calculateMarkers(tripData, activeMembers);
     } catch (error) {
       console.error('Error loading trip map data:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateMarkers = (tripData: any, activeMembers: any[]) => {
-    const newMarkers: any[] = [];
-    if (tripData.lat && tripData.lng) {
-      newMarkers.push({
-        id: 'destination',
-        type: 'destination',
-        latitude: Number(tripData.lat),
-        longitude: Number(tripData.lng),
-        title: 'Destination',
-        description: tripData.destination,
-        pinColor: '#8CC63F',
-      });
-    }
-
-    const allPoints = [
-      ...newMarkers,
-      ...activeMembers.map((m) => ({ latitude: m.latitude, longitude: m.longitude })),
-    ];
-
-    if (allPoints.length > 0) {
-      const lats = allPoints.map((p) => p.latitude);
-      const lngs = allPoints.map((p) => p.longitude);
-      setRegion({
-        latitude: (Math.min(...lats) + Math.max(...lats)) / 2,
-        longitude: (Math.min(...lngs) + Math.max(...lngs)) / 2,
-        latitudeDelta: Math.max((Math.max(...lats) - Math.min(...lats)) * 1.5, 0.1),
-        longitudeDelta: Math.max((Math.max(...lngs) - Math.min(...lngs)) * 1.5, 0.1),
-      });
-    }
-    setMarkers(newMarkers);
   };
 
   const subscribeToMembers = () => {
@@ -131,25 +71,13 @@ export default function TripMapScreen() {
       .subscribe();
   };
 
-  const centerOnDestination = () => {
-    const dest = markers.find((m) => m.type === 'destination');
-    if (dest && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: dest.latitude,
-        longitude: dest.longitude,
-        latitudeDelta: 0.5,
-        longitudeDelta: 0.5,
-      }, 500);
-    }
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header trip={null} onBack={() => router.back()} onCenter={centerOnDestination} />
+        <Header trip={null} onBack={() => router.back()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#8CC63F" />
-          <Text style={styles.loadingText}>Loading map...</Text>
+          <Text style={styles.loadingText}>Loading trip...</Text>
         </View>
       </SafeAreaView>
     );
@@ -157,49 +85,23 @@ export default function TripMapScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header trip={trip} onBack={() => router.back()} onCenter={centerOnDestination} />
+      <Header trip={trip} onBack={() => router.back()} />
 
-      {/* Map or fallback */}
+      {/* Map placeholder — native maps coming in a future update */}
       <View style={styles.mapContainer}>
-        {MapView ? (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            provider={PROVIDER_DEFAULT}
-            initialRegion={region}
-            region={region}
-            onLongPress={async (e: any) => {
-              const { latitude, longitude } = e.nativeEvent.coordinate;
-              const place = await reverseGeocode(longitude, latitude);
-              if (place) Alert.alert('Location', `${place}\n${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-            }}
-            showsUserLocation
-            showsMyLocationButton={false}
-          >
-            {markers.map((m) => (
-              <Marker key={m.id} coordinate={{ latitude: m.latitude, longitude: m.longitude }}
-                title={m.title} description={m.description} pinColor={m.pinColor} />
-            ))}
-            {members.map((m) => (
-              <Marker key={`member-${m.id}`} coordinate={{ latitude: m.latitude, longitude: m.longitude }}
-                title={m.name} description="Trip member" pinColor="#3B82F6" />
-            ))}
-          </MapView>
-        ) : (
-          <View style={styles.mapFallback}>
-            <Ionicons name="map-outline" size={60} color="rgba(255,255,255,0.12)" />
-            <Text style={styles.mapFallbackTitle}>Map not available in Expo Go</Text>
-            <Text style={styles.mapFallbackSub}>
-              Use a development build to view live maps and member locations.
-            </Text>
-            {trip?.destination && (
-              <View style={styles.destInfo}>
-                <Ionicons name="location-outline" size={16} color="#8CC63F" />
-                <Text style={styles.destInfoText}>{trip.destination}</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <View style={styles.mapFallback}>
+          <Ionicons name="map-outline" size={60} color="rgba(255,255,255,0.12)" />
+          <Text style={styles.mapFallbackTitle}>Live Map Coming Soon</Text>
+          <Text style={styles.mapFallbackSub}>
+            Member locations and destination pins will appear here in the next update.
+          </Text>
+          {trip?.destination && (
+            <View style={styles.destInfo}>
+              <Ionicons name="location-outline" size={16} color="#8CC63F" />
+              <Text style={styles.destInfoText}>{trip.destination}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Members */}
@@ -235,7 +137,7 @@ export default function TripMapScreen() {
   );
 }
 
-function Header({ trip, onBack, onCenter }: { trip: any; onBack: () => void; onCenter: () => void }) {
+function Header({ trip, onBack }: { trip: any; onBack: () => void }) {
   return (
     <View style={styles.header}>
       <TouchableOpacity onPress={onBack} style={styles.headerBtn}>
@@ -245,9 +147,7 @@ function Header({ trip, onBack, onCenter }: { trip: any; onBack: () => void; onC
         <Text style={styles.headerTitle}>Trip Map</Text>
         {trip?.destination && <Text style={styles.headerSub}>📍 {trip.destination}</Text>}
       </View>
-      <TouchableOpacity onPress={onCenter} style={styles.headerBtn}>
-        <Ionicons name="locate" size={22} color="#8CC63F" />
-      </TouchableOpacity>
+      <View style={styles.headerBtn} />
     </View>
   );
 }
@@ -265,7 +165,6 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
   headerSub: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 1 },
   mapContainer: { flex: 1 },
-  map: { width: '100%', height: '100%' },
   mapFallback: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     gap: 14, paddingHorizontal: 40,

@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * OFFLINE PAYMENT MODE ONLY
- * - Bookings are created but marked as 'unpaid'
- * - Users can pay offline (cash, bank transfer, UPI, etc.)
- * - No online payment gateway integration
- */
-
 export interface PaymentOptions {
   amount: number;
   bookingId: string;
@@ -19,39 +12,98 @@ export interface PaymentOptions {
 export interface PaymentResponse {
   success: boolean;
   bookingId?: string;
-  paymentMethod?: 'offline' | 'pending';
+  paymentId?: string;
   error?: string;
 }
 
-/**
- * Create offline booking (no online payment)
- */
-export const initiateOfflinePayment = async (
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+export const initiatePayment = async (
   options: PaymentOptions
 ): Promise<PaymentResponse> => {
-  try {
-    console.log('Creating offline booking:', options.bookingId, 'Amount:', options.amount);
-    
-    return {
-      success: true,
-      bookingId: options.bookingId,
-      paymentMethod: 'offline',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Offline booking failed: ${error}`,
-    };
+  const loaded = await loadRazorpayScript();
+  if (!loaded) {
+    return { success: false, error: 'Failed to load payment gateway' };
   }
-};
 
-/**
- * Get offline payment instructions
- */
-export const getOfflinePaymentInstructions = (amount: number): string => {
-  return `Your booking request of ₹${amount} has been created.\n\nPayment Methods:\n• Cash on arrival\n• Bank Transfer\n• UPI\n• Cheque\n\nThe host will contact you with payment details within 24 hours.`;
-};
+  let orderId: string;
+  let orderAmount: number;
 
-export const handleBookingError = (error: string): Error => {
-  return new Error(error || 'Could not create booking request');
+  try {
+    const res = await fetch('/api/payments/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: options.amount,
+        booking_id: options.bookingId,
+        description: options.description,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Order creation failed');
+    orderId = data.order_id;
+    orderAmount = data.amount;
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+
+  return new Promise((resolve) => {
+    const rzp = new (window as any).Razorpay({
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      amount: orderAmount,
+      currency: 'INR',
+      order_id: orderId,
+      name: 'TrekRiderz',
+      description: options.description,
+      prefill: {
+        name: options.userName || '',
+        email: options.userEmail,
+        contact: options.userPhone,
+      },
+      theme: { color: '#F97316' },
+      modal: {
+        ondismiss: () => resolve({ success: false, error: 'Payment cancelled' }),
+      },
+      handler: async (response: any) => {
+        try {
+          const verifyRes = await fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              booking_id: options.bookingId,
+            }),
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyData.verified) {
+            resolve({ success: true, bookingId: options.bookingId, paymentId: response.razorpay_payment_id });
+          } else {
+            resolve({ success: false, error: 'Payment verification failed' });
+          }
+        } catch {
+          resolve({ success: false, error: 'Payment verification error' });
+        }
+      },
+    });
+
+    rzp.on('payment.failed', (response: any) => {
+      resolve({ success: false, error: response.error?.description || 'Payment failed' });
+    });
+
+    rzp.open();
+  });
 };

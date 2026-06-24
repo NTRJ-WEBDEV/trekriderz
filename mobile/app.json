@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.trekriderz.app",
-      "versionCode": 1,
+
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"

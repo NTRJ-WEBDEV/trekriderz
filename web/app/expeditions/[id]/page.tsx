@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import BookingButton from "@/components/BookingButton";
 
 export const revalidate = 60;
 
@@ -84,12 +85,21 @@ export default async function ExpeditionDetailPage({
           </div>
           <div className="space-y-5">
             {exp.packages && (exp.packages as any[]).length > 0 && (
-              <div className="glass-card rounded-2xl p-5">
-                <p className="text-white/40 text-xs uppercase tracking-widest mb-3">Packages</p>
+              <div className="glass-card rounded-2xl p-5 space-y-4">
+                <p className="text-white/40 text-xs uppercase tracking-widest">Packages</p>
                 {(exp.packages as any[]).map((pkg: any) => (
-                  <div key={pkg.id} className="flex justify-between py-2 border-b border-white/5 last:border-0">
-                    <span className="text-white/70 text-sm">{pkg.name || "Standard"}</span>
-                    <span className="text-accent font-bold">Rs.{pkg.price_per_person?.toLocaleString()}</span>
+                  <div key={pkg.id} className="space-y-2 border-b border-white/5 last:border-0 pb-4 last:pb-0">
+                    <div className="flex justify-between">
+                      <span className="text-white/70 text-sm">{pkg.name || "Standard"}</span>
+                      <span className="text-accent font-bold">₹{pkg.price_per_person?.toLocaleString()}</span>
+                    </div>
+                    <BookingButton
+                      expeditionId={exp.id}
+                      expeditionTitle={exp.title}
+                      packageId={pkg.id}
+                      packageName={pkg.name || "Standard"}
+                      pricePerPerson={pkg.price_per_person}
+                    />
                   </div>
                 ))}
               </div>
@@ -98,9 +108,9 @@ export default async function ExpeditionDetailPage({
               href="https://wa.me/919999999999"
               target="_blank"
               rel="noopener noreferrer"
-              className="block btn-accent py-4 rounded-full font-bold text-center"
+              className="block text-center text-white/50 text-sm hover:text-white/80 py-2"
             >
-              Book via WhatsApp
+              Questions? Chat on WhatsApp
             </a>
           </div>
         </div>

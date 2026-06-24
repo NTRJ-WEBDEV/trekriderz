@@ -96,22 +96,23 @@ export default function CreateTripScreen() {
       if (error) {
         console.warn('Sync failed, queuing locally:', error.message);
         await queueTask('INSERT', 'trips', newTrip);
-        Alert.alert('Saved Offline 📡', 'You are currently offline. Trip saved locally.');
+        Alert.alert('Saved Offline 📡', 'You are currently offline. Trip saved locally.', [
+          { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+        ]);
       } else {
         Alert.alert(
           isPublic ? 'Trip Published! 🎉' : 'Trip Created! 🏔️',
           isPublic
             ? 'Your trip is now visible on Discover. Fellow travelers can request to join!'
-            : 'Your adventure has been planned.'
+            : 'Your adventure has been planned.',
+          [{ text: 'OK', onPress: () => { resetForm(); router.back(); } }]
         );
       }
-      router.back();
-      resetForm();
     } catch {
       await queueTask('INSERT', 'trips', newTrip);
-      Alert.alert('Saved Offline 📡', 'Trip saved locally for later sync.');
-      router.back();
-      resetForm();
+      Alert.alert('Saved Offline 📡', 'Trip saved locally for later sync.', [
+        { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+      ]);
     } finally {
       setLoading(false);
     }

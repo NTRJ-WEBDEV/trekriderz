@@ -153,7 +153,7 @@ export default function HomeScreen() {
                 key={section.id}
                 style={styles.gridCard}
                 onPress={() => router.push(section.route as any)}
-                activeOpacity={0.8}
+                activeOpacity={1}
               >
                 <View style={[styles.cardIconWrap, { backgroundColor: section.color + '22' }]}>
                   <Text style={styles.cardEmoji}>{section.emoji}</Text>

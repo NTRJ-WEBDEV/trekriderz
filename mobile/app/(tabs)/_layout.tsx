@@ -38,9 +38,9 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="explore"
           options={{
-            title: 'Feed',
+            title: 'Explore',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="newspaper-outline" color={color} size={size} />
+              <TabBarIcon name="compass-outline" color={color} size={size} />
             ),
           }}
         />
@@ -61,17 +61,13 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="chats"
+          name="notifications"
           options={{
-            title: 'Chats',
+            title: 'Alerts',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="chatbubbles-outline" color={color} size={size} />
+              <TabBarIcon name="notifications-outline" color={color} size={size} />
             ),
           }}
-        />
-        <Tabs.Screen
-          name="feed"
-          options={{ href: null }}
         />
         <Tabs.Screen
           name="profile"
@@ -82,11 +78,8 @@ export default function TabsLayout() {
             ),
           }}
         />
-        {/* Notifications accessible via bell icon on home screen */}
-        <Tabs.Screen
-          name="notifications"
-          options={{ href: null }}
-        />
+        <Tabs.Screen name="chats" options={{ href: null }} />
+        <Tabs.Screen name="feed" options={{ href: null }} />
       </Tabs>
     </>
   );

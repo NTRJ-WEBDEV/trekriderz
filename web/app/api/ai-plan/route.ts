@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
+// Priority: Gemini Flash (free) → Groq Llama (free) → GPT-4o-mini (cheap)
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 const TRIP_TYPE_CONTEXT: Record<string, string> = {
@@ -116,44 +118,46 @@ RESPONSE FORMAT (strict JSON):
 }`;
 }
 
+async function openAICompatCall(
+  url: string, key: string, model: string, prompt: string, jsonMode = true
+): Promise<any> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      max_tokens: 4000,
+      temperature: 0.7,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message ?? `${model} error`);
+  const content = data.choices[0].message.content;
+  return typeof content === 'string' ? JSON.parse(content) : content;
+}
+
 async function callAI(prompt: string): Promise<any> {
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const isReal = (key?: string) => !!key && !key.startsWith('sk_test') && key.length > 10;
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const groqKey   = process.env.GROQ_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
-  const isReal = (key?: string) => !!key && !key.startsWith('sk_test') && key.length > 20;
-
-  if (isReal(deepseekKey)) {
-    const res = await fetch(DEEPSEEK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${deepseekKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 4000,
-        temperature: 0.7,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message ?? 'DeepSeek error');
-    return JSON.parse(data.choices[0].message.content);
+  // 1. Gemini 2.0 Flash — free (1,500 requests/day free tier)
+  if (isReal(geminiKey)) {
+    return openAICompatCall(GEMINI_URL, geminiKey!, 'gemini-2.0-flash', prompt);
   }
 
+  // 2. Groq + Llama 3.1 8B — free tier (30 req/min)
+  if (isReal(groqKey)) {
+    return openAICompatCall(GROQ_URL, groqKey!, 'llama-3.1-8b-instant', prompt);
+  }
+
+  // 3. GPT-4o-mini — cheapest paid (~$0.15/million tokens)
   if (isReal(openaiKey)) {
-    const res = await fetch(OPENAI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 4000,
-        temperature: 0.7,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message ?? 'OpenAI error');
-    return JSON.parse(data.choices[0].message.content);
+    return openAICompatCall(OPENAI_URL, openaiKey!, 'gpt-4o-mini', prompt);
   }
 
   throw new Error('NO_AI_KEY');
@@ -173,7 +177,7 @@ export async function POST(req: NextRequest) {
     console.error('[ai-plan]', err.message);
     if (err.message === 'NO_AI_KEY') {
       return NextResponse.json(
-        { error: 'AI service not configured. Add DEEPSEEK_API_KEY or OPENAI_API_KEY to environment variables.' },
+        { error: 'AI service not configured. Add GEMINI_API_KEY (free) or GROQ_API_KEY (free) to Vercel environment variables.' },
         { status: 503 }
       );
     }

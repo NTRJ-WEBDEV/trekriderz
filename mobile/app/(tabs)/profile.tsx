@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  Image, ScrollView, RefreshControl,
+  Image, ScrollView, RefreshControl, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -144,6 +144,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Profile Completeness */}
+        <ProfileCompleteness profile={profile} stats={stats} onPress={() => router.push('/profile/edit')} />
+
         {/* Stats */}
         <View style={styles.statsRow}>
           <StatBox label="Trips" value={String(stats.trips)} icon="airplane-outline" />
@@ -161,7 +164,7 @@ export default function ProfileScreen() {
         <View style={styles.menu}>
           <Text style={styles.sectionLabel}>Account</Text>
           <MenuItem icon="person-outline" title="Edit Personal Details" onPress={() => router.push('/profile/edit')} />
-          <MenuItem icon="notifications-outline" title="Push Notifications" onPress={() => {}} />
+          <MenuItem icon="notifications-outline" title="Push Notifications" onPress={() => router.push('/notification-preferences' as any)} />
           <MenuItem icon="cloud-offline-outline" title="Offline Cache Management" onPress={() => {}} />
 
           <Text style={styles.sectionLabel}>Guide</Text>
@@ -235,6 +238,35 @@ export default function ProfileScreen() {
         <Text style={styles.version}>TrekRiderz v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function ProfileCompleteness({
+  profile, stats, onPress,
+}: { profile: any; stats: { trips: number; followers: number }; onPress: () => void }) {
+  const steps = [
+    { done: !!profile?.avatar_url, label: 'Profile photo' },
+    { done: !!profile?.full_name, label: 'Full name' },
+    { done: !!profile?.bio, label: 'Bio' },
+    { done: stats.trips > 0, label: 'First trip' },
+  ];
+  const pct = Math.round((steps.filter((s) => s.done).length / steps.length) * 100);
+  if (pct === 100) return null;
+  const missing = steps.find((s) => !s.done);
+  return (
+    <TouchableOpacity style={styles.completenessCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.completenessHeader}>
+        <Ionicons name="person-circle-outline" size={18} color={GREEN} />
+        <Text style={styles.completenessTitle}>Complete your profile</Text>
+        <Text style={styles.completenessPct}>{pct}%</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${pct}%` as any }]} />
+      </View>
+      {missing && (
+        <Text style={styles.completenessTip}>Next: {missing.label} →</Text>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -370,6 +402,51 @@ const styles = StyleSheet.create({
     color: GREEN,
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // Completeness
+  completenessCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: GREEN + '12',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: GREEN + '30',
+  },
+  completenessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  completenessTitle: {
+    flex: 1,
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  completenessPct: {
+    color: GREEN,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  progressTrack: {
+    height: 5,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 5,
+    backgroundColor: GREEN,
+    borderRadius: 3,
+  },
+  completenessTip: {
+    color: GREEN,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 8,
   },
 
   // Stats

@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import ReviewSheet from '@/components/ReviewSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +27,7 @@ export default function GuideProfileScreen() {
   const [guide, setGuide] = useState<any>(null);
   const [expeditions, setExpeditions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showReview, setShowReview] = useState(false);
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -309,6 +311,16 @@ export default function GuideProfileScreen() {
               })}
             </View>
           )}
+
+          {/* Write a Review */}
+          {user && (
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.reviewBtn} onPress={() => setShowReview(true)}>
+                <Ionicons name="star-outline" size={18} color="#FFD700" />
+                <Text style={styles.reviewBtnText}>Write a Review</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -320,6 +332,16 @@ export default function GuideProfileScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      <ReviewSheet
+        visible={showReview}
+        targetId={String(id)}
+        targetType="guide"
+        targetName={guide.name}
+        reviewerId={user?.id || ''}
+        onClose={() => setShowReview(false)}
+        onSubmitted={() => setShowReview(false)}
+      />
     </View>
   );
 }
@@ -619,6 +641,21 @@ const styles = StyleSheet.create({
   expPrice: {
     color: '#8CC63F',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,215,0,0.08)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+  },
+  reviewBtnText: {
+    color: '#FFD700',
+    fontSize: 14,
     fontWeight: '700',
   },
   stickyFooter: {

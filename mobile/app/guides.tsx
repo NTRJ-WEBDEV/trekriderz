@@ -9,6 +9,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import VerifiedBadge from '@/components/VerifiedBadge';
 
 const SPECIALTY_CHIPS = [
   { id: '', label: 'All', emoji: '🧭' },
@@ -174,12 +175,7 @@ function GuideCard({ guide }: { guide: Guide }) {
           <View style={card.badge}>
             <Text style={card.badgeText}>GUIDE</Text>
           </View>
-          {guide.is_premium && (
-            <View style={card.premiumBadge}>
-              <Ionicons name="star" size={10} color="#FFD700" />
-              <Text style={card.premiumText}>PREMIUM</Text>
-            </View>
-          )}
+          <VerifiedBadge isPremium={guide.is_premium} size="sm" />
         </View>
         <Text style={card.name} numberOfLines={1}>{guide.name}</Text>
         {regions ? (

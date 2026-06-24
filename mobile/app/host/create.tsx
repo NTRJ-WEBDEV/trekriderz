@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
+import MapPickerModal from '@/components/MapPickerModal';
 
 const AMENITIES = [
   { id: 'wifi', label: 'WiFi', icon: '📶' },
@@ -40,6 +41,7 @@ export default function CreateHomestayScreen() {
 
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const searchTimeout = useRef<any>(null);
 
   const handleLocationSearch = (text: string) => {
@@ -168,6 +170,20 @@ export default function CreateHomestayScreen() {
             />
             {searching && <ActivityIndicator size="small" color="#8CC63F" />}
           </View>
+          {coords && (
+            <TouchableOpacity style={styles.mapPinBtn} onPress={() => setShowMap(true)}>
+              <Ionicons name="map-outline" size={14} color="#8CC63F" />
+              <Text style={styles.mapPinText}>
+                Pin marked: {coords[1].toFixed(4)}, {coords[0].toFixed(4)} — tap to adjust
+              </Text>
+            </TouchableOpacity>
+          )}
+          {!coords && location.length > 0 && !searching && suggestions.length === 0 && (
+            <TouchableOpacity style={styles.mapPinBtn} onPress={() => setShowMap(true)}>
+              <Ionicons name="map-outline" size={14} color="rgba(255,255,255,0.4)" />
+              <Text style={[styles.mapPinText, { color: 'rgba(255,255,255,0.4)' }]}>Pin exact location on map</Text>
+            </TouchableOpacity>
+          )}
           {suggestions.length > 0 && (
             <View style={styles.suggestions}>
               {suggestions.map((s, i) => (
@@ -268,6 +284,17 @@ export default function CreateHomestayScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <MapPickerModal
+        visible={showMap}
+        initialLat={coords ? coords[1] : undefined}
+        initialLng={coords ? coords[0] : undefined}
+        onConfirm={(loc) => {
+          setCoords([loc.lng, loc.lat]);
+          setShowMap(false);
+        }}
+        onClose={() => setShowMap(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -337,6 +364,13 @@ const styles = StyleSheet.create({
   },
   suggBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   suggText: { flex: 1, color: '#FFF', fontSize: 13 },
+  mapPinBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 8, paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: 'rgba(140,198,63,0.08)',
+    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
+  },
+  mapPinText: { fontSize: 12, color: '#8CC63F', fontWeight: '600', flex: 1 },
 
   amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   amenityChip: {

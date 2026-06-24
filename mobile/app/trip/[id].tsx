@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import WeatherCard from '@/components/WeatherCard';
+import SOSButton from '@/components/SOSButton';
 import { shareTripItinerary } from '@/lib/trip-export';
 
 interface Trip {
@@ -197,6 +198,14 @@ export default function TripDetailScreen() {
             subtitle="Emergency contacts & safety tips"
             onPress={() => router.push(`/safety/${trip.id}` as any)}
           />
+        </View>
+
+        <View style={[styles.section, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          <View>
+            <Text style={styles.sectionTitle}>Emergency</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 }}>Long press SOS to alert contacts</Text>
+          </View>
+          <SOSButton tripName={trip.title} location={trip.destination} />
         </View>
 
         <View style={styles.section}>

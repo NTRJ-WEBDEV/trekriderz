@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Swiper from 'react-native-swiper';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import ReviewSheet from '@/components/ReviewSheet';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ export default function HomestayDetailScreen() {
   const { id } = useLocalSearchParams();
   const [homestay, setHomestay] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showReview, setShowReview] = useState(false);
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -258,6 +260,16 @@ export default function HomestayDetailScreen() {
             </View>
           )}
 
+          {/* Write a Review */}
+          {user && (
+            <View style={styles.section}>
+              <TouchableOpacity style={styles.reviewBtn} onPress={() => setShowReview(true)}>
+                <Ionicons name="star-outline" size={18} color="#FFD700" />
+                <Text style={styles.reviewBtnText}>Write a Review</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Host Info */}
           {homestay.owner && (
             <View style={styles.section}>
@@ -307,6 +319,16 @@ export default function HomestayDetailScreen() {
           <Text style={styles.bookBtnText}>Book Now</Text>
         </TouchableOpacity>
       </View>
+
+      <ReviewSheet
+        visible={showReview}
+        targetId={String(id)}
+        targetType="homestay"
+        targetName={homestay.name}
+        reviewerId={user?.id || ''}
+        onClose={() => setShowReview(false)}
+        onSubmitted={() => setShowReview(false)}
+      />
     </View>
   );
 }
@@ -569,6 +591,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(37,211,102,0.25)',
+  },
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,215,0,0.08)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+  },
+  reviewBtnText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '700',
   },
   stickyFooter: {
     position: 'absolute',

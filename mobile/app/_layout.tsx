@@ -23,6 +23,7 @@ import { requestLocationPermissions, startLocationSharing } from '@/lib/location
 import '@/services/background-location';
 import OfflineBanner from '@/components/OfflineBanner';
 import { syncService } from '@/services/sync-service';
+import { maybeRequestReview } from '@/lib/review-prompt';
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,7 @@ export default function RootLayout() {
 
     const setupServices = async () => {
       try {
+        maybeRequestReview();
         await requestNotificationPermissions();
         await registerPushToken(user.id);
         requestLocationPermissions().then(() => startLocationSharing()).catch(() => {});
@@ -162,6 +164,7 @@ export default function RootLayout() {
         <Stack.Screen name="expeditions/my-list" />
         <Stack.Screen name="legal/privacy-policy" />
         <Stack.Screen name="legal/terms-of-service" />
+        <Stack.Screen name="notification-preferences" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

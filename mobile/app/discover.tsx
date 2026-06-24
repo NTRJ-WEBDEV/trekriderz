@@ -12,15 +12,29 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
 const TYPE_FILTERS = [
-  { id: 'all', label: 'All', emoji: '🗺️' },
-  { id: 'trek', label: 'Trek', emoji: '⛰️' },
-  { id: 'bike', label: 'Bike', emoji: '🏍️' },
-  { id: 'car_ride', label: 'Car Ride', emoji: '🚗' },
-  { id: 'temple', label: 'Temple', emoji: '🛕' },
-  { id: 'spiritual', label: 'Spiritual', emoji: '🙏' },
-  { id: 'backpacking', label: 'Backpack', emoji: '🎒' },
-  { id: 'weekend', label: 'Weekend', emoji: '🌄' },
+  { id: 'all',         label: 'All',         emoji: '🗺️' },
+  { id: 'partner',     label: 'Find Partner', emoji: '🤝' },
+  { id: 'trek',        label: 'Trek',         emoji: '⛰️' },
+  { id: 'bike',        label: 'Bike',         emoji: '🏍️' },
+  { id: 'car_ride',    label: 'Car Ride',     emoji: '🚗' },
+  { id: 'backpacking', label: 'Backpack',     emoji: '🎒' },
+  { id: 'weekend',     label: 'Weekend',      emoji: '🌄' },
+  { id: 'spiritual',   label: 'Spiritual',    emoji: '🙏' },
+  { id: 'temple',      label: 'Temple',       emoji: '🛕' },
+  { id: 'wildlife',    label: 'Wildlife',     emoji: '🦁' },
 ];
+
+const PARTNER_ROLE_LABEL: Record<string, string> = {
+  rider: '🏍️ Rider needs pillion',
+  pillion: '🪑 Pillion needs rider',
+  any: '🤝 Open to all',
+};
+
+const GENDER_LABEL: Record<string, string> = {
+  male: '👨 Male partner',
+  female: '👩 Female partner',
+  any: '🤝 Any partner',
+};
 
 const EMOJI_MAP: Record<string, string> = {
   trek: '⛰️', bike: '🏍️', car_ride: '🚗',
@@ -69,6 +83,14 @@ interface TripPublic {
   description?: string;
   created_by: string;
   creator: { id: string; full_name: string; avatar_url: string | null; role: string } | null;
+  // Partner matching fields
+  looking_for_partner?: boolean;
+  partner_gender?: string;
+  partner_role?: string;
+  slots_available?: number;
+  contact_whatsapp?: string;
+  experience_level?: string;
+  meeting_point?: string;
 }
 
 export default function DiscoverScreen() {
@@ -109,7 +131,9 @@ export default function DiscoverScreen() {
         .order('start_date', { ascending: true })
         .limit(50);
 
-      if (activeType !== 'all') {
+      if (activeType === 'partner') {
+        query = query.eq('looking_for_partner', true);
+      } else if (activeType !== 'all') {
         query = query.eq('trip_type', activeType);
       }
 
@@ -306,9 +330,24 @@ function TripCard({
   const roleInfo = ROLE_COLORS[trip.creator?.role || 'user'] || ROLE_COLORS.user;
   const countdown = daysUntil(trip.start_date);
   const emoji = EMOJI_MAP[trip.trip_type] || '🗺️';
+  const hasPartner = !!trip.looking_for_partner;
+
+  const handleWhatsApp = () => {
+    if (!trip.contact_whatsapp) return;
+    const msg = encodeURIComponent(
+      `Hi! I saw your trip "${trip.title}" to ${trip.destination} on TrekRiderz and I'm interested in joining as a travel partner. Are spots still available?`
+    );
+    import('react-native').then(({ Linking }) =>
+      Linking.openURL(`whatsapp://send?phone=${trip.contact_whatsapp}&text=${msg}`)
+    );
+  };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
+    <TouchableOpacity
+      style={[styles.card, hasPartner && styles.cardPartner]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
       {/* Top row: type + countdown */}
       <View style={styles.cardTopRow}>
         <View style={styles.cardTypeRow}>
@@ -317,11 +356,18 @@ function TripCard({
             {trip.trip_type?.replace('_', ' ').toUpperCase() || 'TRIP'}
           </Text>
         </View>
-        {countdown && (
-          <View style={styles.countdown}>
-            <Text style={styles.countdownText}>{countdown}</Text>
-          </View>
-        )}
+        <View style={styles.cardTopRight}>
+          {hasPartner && (
+            <View style={styles.partnerBadge}>
+              <Text style={styles.partnerBadgeText}>🤝 Partner Wanted</Text>
+            </View>
+          )}
+          {countdown && (
+            <View style={styles.countdown}>
+              <Text style={styles.countdownText}>{countdown}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <Text style={styles.cardTitle} numberOfLines={2}>{trip.title}</Text>
@@ -335,13 +381,43 @@ function TripCard({
         <Text style={styles.metaDate}>{formatDateRange(trip.start_date, trip.end_date)}</Text>
       </View>
 
+      {/* Partner details row */}
+      {hasPartner && (
+        <View style={styles.partnerInfoRow}>
+          <View style={styles.partnerTag}>
+            <Text style={styles.partnerTagText}>
+              {trip.partner_role ? PARTNER_ROLE_LABEL[trip.partner_role] ?? '🤝 Partner wanted'
+                : GENDER_LABEL[trip.partner_gender ?? 'any']}
+            </Text>
+          </View>
+          {trip.slots_available && trip.slots_available > 0 && (
+            <View style={styles.slotsTag}>
+              <Ionicons name="person-add-outline" size={11} color="#A78BFA" />
+              <Text style={styles.slotsTagText}>{trip.slots_available} spot{trip.slots_available > 1 ? 's' : ''} open</Text>
+            </View>
+          )}
+          {trip.experience_level && (
+            <View style={styles.expTag}>
+              <Text style={styles.expTagText}>⛰️ {trip.experience_level}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {trip.meeting_point && (
+        <View style={styles.metaRow}>
+          <Ionicons name="flag-outline" size={13} color="rgba(255,255,255,0.3)" />
+          <Text style={styles.meetText} numberOfLines={1}>Meet: {trip.meeting_point}</Text>
+        </View>
+      )}
+
       {!!trip.description && (
         <Text style={styles.cardDesc} numberOfLines={2}>{trip.description}</Text>
       )}
 
       <View style={styles.divider} />
 
-      {/* Organizer + join */}
+      {/* Organizer */}
       <View style={styles.organizerRow}>
         {trip.creator?.avatar_url ? (
           <Image source={{ uri: trip.creator.avatar_url }} style={styles.avatar} contentFit="cover" />
@@ -365,10 +441,11 @@ function TripCard({
         </View>
         <View style={styles.spotsChip}>
           <Ionicons name="people-outline" size={13} color="rgba(255,255,255,0.55)" />
-          <Text style={styles.spotsText}>{trip.group_size} spots</Text>
+          <Text style={styles.spotsText}>{trip.group_size} people</Text>
         </View>
       </View>
 
+      {/* Action buttons */}
       {isOwner ? (
         <View style={[styles.joinBtn, styles.joinBtnMuted]}>
           <Ionicons name="shield-checkmark-outline" size={15} color="#8CC63F" />
@@ -380,21 +457,30 @@ function TripCard({
           <Text style={[styles.joinBtnTxt, { color: '#8CC63F' }]}>Request Sent</Text>
         </View>
       ) : (
-        <TouchableOpacity
-          style={styles.joinBtn}
-          onPress={onJoin}
-          disabled={isJoining}
-          activeOpacity={0.8}
-        >
-          {isJoining ? (
-            <ActivityIndicator size="small" color="#000" />
-          ) : (
-            <>
-              <Ionicons name="person-add-outline" size={15} color="#000" />
-              <Text style={styles.joinBtnTxt}>Request to Join</Text>
-            </>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.joinBtn, { flex: 1 }]}
+            onPress={onJoin}
+            disabled={isJoining}
+            activeOpacity={0.8}
+          >
+            {isJoining ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <>
+                <Ionicons name="person-add-outline" size={15} color="#000" />
+                <Text style={styles.joinBtnTxt}>
+                  {hasPartner ? 'Connect' : 'Request to Join'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {hasPartner && trip.contact_whatsapp && (
+            <TouchableOpacity style={styles.waBtn} onPress={handleWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -455,19 +541,58 @@ const styles = StyleSheet.create({
     borderRadius: 20, padding: 16, marginBottom: 14,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
+  cardPartner: {
+    borderColor: 'rgba(167,139,250,0.3)',
+    backgroundColor: 'rgba(167,139,250,0.04)',
+  },
   cardTopRow: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 10,
+    alignItems: 'flex-start', marginBottom: 10, gap: 8,
   },
+  cardTopRight: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' },
   cardTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardEmoji: { fontSize: 20 },
   cardTypeLabel: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 1.5 },
+  partnerBadge: {
+    backgroundColor: 'rgba(167,139,250,0.2)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.4)',
+  },
+  partnerBadgeText: { fontSize: 10, fontWeight: '800', color: '#A78BFA' },
   countdown: {
     backgroundColor: 'rgba(140,198,63,0.14)',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
     borderWidth: 1, borderColor: 'rgba(140,198,63,0.3)',
   },
   countdownText: { fontSize: 11, fontWeight: '700', color: '#8CC63F' },
+  partnerInfoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 4 },
+  partnerTag: {
+    backgroundColor: 'rgba(167,139,250,0.15)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.3)',
+  },
+  partnerTagText: { fontSize: 11, fontWeight: '700', color: '#A78BFA' },
+  slotsTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(167,139,250,0.1)',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(167,139,250,0.2)',
+  },
+  slotsTagText: { fontSize: 11, fontWeight: '600', color: '#A78BFA' },
+  expTag: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  expTagText: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
+  meetText: { fontSize: 12, color: 'rgba(255,255,255,0.35)', flex: 1 },
+  actionRow: { flexDirection: 'row', gap: 8 },
+  waBtn: {
+    width: 46, height: 46, borderRadius: 12,
+    backgroundColor: 'rgba(37,211,102,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(37,211,102,0.25)',
+  },
 
   cardTitle: { fontSize: 18, fontWeight: '800', color: '#FFF', marginBottom: 8, lineHeight: 24 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },

@@ -2,8 +2,11 @@ import { Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+  const { bottom } = useSafeAreaInsets();
+
   return (
     <>
       <StatusBar style="light" />
@@ -16,8 +19,8 @@ export default function TabsLayout() {
             backgroundColor: 'rgba(8, 12, 20, 0.96)',
             borderTopColor: 'rgba(140, 198, 63, 0.18)',
             borderTopWidth: 1,
-            height: 65,
-            paddingBottom: 10,
+            height: 65 + bottom,
+            paddingBottom: 10 + bottom,
             paddingTop: 8,
           },
           tabBarLabelStyle: {

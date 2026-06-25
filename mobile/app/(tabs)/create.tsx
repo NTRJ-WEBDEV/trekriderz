@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Switch, Dimensions,
+  ScrollView, Alert, ActivityIndicator, Switch, Dimensions, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -11,6 +11,9 @@ import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import { Ionicons } from '@expo/vector-icons';
 import { queueTask } from '@/lib/db';
 import { haptic } from '@/lib/haptics';
+import { Calendar } from 'react-native-calendars';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -62,6 +65,10 @@ export default function CreateTripScreen() {
   const [description, setDescription] = useState('');
   const [startDate, setStartDate]     = useState('');
   const [endDate, setEndDate]         = useState('');
+  const [dateModal, setDateModal]     = useState(false);
+  const [pickingField, setPickingField] = useState<'start' | 'end'>('start');
+  const [photos, setPhotos]           = useState<string[]>([]);
+  const [uploading, setUploading]     = useState(false);
   const [groupSize, setGroupSize]     = useState('');
   const [budget, setBudget]           = useState('');
   const [meetingPoint, setMeetingPoint] = useState('');
@@ -101,11 +108,55 @@ export default function CreateTripScreen() {
 
   const resetForm = () => {
     setTripType('trek'); setDestination(''); setCoords(null);
-    setTitle(''); setDescription(''); setStartDate(''); setEndDate('');
+    setTitle(''); setDescription(''); setStartDate(''); setEndDate(''); setDateModal(false); setPhotos([]);
     setGroupSize(''); setBudget(''); setMeetingPoint(''); setExperienceLevel('');
     setIsPublic(false); setLookingForPartner(false);
     setPartnerGender('any'); setBikeRole('rider');
     setSlotsAvailable(1); setContactWhatsApp('');
+  };
+
+  const pickImage = async () => {
+    if (photos.length >= 5) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to add trip images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 5 - photos.length,
+      quality: 0.7,
+      allowsEditing: false,
+    });
+    if (!result.canceled) {
+      const uris = result.assets.map((a) => a.uri);
+      setPhotos((prev) => [...prev, ...uris].slice(0, 5));
+    }
+  };
+
+  const uploadPhotos = async (userId: string): Promise<string[]> => {
+    const urls: string[] = [];
+    const ts = Date.now();
+    for (let i = 0; i < photos.length; i++) {
+      const uri = photos[i];
+      const ext = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+      const path = `${userId}/${ts}_${i}.${ext}`;
+      try {
+        const res = await fetch(uri);
+        const blob = await res.blob();
+        const { error } = await supabase.storage
+          .from('trip-photos')
+          .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
+        if (!error) {
+          const { data } = supabase.storage.from('trip-photos').getPublicUrl(path);
+          urls.push(data.publicUrl);
+        }
+      } catch (e) {
+        console.warn('Photo upload failed for', path, e);
+      }
+    }
+    return urls;
   };
 
   const handleCreate = async () => {
@@ -115,6 +166,14 @@ export default function CreateTripScreen() {
     }
     haptic.medium();
     setLoading(true);
+
+    // Upload photos first
+    let photoUrls: string[] = [];
+    if (photos.length > 0 && user?.id) {
+      setUploading(true);
+      photoUrls = await uploadPhotos(user.id);
+      setUploading(false);
+    }
 
     const newTrip: Record<string, any> = {
       id: Math.random().toString(36).substr(2, 9),
@@ -132,6 +191,7 @@ export default function CreateTripScreen() {
     };
 
     if (description.trim()) newTrip.description = description.trim();
+    if (photoUrls.length > 0) newTrip.photos = photoUrls;
     if (isPublic) newTrip.is_public = true;
     if (meetingPoint.trim()) newTrip.meeting_point = meetingPoint.trim();
     if (experienceLevel) newTrip.experience_level = experienceLevel;
@@ -147,10 +207,18 @@ export default function CreateTripScreen() {
     try {
       const { error } = await supabase.from('trips').insert([newTrip]);
       if (error) {
-        await queueTask('INSERT', 'trips', newTrip);
-        Alert.alert('Saved Offline 📡', 'No connection — trip saved locally.', [
-          { text: 'OK', onPress: () => { resetForm(); router.back(); } },
-        ]);
+        // Only save offline for genuine network failures
+        const isNetworkError = error.message?.toLowerCase().includes('network') ||
+          error.message?.toLowerCase().includes('fetch') ||
+          error.message?.toLowerCase().includes('connection');
+        if (isNetworkError) {
+          await queueTask('INSERT', 'trips', newTrip);
+          Alert.alert('Saved Offline 📡', 'No connection — trip saved locally and will sync when you\'re back online.', [
+            { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+          ]);
+        } else {
+          Alert.alert('Failed to Create Trip', error.message || 'Something went wrong. Please try again.');
+        }
       } else {
         haptic.success();
         const msg = lookingForPartner && isPublic
@@ -162,9 +230,10 @@ export default function CreateTripScreen() {
           { text: 'OK', onPress: () => { resetForm(); router.back(); } },
         ]);
       }
-    } catch {
+    } catch (e: any) {
+      // Catch-block is true network failure (fetch threw)
       await queueTask('INSERT', 'trips', newTrip);
-      Alert.alert('Saved Offline 📡', 'Trip saved locally for later sync.', [
+      Alert.alert('Saved Offline 📡', 'Trip saved locally and will sync when you\'re back online.', [
         { text: 'OK', onPress: () => { resetForm(); router.back(); } },
       ]);
     } finally {
@@ -295,31 +364,126 @@ export default function CreateTripScreen() {
           <View style={s.row}>
             <View style={s.half}>
               <Text style={s.sublabel}>Start Date</Text>
-              <View style={s.inputRow}>
-                <Ionicons name="calendar-outline" size={15} color="rgba(255,255,255,0.3)" />
-                <TextInput
-                  style={s.input}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                  value={startDate}
-                  onChangeText={setStartDate}
-                />
-              </View>
+              <TouchableOpacity
+                style={[s.inputRow, s.dateTap]}
+                onPress={() => { setPickingField('start'); setDateModal(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={15} color={startDate ? GREEN : 'rgba(255,255,255,0.3)'} />
+                <Text style={[s.dateTapText, !startDate && s.datePlaceholder]}>
+                  {startDate ? formatDisplayDate(startDate) : 'Pick date'}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={s.half}>
               <Text style={s.sublabel}>End Date</Text>
-              <View style={s.inputRow}>
-                <Ionicons name="calendar-outline" size={15} color="rgba(255,255,255,0.3)" />
-                <TextInput
-                  style={s.input}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                  value={endDate}
-                  onChangeText={setEndDate}
-                />
-              </View>
+              <TouchableOpacity
+                style={[s.inputRow, s.dateTap]}
+                onPress={() => { setPickingField('end'); setDateModal(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={15} color={endDate ? GREEN : 'rgba(255,255,255,0.3)'} />
+                <Text style={[s.dateTapText, !endDate && s.datePlaceholder]}>
+                  {endDate ? formatDisplayDate(endDate) : 'Pick date'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
+
+          {/* Calendar Modal */}
+          <Modal visible={dateModal} transparent animationType="slide">
+            <View style={s.calModalOverlay}>
+              <View style={s.calModal}>
+                <View style={s.calHeader}>
+                  <Text style={s.calTitle}>
+                    {pickingField === 'start' ? 'Select Start Date' : 'Select End Date'}
+                  </Text>
+                  <TouchableOpacity onPress={() => setDateModal(false)}>
+                    <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                </View>
+                <Calendar
+                  minDate={pickingField === 'end' && startDate ? startDate : new Date().toISOString().split('T')[0]}
+                  onDayPress={(day: any) => {
+                    if (pickingField === 'start') {
+                      setStartDate(day.dateString);
+                      if (endDate && day.dateString > endDate) setEndDate('');
+                      setPickingField('end');
+                    } else {
+                      setEndDate(day.dateString);
+                      setDateModal(false);
+                    }
+                  }}
+                  markedDates={{
+                    ...(startDate ? { [startDate]: { selected: true, selectedColor: GREEN, startingDay: true } } : {}),
+                    ...(endDate ? { [endDate]: { selected: true, selectedColor: GREEN, endingDay: true } } : {}),
+                  }}
+                  markingType="period"
+                  theme={{
+                    backgroundColor: '#111827',
+                    calendarBackground: '#111827',
+                    textSectionTitleColor: 'rgba(255,255,255,0.4)',
+                    selectedDayBackgroundColor: GREEN,
+                    selectedDayTextColor: '#000',
+                    todayTextColor: GREEN,
+                    dayTextColor: '#FFF',
+                    textDisabledColor: 'rgba(255,255,255,0.2)',
+                    dotColor: GREEN,
+                    arrowColor: GREEN,
+                    monthTextColor: '#FFF',
+                    textMonthFontWeight: '800',
+                    textDayFontSize: 14,
+                    textMonthFontSize: 16,
+                  }}
+                />
+                {startDate && endDate && (
+                  <View style={s.calSummary}>
+                    <Ionicons name="calendar-outline" size={16} color={GREEN} />
+                    <Text style={s.calSummaryText}>
+                      {formatDisplayDate(startDate)} → {formatDisplayDate(endDate)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </Modal>
+
+          {/* Trip Photos */}
+          <Text style={s.sublabel}>Trip Photos <Text style={s.sublabelMuted}>(up to 5)</Text></Text>
+          <View style={s.photosRow}>
+            {photos.map((uri, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={s.photoThumb}
+                onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri }} style={s.photoThumbImg} contentFit="cover" />
+                <View style={s.photoRemoveIcon}>
+                  <Ionicons name="close-circle" size={18} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+            ))}
+            {photos.length < 5 && (
+              <TouchableOpacity style={s.photoAddSlot} onPress={pickImage} activeOpacity={0.8}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color={GREEN} />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={22} color="rgba(255,255,255,0.35)" />
+                    <Text style={s.photoAddText}>
+                      {photos.length === 0 ? 'Add\nPhotos' : `${5 - photos.length}\nleft`}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+          {photos.length > 0 && (
+            <Text style={s.photoHint}>
+              🗑 Tap a photo to remove it · Images auto-delete 30 days after trip ends
+            </Text>
+          )}
 
           {/* Group Size & Budget */}
           <View style={s.row}>
@@ -511,7 +675,12 @@ export default function CreateTripScreen() {
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color="#000" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ActivityIndicator color="#000" />
+                <Text style={s.createBtnText}>
+                  {uploading ? `Uploading photos…` : 'Creating…'}
+                </Text>
+              </View>
             ) : (
               <>
                 <Ionicons
@@ -548,6 +717,12 @@ function SectionLabel({ title, icon }: { title: string; icon: string }) {
       <Text style={s.sectionLabelText}>{title}</Text>
     </View>
   );
+}
+
+function formatDisplayDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const s = StyleSheet.create({
@@ -724,5 +899,63 @@ const s = StyleSheet.create({
   publicNote: {
     marginTop: 12, fontSize: 12, color: 'rgba(255,255,255,0.3)',
     textAlign: 'center', lineHeight: 17, paddingHorizontal: 8,
+  },
+
+  // Date picker
+  dateTap: { justifyContent: 'flex-start', gap: 8 },
+  dateTapText: { fontSize: 14, color: '#FFF', fontWeight: '600' },
+  datePlaceholder: { color: 'rgba(255,255,255,0.25)', fontWeight: '400' },
+
+  calModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  calModal: {
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingBottom: 32, overflow: 'hidden',
+  },
+  calHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  calTitle: { fontSize: 16, fontWeight: '800', color: '#FFF' },
+  calSummary: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 20, marginTop: 12,
+    backgroundColor: 'rgba(140,198,63,0.1)',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
+  },
+  calSummaryText: { fontSize: 13, fontWeight: '700', color: GREEN },
+
+  // Photos
+  sublabelMuted: { color: 'rgba(255,255,255,0.25)', fontWeight: '400', fontSize: 10 },
+  photosRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4, marginBottom: 6,
+  },
+  photoThumb: {
+    width: 80, height: 80, borderRadius: 12, overflow: 'hidden', position: 'relative',
+  },
+  photoThumbImg: { width: '100%', height: '100%' },
+  photoRemoveIcon: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10,
+  },
+  photoAddSlot: {
+    width: 80, height: 80, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)',
+    borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  photoAddText: {
+    fontSize: 10, color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center', lineHeight: 13,
+  },
+  photoHint: {
+    fontSize: 11, color: 'rgba(255,255,255,0.28)',
+    lineHeight: 16, marginBottom: 4,
   },
 });

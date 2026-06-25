@@ -166,6 +166,12 @@ export default function RootLayout() {
         <Stack.Screen name="legal/terms-of-service" />
         <Stack.Screen name="notification-preferences" />
         <Stack.Screen name="ai-planner" />
+        <Stack.Screen name="rentals/index" />
+        <Stack.Screen name="rentals/[id]" />
+        <Stack.Screen name="rentals/register" />
+        <Stack.Screen name="stories/index" />
+        <Stack.Screen name="stories/[id]" />
+        <Stack.Screen name="stories/create" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

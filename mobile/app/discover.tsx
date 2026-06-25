@@ -213,13 +213,6 @@ export default function DiscoverScreen() {
             <Text style={styles.headerTitle}>Discover Trips</Text>
             <Text style={styles.headerSub}>Find adventures to join</Text>
           </View>
-          <TouchableOpacity
-            style={styles.planBtn}
-            onPress={() => router.push('/(tabs)/create' as any)}
-          >
-            <Ionicons name="add" size={18} color="#000" />
-            <Text style={styles.planBtnText}>Plan</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Location search */}
@@ -244,7 +237,7 @@ export default function DiscoverScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.pillsRow}
-          style={{ marginBottom: 16 }}
+          style={styles.pillsScroll}
         >
           {TYPE_FILTERS.map((f) => (
             <TouchableOpacity
@@ -287,17 +280,12 @@ export default function DiscoverScreen() {
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyEmoji}>🌍</Text>
-                <Text style={styles.emptyTitle}>No public trips yet</Text>
+                <Text style={styles.emptyTitle}>No trips yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Be the first to invite fellow travelers on an adventure!
+                  {activeType === 'partner'
+                    ? 'No one is looking for a travel partner right now. Create a trip and enable partner matching!'
+                    : 'No public trips here yet. Check back soon for new adventures!'}
                 </Text>
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => router.push('/(tabs)/create' as any)}
-                >
-                  <Ionicons name="add-circle-outline" size={16} color="#000" />
-                  <Text style={styles.emptyBtnText}>Create a Public Trip</Text>
-                </TouchableOpacity>
               </View>
             }
             renderItem={({ item }) => (
@@ -501,12 +489,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '900', color: '#FFF', letterSpacing: 0.3 },
   headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
-  planBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#8CC63F', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,
-  },
-  planBtnText: { fontSize: 13, fontWeight: '800', color: '#000' },
-
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -517,7 +499,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: '#FFF', fontSize: 14 },
 
-  pillsRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 2 },
+  pillsScroll: { height: 46, marginBottom: 10 },
+  pillsRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,
@@ -641,10 +624,5 @@ const styles = StyleSheet.create({
     fontSize: 13, color: 'rgba(255,255,255,0.38)',
     textAlign: 'center', paddingHorizontal: 40, lineHeight: 19,
   },
-  emptyBtn: {
-    marginTop: 8, backgroundColor: '#8CC63F',
-    paddingHorizontal: 24, paddingVertical: 13,
-    borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: '800', color: '#000' },
 });
+

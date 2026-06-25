@@ -26,13 +26,13 @@ const SECTIONS = [
     iconName: 'walk-outline',
   },
   {
-    id: 'trips',
-    label: 'Trips',
-    emoji: '🗺️',
-    description: 'Plan & join group trips',
-    route: '/discover?type=all',
-    color: '#3897F0',
-    iconName: 'airplane-outline',
+    id: 'stories',
+    label: 'Stories',
+    emoji: '📖',
+    description: 'Trek & travel journeys',
+    route: '/stories',
+    color: '#EC4899',
+    iconName: 'book-outline',
   },
   {
     id: 'guides',
@@ -69,6 +69,15 @@ const SECTIONS = [
     route: '/expeditions',
     color: '#EF4444',
     iconName: 'flag-outline',
+  },
+  {
+    id: 'rentals',
+    label: 'Rentals',
+    emoji: '🏍️',
+    description: 'Bikes, cars & more',
+    route: '/rentals',
+    color: '#F97316',
+    iconName: 'car-outline',
   },
 ] as const;
 

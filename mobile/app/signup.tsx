@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { authHelpers } from '../lib/supabase';
+import { useAuthStore } from '../stores/authStore';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -23,6 +24,7 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const setUser = useAuthStore((state) => state.setUser);
 
   const handleSignup = async () => {
     if (!fullName || !email || !password || !confirmPassword) {
@@ -51,11 +53,18 @@ export default function SignupScreen() {
       return;
     }
 
-    Alert.alert(
-      'Account Created! 🎉',
-      'Check your email to verify your account, then log in.',
-      [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
-    );
+    if (data.session) {
+      // Email confirmation is off — user is instantly signed in
+      setUser(data.session.user);
+      router.replace('/(tabs)');
+    } else {
+      // Email confirmation is on — ask user to verify first
+      Alert.alert(
+        'Account Created! 🎉',
+        'Check your email to verify your account, then log in.',
+        [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
+      );
+    }
   };
 
   return (

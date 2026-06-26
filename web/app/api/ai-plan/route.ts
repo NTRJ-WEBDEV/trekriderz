@@ -132,10 +132,23 @@ async function openAICompatCall(
       temperature: 0.7,
     }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message ?? `${model} error`);
-  const content = data.choices[0].message.content;
-  return typeof content === 'string' ? JSON.parse(content) : content;
+
+  // Always read as text first — AI providers sometimes return HTML on rate-limit/auth errors
+  const text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`${model} unavailable (HTTP ${res.status})`);
+  }
+
+  if (!res.ok) throw new Error(data.error?.message ?? `${model} error ${res.status}`);
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error(`${model} returned empty response`);
+  if (typeof content === 'string') {
+    try { return JSON.parse(content); } catch { throw new Error(`${model} returned non-JSON content`); }
+  }
+  return content;
 }
 
 async function callAI(prompt: string): Promise<any> {
@@ -145,22 +158,39 @@ async function callAI(prompt: string): Promise<any> {
   const groqKey   = process.env.GROQ_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
 
+  const errors: string[] = [];
+
   // 1. Gemini 2.0 Flash — free (1,500 requests/day free tier)
   if (isReal(geminiKey)) {
-    return openAICompatCall(GEMINI_URL, geminiKey!, 'gemini-2.0-flash', prompt);
+    try {
+      return await openAICompatCall(GEMINI_URL, geminiKey!, 'gemini-2.0-flash', prompt);
+    } catch (e: any) {
+      errors.push(`Gemini: ${e.message}`);
+      console.warn('[ai-plan] Gemini failed, trying fallback:', e.message);
+    }
   }
 
   // 2. Groq + Llama 3.1 8B — free tier (30 req/min)
   if (isReal(groqKey)) {
-    return openAICompatCall(GROQ_URL, groqKey!, 'llama-3.1-8b-instant', prompt);
+    try {
+      return await openAICompatCall(GROQ_URL, groqKey!, 'llama-3.1-8b-instant', prompt, false);
+    } catch (e: any) {
+      errors.push(`Groq: ${e.message}`);
+      console.warn('[ai-plan] Groq failed, trying fallback:', e.message);
+    }
   }
 
   // 3. GPT-4o-mini — cheapest paid (~$0.15/million tokens)
   if (isReal(openaiKey)) {
-    return openAICompatCall(OPENAI_URL, openaiKey!, 'gpt-4o-mini', prompt);
+    try {
+      return await openAICompatCall(OPENAI_URL, openaiKey!, 'gpt-4o-mini', prompt);
+    } catch (e: any) {
+      errors.push(`OpenAI: ${e.message}`);
+    }
   }
 
-  throw new Error('NO_AI_KEY');
+  if (errors.length === 0) throw new Error('NO_AI_KEY');
+  throw new Error(`All AI providers failed: ${errors.join(' | ')}`);
 }
 
 export async function POST(req: NextRequest) {
@@ -177,7 +207,13 @@ export async function POST(req: NextRequest) {
     console.error('[ai-plan]', err.message);
     if (err.message === 'NO_AI_KEY') {
       return NextResponse.json(
-        { error: 'AI service not configured. Add GEMINI_API_KEY (free) or GROQ_API_KEY (free) to Vercel environment variables.' },
+        { error: 'AI service not configured. Add GEMINI_API_KEY or GROQ_API_KEY to Vercel environment variables.' },
+        { status: 503 }
+      );
+    }
+    if (err.message?.startsWith('All AI providers failed')) {
+      return NextResponse.json(
+        { error: 'AI service is temporarily busy. Please try again in a moment.' },
         { status: 503 }
       );
     }

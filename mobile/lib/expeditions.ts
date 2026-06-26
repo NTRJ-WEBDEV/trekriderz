@@ -107,7 +107,7 @@ export async function fetchExpeditions(filters?: {
       .from('guided_expeditions')
       .select(`
         *,
-        guide:guides(id, name, photo_url, rating, experience_years, location, is_premium),
+        guide:guides(id, name, photo_url, rating, experience_years, is_premium),
         packages:expedition_packages(id, price_per_person, sort_order)
       `)
       .in('status', ['published', 'full'])
@@ -155,7 +155,7 @@ export async function fetchExpeditionById(id: string): Promise<{
         .from('guided_expeditions')
         .select(`
           *,
-          guide:guides(id, name, photo_url, rating, experience_years, location, bio, is_premium),
+          guide:guides(id, name, photo_url, rating, experience_years, bio, is_premium),
           packages:expedition_packages(*),
           itinerary_days:expedition_itinerary_days(*)
         `)

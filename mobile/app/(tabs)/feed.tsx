@@ -302,6 +302,7 @@ export default function FeedScreen() {
         .from('posts')
         .select('*, users(full_name, avatar_url, id)')
         .eq('visibility', 'public')
+        .or('post_type.is.null,post_type.neq.trip_story')
         .order('created_at', { ascending: false })
         .limit(30);
 

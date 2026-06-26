@@ -220,6 +220,7 @@ export default function ExploreScreen() {
         .from('posts')
         .select('*, users:user_id(id, full_name, avatar_url)')
         .eq('visibility', 'public')
+        .or('post_type.is.null,post_type.neq.trip_story')
         .order('created_at', { ascending: false })
         .limit(30);
 

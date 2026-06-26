@@ -242,7 +242,8 @@ export default function CreateTripScreen() {
   };
 
   return (
-    <SafeAreaView style={s.container}>
+    <View style={s.container}>
+      <SafeAreaView edges={['top']} />
       <ScrollView
         style={s.scroll}
         showsVerticalScrollIndicator={false}
@@ -389,64 +390,6 @@ export default function CreateTripScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Calendar Modal */}
-          <Modal visible={dateModal} transparent animationType="slide">
-            <View style={s.calModalOverlay}>
-              <View style={s.calModal}>
-                <View style={s.calHeader}>
-                  <Text style={s.calTitle}>
-                    {pickingField === 'start' ? 'Select Start Date' : 'Select End Date'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setDateModal(false)}>
-                    <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
-                  </TouchableOpacity>
-                </View>
-                <Calendar
-                  minDate={pickingField === 'end' && startDate ? startDate : new Date().toISOString().split('T')[0]}
-                  onDayPress={(day: any) => {
-                    if (pickingField === 'start') {
-                      setStartDate(day.dateString);
-                      if (endDate && day.dateString > endDate) setEndDate('');
-                      setPickingField('end');
-                    } else {
-                      setEndDate(day.dateString);
-                      setDateModal(false);
-                    }
-                  }}
-                  markedDates={{
-                    ...(startDate ? { [startDate]: { selected: true, selectedColor: GREEN, startingDay: true } } : {}),
-                    ...(endDate ? { [endDate]: { selected: true, selectedColor: GREEN, endingDay: true } } : {}),
-                  }}
-                  markingType="period"
-                  theme={{
-                    backgroundColor: '#111827',
-                    calendarBackground: '#111827',
-                    textSectionTitleColor: 'rgba(255,255,255,0.4)',
-                    selectedDayBackgroundColor: GREEN,
-                    selectedDayTextColor: '#000',
-                    todayTextColor: GREEN,
-                    dayTextColor: '#FFF',
-                    textDisabledColor: 'rgba(255,255,255,0.2)',
-                    dotColor: GREEN,
-                    arrowColor: GREEN,
-                    monthTextColor: '#FFF',
-                    textMonthFontWeight: '800',
-                    textDayFontSize: 14,
-                    textMonthFontSize: 16,
-                  }}
-                />
-                {startDate && endDate && (
-                  <View style={s.calSummary}>
-                    <Ionicons name="calendar-outline" size={16} color={GREEN} />
-                    <Text style={s.calSummaryText}>
-                      {formatDisplayDate(startDate)} → {formatDisplayDate(endDate)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </Modal>
 
           {/* Trip Photos */}
           <Text style={s.sublabel}>Trip Photos <Text style={s.sublabelMuted}>(up to 5)</Text></Text>
@@ -706,7 +649,65 @@ export default function CreateTripScreen() {
 
         </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Calendar Modal — must live OUTSIDE ScrollView to avoid Fabric crash */}
+      <Modal visible={dateModal} transparent animationType="slide">
+        <View style={s.calModalOverlay}>
+          <View style={s.calModal}>
+            <View style={s.calHeader}>
+              <Text style={s.calTitle}>
+                {pickingField === 'start' ? 'Select Start Date' : 'Select End Date'}
+              </Text>
+              <TouchableOpacity onPress={() => setDateModal(false)}>
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            </View>
+            <Calendar
+              minDate={pickingField === 'end' && startDate ? startDate : new Date().toISOString().split('T')[0]}
+              onDayPress={(day: any) => {
+                if (pickingField === 'start') {
+                  setStartDate(day.dateString);
+                  if (endDate && day.dateString > endDate) setEndDate('');
+                  setPickingField('end');
+                } else {
+                  setEndDate(day.dateString);
+                  setDateModal(false);
+                }
+              }}
+              markedDates={{
+                ...(startDate ? { [startDate]: { selected: true, selectedColor: GREEN, startingDay: true } } : {}),
+                ...(endDate ? { [endDate]: { selected: true, selectedColor: GREEN, endingDay: true } } : {}),
+              }}
+              markingType="period"
+              theme={{
+                backgroundColor: '#111827',
+                calendarBackground: '#111827',
+                textSectionTitleColor: 'rgba(255,255,255,0.4)',
+                selectedDayBackgroundColor: GREEN,
+                selectedDayTextColor: '#000',
+                todayTextColor: GREEN,
+                dayTextColor: '#FFF',
+                textDisabledColor: 'rgba(255,255,255,0.2)',
+                dotColor: GREEN,
+                arrowColor: GREEN,
+                monthTextColor: '#FFF',
+                textMonthFontWeight: '800',
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+              }}
+            />
+            {startDate && endDate && (
+              <View style={s.calSummary}>
+                <Ionicons name="calendar-outline" size={16} color={GREEN} />
+                <Text style={s.calSummaryText}>
+                  {formatDisplayDate(startDate)} → {formatDisplayDate(endDate)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 

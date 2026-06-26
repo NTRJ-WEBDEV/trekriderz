@@ -195,9 +195,9 @@ export default function CreateStoryScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Additional photo thumbnails */}
+        {/* Additional photo thumbnails — plain View avoids nested-ScrollView Fabric crash */}
         {photos.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbRow} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+          <View style={styles.thumbRow}>
             {photos.slice(1).map((uri, i) => (
               <TouchableOpacity key={i} onPress={() => setPreviewIndex(i + 1)} style={styles.thumb}>
                 <Image source={{ uri }} style={styles.thumbImg} contentFit="cover" />
@@ -212,7 +212,7 @@ export default function CreateStoryScreen() {
                 <Text style={styles.thumbAddText}>{MAX_PHOTOS - photos.length} left</Text>
               </TouchableOpacity>
             )}
-          </ScrollView>
+          </View>
         )}
         {photos.length === 1 && canAddMore && (
           <TouchableOpacity style={styles.addMoreRow} onPress={pickPhotos}>
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   coverPickLabel: { fontSize: 15, fontWeight: '800', color: '#FFF' },
   coverPickHint: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
 
-  thumbRow: { paddingHorizontal: 16, paddingVertical: 12 },
+  thumbRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   thumb: { width: 72, height: 72, borderRadius: 12, overflow: 'visible' },
   thumbImg: { width: 72, height: 72, borderRadius: 12 },
   thumbRemove: { position: 'absolute', top: -6, right: -6 },

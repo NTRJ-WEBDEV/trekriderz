@@ -66,11 +66,18 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
+    "updates": {
+      "url": "https://u.expo.dev/946b44e9-cee5-4d14-93c3-0492cbb2dd9f"
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
       "expo-router",
+      "expo-updates",
       "expo-location",
       "expo-asset",
       [

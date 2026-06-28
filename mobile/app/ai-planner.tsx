@@ -204,7 +204,7 @@ export default function AIPlannerScreen() {
       `Hi TrekRiderz! I'd like to book this trip:\n\n🏔️ ${result?.title}\n📍 ${destination}\n👥 ${groupSize} people\n📅 ${duration} days\n💰 ${BUDGETS.find((b) => b.id === budget)?.sub}\n\nType: ${selectedType.label}${specialNotes ? `\nNotes: ${specialNotes}` : ''}\n\nPlease help me organise this!`
     );
     import('react-native').then(({ Linking }) => {
-      Linking.openURL(`whatsapp://send?phone=919999999999&text=${msg}`);
+      Linking.openURL(`whatsapp://send?phone=${process.env.EXPO_PUBLIC_BUSINESS_WHATSAPP || '919999999999'}&text=${msg}`);
     });
   };
 

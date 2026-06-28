@@ -10,7 +10,7 @@ const supabase = createClient(
 
 const ADMIN_PASSWORD = "trekriderz2026";
 
-type Tab = "overview" | "enquiries" | "bookings" | "users" | "expeditions" | "trips" | "moderation" | "videos";
+type Tab = "overview" | "enquiries" | "bookings" | "users" | "expeditions" | "trips" | "moderation" | "videos" | "communities";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number) { return n.toLocaleString("en-IN"); }
@@ -70,6 +70,9 @@ export default function AdminPage() {
   const [editingTrip, setEditingTrip] = useState<any>(null);
   const [tripForm, setTripForm] = useState<any>({ ...BLANK_TRIP });
   const [videoForm, setVideoForm] = useState({ title: "", youtube_url: "", category: "shorts" });
+  const [communities, setCommunities] = useState<any[]>([]);
+  const [addingCommunity, setAddingCommunity] = useState(false);
+  const [communityForm, setCommunityForm] = useState({ name: "", description: "", category: "general", cover_image: "", is_private: false });
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -93,6 +96,7 @@ export default function AdminPage() {
       supabase.from("guides").select("*, user:user_id(full_name,avatar_url)").order("created_at", { ascending: false }),
       supabase.from("homestays").select("*, owner:owner_id(full_name,avatar_url)").order("created_at", { ascending: false }),
       supabase.from("youtube_videos").select("*").order("created_at", { ascending: false }),
+      supabase.from("communities").select("*, creator:created_by(full_name)").order("created_at", { ascending: false }),
     ]);
 
     const get = (i: number) => results[i].status === "fulfilled" ? (results[i] as any).value : null;
@@ -119,6 +123,7 @@ export default function AdminPage() {
     setGuides(get(15)?.data || []);
     setHomestays(get(16)?.data || []);
     setVideos(get(17)?.data || []);
+    setCommunities(get(18)?.data || []);
     setLoading(false);
   }, []);
 
@@ -184,6 +189,27 @@ export default function AdminPage() {
 
   const deleteVideo = async (id: string) => { await supabase.from("youtube_videos").delete().eq("id", id); loadAll(); };
 
+  const createCommunity = async () => {
+    if (!communityForm.name.trim()) return;
+    const payload: any = { name: communityForm.name.trim(), description: communityForm.description || null, category: communityForm.category, is_private: communityForm.is_private };
+    if (communityForm.cover_image.trim()) payload.cover_image = communityForm.cover_image.trim();
+    await supabase.from("communities").insert(payload);
+    setCommunityForm({ name: "", description: "", category: "general", cover_image: "", is_private: false });
+    setAddingCommunity(false);
+    loadAll();
+  };
+
+  const deleteCommunity = async (id: string) => {
+    if (!confirm("Delete this community? All posts and members will also be removed.")) return;
+    await supabase.from("communities").delete().eq("id", id);
+    loadAll();
+  };
+
+  const updateBookingStatus = async (id: string, status: string) => {
+    await supabase.from("bookings").update({ status }).eq("id", id);
+    loadAll();
+  };
+
   // ── Tab config ─────────────────────────────────────────────────────────────
   const TABS: { key: Tab; label: string; badge?: number }[] = [
     { key: "overview", label: "📊 Overview" },
@@ -194,6 +220,7 @@ export default function AdminPage() {
     { key: "trips", label: "🗺️ Web Trips", badge: 0 },
     { key: "moderation", label: "✅ Moderation", badge: overview.pendingApprovals },
     { key: "videos", label: "🎬 Videos", badge: 0 },
+    { key: "communities", label: "🏘️ Communities", badge: 0 },
   ];
 
   return (
@@ -236,6 +263,7 @@ export default function AdminPage() {
                 { label: "Active Expeditions", value: fmt(overview.activeExpeditions || 0), icon: "⛰️", color: "text-accent" },
                 { label: "Active Web Trips", value: fmt(overview.activeWebTrips || 0), icon: "🗺️", color: "text-purple-400" },
                 { label: "YouTube Videos", value: fmt(videos.length), icon: "🎬", color: "text-red-400" },
+                { label: "Communities", value: fmt(communities.length), icon: "🏘️", color: "text-cyan-400" },
               ].map((s) => (
                 <div key={s.label} className="glass-card rounded-2xl p-5">
                   <div className="text-2xl mb-2">{s.icon}</div>
@@ -418,10 +446,11 @@ export default function AdminPage() {
                     <th className="text-left p-4">Payment</th>
                     <th className="text-left p-4">Status</th>
                     <th className="text-left p-4">Booked</th>
+                    <th className="p-4">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.length === 0 && <tr><td colSpan={8} className="text-center py-12 text-white/30">No bookings yet</td></tr>}
+                  {bookings.length === 0 && <tr><td colSpan={9} className="text-center py-12 text-white/30">No bookings yet</td></tr>}
                   {bookings.map((b) => (
                     <tr key={b.id} className="border-b border-white/5 hover:bg-white/2">
                       <td className="p-4">
@@ -436,6 +465,14 @@ export default function AdminPage() {
                       <td className="p-4"><Badge status={b.payment_status} /></td>
                       <td className="p-4"><Badge status={b.status} /></td>
                       <td className="p-4 text-white/30 text-xs">{fmtDate(b.created_at)}</td>
+                      <td className="p-4">
+                        {b.status === "pending" && (
+                          <div className="flex gap-1">
+                            <button onClick={() => updateBookingStatus(b.id, "confirmed")} className="btn-accent px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap">Confirm</button>
+                            <button onClick={() => updateBookingStatus(b.id, "rejected")} className="glass px-2 py-1 rounded-full text-xs hover:text-red-400">Reject</button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -717,6 +754,90 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+        {/* ── COMMUNITIES ──────────────────────────────────────────────── */}
+        {tab === "communities" && (
+          <div className="space-y-6">
+            {addingCommunity ? (
+              <div className="glass-card rounded-2xl p-6">
+                <h2 className="font-display text-2xl text-white mb-5">CREATE COMMUNITY</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-white/40 text-xs mb-1 block">Community Name *</label>
+                    <input placeholder="e.g. Himalayan Trekkers" value={communityForm.name} onChange={(e) => setCommunityForm(f => ({ ...f, name: e.target.value }))} className="form-input text-sm" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-white/40 text-xs mb-1 block">Description</label>
+                    <input placeholder="What is this community about?" value={communityForm.description} onChange={(e) => setCommunityForm(f => ({ ...f, description: e.target.value }))} className="form-input text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs mb-1 block">Category</label>
+                    <select value={communityForm.category} onChange={(e) => setCommunityForm(f => ({ ...f, category: e.target.value }))} className="form-input text-sm">
+                      {["general", "trekking", "travel", "photography", "gear", "safety", "guides", "homestays"].map(c => (
+                        <option key={c} value={c} className="bg-dark-800 capitalize">{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-white/40 text-xs mb-1 block">Cover Image URL</label>
+                    <input placeholder="https://..." value={communityForm.cover_image} onChange={(e) => setCommunityForm(f => ({ ...f, cover_image: e.target.value }))} className="form-input text-sm" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" id="is_private" checked={communityForm.is_private} onChange={(e) => setCommunityForm(f => ({ ...f, is_private: e.target.checked }))} className="w-4 h-4 accent-accent cursor-pointer" />
+                    <label htmlFor="is_private" className="text-white/70 text-sm cursor-pointer">Private community (invite-only)</label>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-5">
+                  <button onClick={createCommunity} className="btn-accent px-6 py-2.5 rounded-full font-bold text-sm">Create Community</button>
+                  <button onClick={() => { setAddingCommunity(false); setCommunityForm({ name: "", description: "", category: "general", cover_image: "", is_private: false }); }} className="btn-ghost px-6 py-2.5 rounded-full text-sm font-bold">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingCommunity(true)} className="btn-accent px-6 py-2.5 rounded-full font-bold text-sm">+ Create Community</button>
+            )}
+
+            <div className="glass-card rounded-2xl overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-white/10 text-white/30 text-xs uppercase tracking-wider">
+                    <th className="text-left p-4">Community</th>
+                    <th className="text-left p-4 hidden md:table-cell">Category</th>
+                    <th className="text-left p-4 hidden md:table-cell">Members</th>
+                    <th className="text-left p-4 hidden lg:table-cell">Created By</th>
+                    <th className="text-left p-4">Visibility</th>
+                    <th className="text-left p-4">Date</th>
+                    <th className="p-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {communities.length === 0 && <tr><td colSpan={7} className="text-center py-12 text-white/30">No communities yet</td></tr>}
+                  {communities.map((c) => (
+                    <tr key={c.id} className="border-b border-white/5 hover:bg-white/2">
+                      <td className="p-4">
+                        <p className="font-medium text-white">{c.name}</p>
+                        {c.description && <p className="text-white/40 text-xs truncate max-w-[200px]">{c.description}</p>}
+                      </td>
+                      <td className="p-4 hidden md:table-cell">
+                        <span className="text-xs bg-white/10 text-white/60 px-2 py-0.5 rounded-full capitalize">{c.category}</span>
+                      </td>
+                      <td className="p-4 hidden md:table-cell text-accent font-bold text-sm">{c.member_count}</td>
+                      <td className="p-4 hidden lg:table-cell text-white/50 text-xs">{c.creator?.full_name || "—"}</td>
+                      <td className="p-4">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.is_private ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"}`}>
+                          {c.is_private ? "Private" : "Public"}
+                        </span>
+                      </td>
+                      <td className="p-4 text-white/30 text-xs">{fmtDate(c.created_at)}</td>
+                      <td className="p-4">
+                        <button onClick={() => deleteCommunity(c.id)} className="glass px-3 py-1 rounded-full text-xs hover:border-red-500/30 hover:text-red-400">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

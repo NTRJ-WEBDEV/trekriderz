@@ -1,5 +1,6 @@
 "use client";
 
+import { BUSINESS_WA } from "@/lib/constants";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import TripCard, { Trip } from "./TripCard";
@@ -130,7 +131,7 @@ export default function TripsFilterClient({ trips }: { trips: Trip[] }) {
           <p className="text-white/50 text-lg font-medium">No trips match your filters</p>
           <p className="text-white/30 text-sm mt-1">Try removing a filter or reach out on WhatsApp</p>
           <a
-            href="https://wa.me/919999999999?text=Hi%2C%20I%27m%20looking%20for%20a%20trip!"
+            href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27m%20looking%20for%20a%20trip!`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-6 inline-block btn-accent px-6 py-2.5 rounded-full text-sm font-bold"

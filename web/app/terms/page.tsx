@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -212,7 +213,7 @@ export default function TermsPage() {
               <li><strong>Email:</strong> <a href="mailto:hello@trekriderz.com">hello@trekriderz.com</a></li>
               <li><strong>Company:</strong> NTRJ WEBDEV PVT LTD</li>
               <li><strong>Address:</strong> Karnataka, India</li>
-              <li><strong>WhatsApp:</strong> <a href="https://wa.me/919999999999">+91 99999 99999</a></li>
+              <li><strong>WhatsApp:</strong> <a href={`https://wa.me/${BUSINESS_WA}`}>+91 99999 99999</a></li>
             </ul>
           </Section>
         </div>

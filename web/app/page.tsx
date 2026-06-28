@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import AnimatedStats from "@/components/AnimatedStats";
 import TripCard, { Trip } from "@/components/TripCard";
+import { BUSINESS_WA } from "@/lib/constants";
 
 export const revalidate = 60;
 
@@ -363,7 +364,7 @@ export default async function Home() {
                 Plan My Custom Trip →
               </Link>
               <a
-                href="https://wa.me/919999999999?text=Hi%2C%20I%27d%20like%20to%20plan%20a%20custom%20trip!"
+                href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27d%20like%20to%20plan%20a%20custom%20trip!`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-ghost px-8 py-4 rounded-full font-bold text-base"

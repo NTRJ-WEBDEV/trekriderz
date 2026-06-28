@@ -1,5 +1,6 @@
 "use client";
 
+import { BUSINESS_WA } from "@/lib/constants";
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -50,7 +51,7 @@ export default function SpecialEnquiryForm({ type }: { type: "birthday" | "anniv
           perfect {label.toLowerCase()} experience.
         </p>
         <a
-          href={`https://wa.me/919999999999?text=${waMsg}`}
+          href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
           target="_blank"
           rel="noopener noreferrer"
           className="btn-accent px-6 py-3 rounded-full font-bold text-sm"
@@ -130,7 +131,7 @@ export default function SpecialEnquiryForm({ type }: { type: "birthday" | "anniv
             {status === "loading" ? "Sending..." : `Plan ${label} Trip`}
           </button>
           <a
-            href={`https://wa.me/919999999999?text=${waMsg}`}
+            href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 btn-ghost py-3 rounded-full font-bold text-sm text-center"

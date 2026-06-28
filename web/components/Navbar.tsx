@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BUSINESS_WA } from "@/lib/constants";
 
 const NAV_LINKS = [
   { href: "/trips", label: "Treks & Tours" },
@@ -69,7 +70,7 @@ export default function Navbar() {
           </Link>
           {/* WhatsApp */}
           <a
-            href="https://wa.me/919999999999?text=Hi%20TrekRiderz%2C%20I%27m%20interested%20in%20a%20trip!"
+            href={`https://wa.me/${BUSINESS_WA}?text=Hi%20TrekRiderz%2C%20I%27m%20interested%20in%20a%20trip!`}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden lg:inline-flex items-center gap-1.5 glass px-4 py-2 rounded-full text-sm font-medium hover:border-accent/30 transition-colors"
@@ -114,7 +115,7 @@ export default function Navbar() {
             Book Now
           </Link>
           <a
-            href="https://wa.me/919999999999?text=Hi%20TrekRiderz%2C%20I%27m%20interested%20in%20a%20trip!"
+            href={`https://wa.me/${BUSINESS_WA}?text=Hi%20TrekRiderz%2C%20I%27m%20interested%20in%20a%20trip!`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-center text-white/60 hover:text-accent text-sm py-1"

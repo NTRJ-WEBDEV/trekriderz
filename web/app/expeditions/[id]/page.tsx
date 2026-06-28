@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -105,7 +106,7 @@ export default async function ExpeditionDetailPage({
               </div>
             )}
             <a
-              href="https://wa.me/919999999999"
+              href={`https://wa.me/${BUSINESS_WA}`}
               target="_blank"
               rel="noopener noreferrer"
               className="block text-center text-white/50 text-sm hover:text-white/80 py-2"

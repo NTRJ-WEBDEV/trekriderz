@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import { createClient } from "@supabase/supabase-js";
 
 export const revalidate = 60;
@@ -7,15 +8,6 @@ export const metadata = {
   description:
     "Watch TrekRiderz trail reels, time-lapses, and adventure shorts from Western Ghats and beyond.",
 };
-
-const PLACEHOLDER_VIDEOS = [
-  { id: "p1", title: "Coorg Coffee Trail Highlights", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "shorts" },
-  { id: "p2", title: "Western Ghats Trek 4K", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "shorts" },
-  { id: "p3", title: "Nepal Base Camp Journey", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "shorts" },
-  { id: "p4", title: "Bhutan Kingdom Tour 2025", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "shorts" },
-  { id: "p5", title: "Monsoon Trek Time-lapse", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "timelapse" },
-  { id: "p6", title: "Sunrise on Kodachadri", embed_url: "https://www.youtube.com/embed/dQw4w9WgXcQ", category: "timelapse" },
-];
 
 async function getVideos() {
   try {
@@ -27,9 +19,9 @@ async function getVideos() {
       .from("youtube_videos")
       .select("*")
       .order("created_at", { ascending: false });
-    return data && data.length > 0 ? data : PLACEHOLDER_VIDEOS;
+    return data || [];
   } catch {
-    return PLACEHOLDER_VIDEOS;
+    return [];
   }
 }
 
@@ -66,25 +58,33 @@ export default async function VideosPage() {
         {/* Shorts / Main videos */}
         <section>
           <h2 className="font-display text-4xl text-white mb-6">YOUTUBE SHORTS</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {shorts.map((v: { id: string; title: string; embed_url: string }) => (
-              <div key={v.id} className="glass-card rounded-2xl overflow-hidden">
-                <div className="relative aspect-[9/16]">
-                  <iframe
-                    src={v.embed_url}
-                    title={v.title}
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
+          {shorts.length === 0 ? (
+            <div className="glass-card rounded-2xl p-12 text-center text-white/40">
+              <p className="text-5xl mb-3">🎬</p>
+              <p className="font-display text-2xl text-white/60 mb-1">COMING SOON</p>
+              <p className="text-sm">Our first trail reels are in production. Subscribe to be notified.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {shorts.map((v: { id: string; title: string; embed_url: string }) => (
+                <div key={v.id} className="glass-card rounded-2xl overflow-hidden">
+                  <div className="relative aspect-[9/16]">
+                    <iframe
+                      src={v.embed_url}
+                      title={v.title}
+                      className="absolute inset-0 w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="p-3">
+                    <p className="text-white/70 text-xs font-medium line-clamp-2">{v.title}</p>
+                  </div>
                 </div>
-                <div className="p-3">
-                  <p className="text-white/70 text-xs font-medium line-clamp-2">{v.title}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Time-lapses — uses section-bg.mp4 */}
@@ -135,7 +135,7 @@ export default async function VideosPage() {
             Your photos and memories, professionally documented.
           </p>
           <a
-            href="https://wa.me/919999999999?text=Hi%2C%20I%27d%20love%20to%20join%20a%20trek%20and%20be%20featured%20in%20your%20reels!"
+            href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27d%20love%20to%20join%20a%20trek%20and%20be%20featured%20in%20your%20reels!`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block btn-accent px-8 py-3 rounded-full font-bold"

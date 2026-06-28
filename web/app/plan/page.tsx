@@ -1,5 +1,6 @@
 "use client";
 
+import { BUSINESS_WA } from "@/lib/constants";
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -365,7 +366,7 @@ export default function PlanPage() {
                     </button>
                   </div>
                   <a
-                    href={`https://wa.me/919999999999?text=${waMsg}`}
+                    href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-center text-accent text-xs hover:underline"
@@ -397,7 +398,7 @@ export default function PlanPage() {
               </Link>
               <br />
               <a
-                href={`https://wa.me/919999999999?text=${waMsg}`}
+                href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-block text-white/50 text-sm hover:text-accent"
@@ -417,7 +418,7 @@ export default function PlanPage() {
               <strong className="text-accent">24 hours</strong>.
             </p>
             <a
-              href={`https://wa.me/919999999999?text=${waMsg}`}
+              href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block btn-accent px-8 py-3 rounded-full font-bold"

@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import { createClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -25,7 +26,7 @@ const SAMPLE_TRIPS: Record<string, Trip & {
       { day: 2, title: "Forest Trek & Waterfall", description: "Full day trek through Pushpagiri Wildlife Sanctuary, Abbé Falls visit." },
       { day: 3, title: "Raja's Seat Sunrise & Departure", description: "Sunrise at Raja's Seat, local market tour, departure." },
     ],
-    whatsapp_link: "https://wa.me/919999999999?text=Hi%2C%20I%27m%20interested%20in%20Coorg%20Coffee%20Trail%20Trek!",
+    whatsapp_link: `https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27m%20interested%20in%20Coorg%20Coffee%20Trail%20Trek!`,
   },
   "nepal-abc": {
     id: "nepal-abc", name: "Nepal Annapurna Base Camp Trek", type: "trek",
@@ -39,7 +40,7 @@ const SAMPLE_TRIPS: Record<string, Trip & {
       { day: 2, title: "Fly to Pokhara", description: "Morning flight, acclimatisation walk." },
       { day: 3, title: "Nayapul to Tikhedhunga", description: "Trek begins. 5–6 hours through local villages." },
     ],
-    whatsapp_link: "https://wa.me/919999999999?text=Hi%2C%20interested%20in%20Nepal%20ABC%20Trek!",
+    whatsapp_link: `https://wa.me/${BUSINESS_WA}?text=Hi%2C%20interested%20in%20Nepal%20ABC%20Trek!`,
   },
 };
 
@@ -99,7 +100,7 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
   const exclusions: string[] = trip.exclusions || [];
   const highlights: string[] = trip.highlights || [];
   const whatsapp = trip.whatsapp_link ||
-    `https://wa.me/919999999999?text=Hi%2C%20I%27m%20interested%20in%20${encodeURIComponent(trip.name)}`;
+    `https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27m%20interested%20in%20${encodeURIComponent(trip.name)}`;
 
   return (
     <>

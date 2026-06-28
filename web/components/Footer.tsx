@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BUSINESS_WA } from "@/lib/constants";
 
 const EXPLORE_LINKS = [
   ["Treks & Tours", "/trips"],
@@ -36,7 +37,7 @@ export default function Footer() {
               Himalayas and beyond.
             </p>
             <a
-              href="https://wa.me/919999999999?text=Hi%20TrekRiderz!"
+              href={`https://wa.me/${BUSINESS_WA}?text=Hi%20TrekRiderz!`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 btn-accent px-5 py-2.5 rounded-full text-sm"
@@ -88,7 +89,7 @@ export default function Footer() {
             </h4>
             <div className="flex flex-col gap-3 text-sm text-white/55">
               <a
-                href="https://wa.me/919999999999"
+                href={`https://wa.me/${BUSINESS_WA}`}
                 className="hover:text-accent transition-colors"
               >
                 📱 +91 99999 99999

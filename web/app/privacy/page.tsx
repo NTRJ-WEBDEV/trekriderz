@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -160,7 +161,7 @@ export default function PrivacyPage() {
               <li><strong>Email:</strong> <a href="mailto:privacy@trekriderz.com">privacy@trekriderz.com</a></li>
               <li><strong>Company:</strong> NTRJ WEBDEV PVT LTD</li>
               <li><strong>Address:</strong> Karnataka, India</li>
-              <li><strong>WhatsApp:</strong> <a href="https://wa.me/919999999999">+91 99999 99999</a></li>
+              <li><strong>WhatsApp:</strong> <a href={`https://wa.me/${BUSINESS_WA}`}>+91 99999 99999</a></li>
             </ul>
             <p>We aim to respond to all privacy-related inquiries within 7 business days.</p>
           </Section>

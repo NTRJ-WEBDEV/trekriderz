@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import SpecialEnquiryForm from "@/components/SpecialEnquiryForm";
 
 export const metadata = {
@@ -65,10 +66,12 @@ export default function SpecialPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-5">
               <div className="glass-card rounded-2xl overflow-hidden">
-                <div className="h-52 img-placeholder flex-col gap-2">
-                  <span className="text-4xl opacity-30">🎉</span>
-                  <span className="text-[10px]">📸 Birthday trek celebration photo</span>
-                </div>
+                <img
+                  src="https://images.unsplash.com/photo-1551632811-561732d1e306?w=800&auto=format&fit=crop&q=80"
+                  alt="Birthday celebration trek at sunrise"
+                  className="w-full h-52 object-cover"
+                  loading="lazy"
+                />
               </div>
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="font-display text-3xl text-white mb-2">
@@ -114,10 +117,12 @@ export default function SpecialPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-5">
               <div className="glass-card rounded-2xl overflow-hidden">
-                <div className="h-52 img-placeholder flex-col gap-2">
-                  <span className="text-4xl opacity-30">💑</span>
-                  <span className="text-[10px]">📸 Anniversary couple trek photo</span>
-                </div>
+                <img
+                  src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&auto=format&fit=crop&q=80"
+                  alt="Couple trekking together in the mountains"
+                  className="w-full h-52 object-cover"
+                  loading="lazy"
+                />
               </div>
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="font-display text-3xl text-white mb-2">
@@ -166,7 +171,7 @@ export default function SpecialPage() {
                 <p className="text-white/60 text-sm mb-4 leading-relaxed">{pkg.desc}</p>
                 <p className="text-accent font-bold text-sm">{pkg.price}</p>
                 <a
-                  href={`https://wa.me/919999999999?text=Hi%2C%20I%27m%20interested%20in%20${encodeURIComponent(pkg.name)}!`}
+                  href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27m%20interested%20in%20${encodeURIComponent(pkg.name)}!`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-4 block text-center btn-ghost px-4 py-2 rounded-full text-xs font-bold"

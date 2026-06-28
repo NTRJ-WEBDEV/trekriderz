@@ -1,5 +1,6 @@
 "use client";
 
+import { BUSINESS_WA } from "@/lib/constants";
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -67,7 +68,7 @@ export default function TripEnquiryForm({
           <p className="font-semibold text-white">Enquiry sent!</p>
           <p className="text-xs mt-1 text-white/50">We'll WhatsApp you within 24 hours.</p>
           <a
-            href={`https://wa.me/919999999999?text=${waMsg}`}
+            href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 inline-block btn-accent px-5 py-2 rounded-full text-xs font-bold"
@@ -133,7 +134,7 @@ export default function TripEnquiryForm({
               {status === "loading" ? "Sending..." : "Send Enquiry"}
             </button>
             <a
-              href={`https://wa.me/919999999999?text=${waMsg}`}
+              href={`https://wa.me/${BUSINESS_WA}?text=${waMsg}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 btn-ghost py-2.5 rounded-full text-xs font-bold text-center"

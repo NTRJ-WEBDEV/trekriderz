@@ -1,3 +1,4 @@
+import { BUSINESS_WA } from "@/lib/constants";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
@@ -174,7 +175,7 @@ export default async function DestinationsPage() {
                         : "Browse Trips →"}
                     </Link>
                     <a
-                      href={`https://wa.me/919999999999?text=Hi%2C%20I%27m%20interested%20in%20trips%20to%20${encodeURIComponent(d.country)}!`}
+                      href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27m%20interested%20in%20trips%20to%20${encodeURIComponent(d.country)}!`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-white/50 text-sm hover:text-accent transition-colors"

@@ -1,75 +1,132 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
+  View, Text, StyleSheet, TouchableOpacity,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { searchPlaces } from '@/lib/geocoding';
+import { fetchWeatherOpenMeteo, WeatherData } from '@/lib/weather';
 import { Ionicons } from '@expo/vector-icons';
+import ExploreMapView, { MapMarker } from '@/components/ExploreMapView';
+
+const WEATHER_EMOJI: Record<string, string> = {
+  sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
+  rainy: '🌧️', snow: '❄️', thunderstorm: '⛈️', moon: '🌙',
+};
+
+interface Member {
+  id: string;
+  name: string;
+  avatar?: string;
+  latitude?: number;
+  longitude?: number;
+  lastUpdate?: string;
+}
 
 export default function TripMapScreen() {
-  const { tripId } = useLocalSearchParams();
+  const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [destLat, setDestLat] = useState<number | null>(null);
+  const [destLng, setDestLng] = useState<number | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
 
-  useEffect(() => {
-    loadTripData();
-    const membersSubscription = subscribeToMembers();
-    return () => {
-      membersSubscription?.unsubscribe();
-    };
-  }, [tripId]);
-
-  const loadTripData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const { data: tripData, error: tripError } = await supabase
+      const { data: tripData } = await supabase
         .from('trips')
         .select('*')
         .eq('id', tripId)
         .single();
 
-      if (tripError) throw tripError;
-      setTrip(tripData);
+      if (tripData) {
+        setTrip(tripData);
+        // Use stored coordinates or geocode destination
+        let dlat = tripData.lat ? parseFloat(tripData.lat) : null;
+        let dlng = tripData.lng ? parseFloat(tripData.lng) : null;
+        if (!dlat && tripData.destination) {
+          try {
+            const places = await searchPlaces(tripData.destination);
+            if (places.length > 0) {
+              [dlng, dlat] = places[0].center;
+            }
+          } catch (_) {}
+        }
+        if (dlat && dlng) {
+          setDestLat(dlat);
+          setDestLng(dlng);
+          const w = await fetchWeatherOpenMeteo(dlat, dlng).catch(() => null);
+          if (w) setWeather(w);
+        }
+      }
 
-      const { data: membersData, error: membersError } = await supabase
+      const { data: membersData } = await supabase
         .from('trip_members')
-        .select('user_id, users:user_id (id, full_name, avatar_url, last_latitude, last_longitude, last_location_update)')
+        .select('user_id, users:user_id(id, full_name, avatar_url, last_latitude, last_longitude, last_location_update)')
         .eq('trip_id', tripId)
         .eq('status', 'accepted');
 
-      if (membersError) throw membersError;
-
-      const activeMembers = (membersData || []).map((m: any) => ({
+      const active: Member[] = (membersData || []).map((m: any) => ({
         id: m.users?.id,
-        name: m.users?.full_name,
+        name: m.users?.full_name || 'Member',
         avatar: m.users?.avatar_url,
-        latitude: m.users?.last_latitude,
-        longitude: m.users?.last_longitude,
+        latitude: m.users?.last_latitude ? parseFloat(m.users.last_latitude) : undefined,
+        longitude: m.users?.last_longitude ? parseFloat(m.users.last_longitude) : undefined,
         lastUpdate: m.users?.last_location_update,
-      })).filter((m: any) => m.latitude && m.longitude);
+      })).filter((m: Member) => m.id);
 
-      setMembers(activeMembers);
+      setMembers(active);
     } catch (error) {
-      console.error('Error loading trip map data:', error);
+      console.error('Trip map load error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tripId]);
 
-  const subscribeToMembers = () => {
-    return supabase
+  useEffect(() => {
+    loadData();
+    const sub = supabase
       .channel(`map-locations-${tripId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, () => {
-        loadTripData();
-      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, () => loadData())
       .subscribe();
-  };
+    return () => { sub.unsubscribe(); };
+  }, [tripId, loadData]);
+
+  const mapMarkers: MapMarker[] = [];
+
+  // Member pins (only those who shared location)
+  for (const m of members) {
+    if (m.latitude && m.longitude) {
+      mapMarkers.push({
+        id: m.id,
+        kind: 'member',
+        name: m.name,
+        lat: m.latitude,
+        lng: m.longitude,
+        sublabel: m.lastUpdate
+          ? `Updated ${new Date(m.lastUpdate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
+          : 'Location shared',
+      });
+    }
+  }
+
+  // Destination pin
+  if (destLat && destLng && trip?.destination) {
+    mapMarkers.push({
+      id: 'destination',
+      kind: 'destination',
+      name: trip.destination,
+      lat: destLat,
+      lng: destLng,
+      sublabel: trip.title,
+    });
+  }
+
+  const membersWithLocation = members.filter((m) => m.latitude && m.longitude);
+  const membersNoLocation = members.filter((m) => !m.latitude || !m.longitude);
 
   if (loading) {
     return (
@@ -77,7 +134,7 @@ export default function TripMapScreen() {
         <Header trip={null} onBack={() => router.back()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#8CC63F" />
-          <Text style={styles.loadingText}>Loading trip...</Text>
+          <Text style={styles.loadingText}>Loading trip map…</Text>
         </View>
       </SafeAreaView>
     );
@@ -87,37 +144,66 @@ export default function TripMapScreen() {
     <SafeAreaView style={styles.container}>
       <Header trip={trip} onBack={() => router.back()} />
 
-      {/* Map placeholder — native maps coming in a future update */}
-      <View style={styles.mapContainer}>
-        <View style={styles.mapFallback}>
-          <Ionicons name="map-outline" size={60} color="rgba(255,255,255,0.12)" />
-          <Text style={styles.mapFallbackTitle}>Live Map Coming Soon</Text>
-          <Text style={styles.mapFallbackSub}>
-            Member locations and destination pins will appear here in the next update.
+      {/* Weather bar for destination */}
+      {weather && (
+        <View style={styles.weatherBar}>
+          <Text style={styles.weatherEmoji}>{WEATHER_EMOJI[weather.icon] || '🌤️'}</Text>
+          <Text style={styles.weatherText}>
+            {weather.currentTemp}°C · {weather.condition}
           </Text>
-          {trip?.destination && (
-            <View style={styles.destInfo}>
-              <Ionicons name="location-outline" size={16} color="#8CC63F" />
-              <Text style={styles.destInfoText}>{trip.destination}</Text>
-            </View>
+          {weather.wind > 0 && (
+            <Text style={styles.weatherWind}>💨 {weather.wind} km/h</Text>
           )}
-        </View>
-      </View>
-
-      {/* Members */}
-      {members.length > 0 && (
-        <View style={styles.membersPanel}>
-          <Text style={styles.membersPanelTitle}>Live Locations ({members.length})</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {members.map((m) => (
-              <View key={m.id} style={styles.memberChip}>
-                <View style={styles.memberDot} />
-                <Text style={styles.memberChipName}>{m.name?.split(' ')[0]}</Text>
-              </View>
-            ))}
-          </ScrollView>
+          <View style={styles.weatherSpacer} />
+          {weather.forecast.slice(0, 2).map((f) => (
+            <View key={f.day} style={styles.forecastItem}>
+              <Text style={styles.forecastDay}>{f.day}</Text>
+              <Text style={styles.forecastTemp}>{f.temp}°</Text>
+            </View>
+          ))}
         </View>
       )}
+
+      {/* Map */}
+      <ExploreMapView
+        markers={mapMarkers}
+        centerLat={destLat ?? undefined}
+        centerLng={destLng ?? undefined}
+        zoom={destLat ? 10 : 5}
+        onMarkerTap={() => {}}
+      />
+
+      {/* Members panel */}
+      <View style={styles.membersPanel}>
+        <View style={styles.membersPanelHeader}>
+          <Text style={styles.membersPanelTitle}>
+            {members.length} Member{members.length !== 1 ? 's' : ''}
+          </Text>
+          <View style={styles.liveRow}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>{membersWithLocation.length} sharing live</Text>
+          </View>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.membersScroll}>
+          {members.map((m) => {
+            const hasLoc = !!(m.latitude && m.longitude);
+            return (
+              <View key={m.id} style={[styles.memberChip, !hasLoc && styles.memberChipDim]}>
+                <View style={[styles.memberDot, { backgroundColor: hasLoc ? '#8CC63F' : 'rgba(255,255,255,0.2)' }]} />
+                <Text style={styles.memberName}>{m.name.split(' ')[0]}</Text>
+                {!hasLoc && <Ionicons name="location-outline" size={10} color="rgba(255,255,255,0.3)" />}
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        {membersNoLocation.length > 0 && (
+          <Text style={styles.noLocHint}>
+            {membersNoLocation.length} member{membersNoLocation.length > 1 ? 's' : ''} haven't shared location yet
+          </Text>
+        )}
+      </View>
 
       {/* Destination card */}
       {trip && (
@@ -131,6 +217,12 @@ export default function TripMapScreen() {
               {new Date(trip.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           </View>
+          <TouchableOpacity
+            onPress={loadData}
+            style={styles.refreshBtn}
+          >
+            <Ionicons name="refresh-outline" size={18} color="#8CC63F" />
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
@@ -144,7 +236,7 @@ function Header({ trip, onBack }: { trip: any; onBack: () => void }) {
         <Ionicons name="chevron-back" size={24} color="#FFF" />
       </TouchableOpacity>
       <View style={{ flex: 1, alignItems: 'center' }}>
-        <Text style={styles.headerTitle}>Trip Map</Text>
+        <Text style={styles.headerTitle}>{trip?.title || 'Trip Map'}</Text>
         {trip?.destination && <Text style={styles.headerSub}>📍 {trip.destination}</Text>}
       </View>
       <View style={styles.headerBtn} />
@@ -156,6 +248,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080C14' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
   loadingText: { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
+
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
@@ -164,40 +257,54 @@ const styles = StyleSheet.create({
   headerBtn: { padding: 4, width: 36 },
   headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
   headerSub: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 1 },
-  mapContainer: { flex: 1 },
-  mapFallback: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    gap: 14, paddingHorizontal: 40,
-  },
-  mapFallbackTitle: { fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
-  mapFallbackSub: { fontSize: 13, color: 'rgba(255,255,255,0.3)', textAlign: 'center', lineHeight: 18 },
-  destInfo: {
+
+  weatherBar: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 8, backgroundColor: 'rgba(140,198,63,0.1)',
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(140,198,63,0.25)',
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: 'rgba(140,198,63,0.07)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(140,198,63,0.15)',
   },
-  destInfoText: { color: '#8CC63F', fontWeight: '600', fontSize: 14 },
+  weatherEmoji: { fontSize: 18 },
+  weatherText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  weatherWind: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+  weatherSpacer: { flex: 1 },
+  forecastItem: { alignItems: 'center', marginLeft: 10 },
+  forecastDay: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' },
+  forecastTemp: { color: '#8CC63F', fontSize: 12, fontWeight: '700' },
+
   membersPanel: {
-    backgroundColor: '#080C14', paddingHorizontal: 16, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#0F1724',
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 12, paddingBottom: 8,
   },
-  membersPanelTitle: {
-    color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '600',
-    marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
+  membersPanelHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, marginBottom: 8,
   },
+  membersPanelTitle: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  liveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#8CC63F' },
+  liveText: { color: '#8CC63F', fontSize: 11, fontWeight: '600' },
+  membersScroll: { paddingHorizontal: 12, gap: 8 },
   memberChip: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 8, gap: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 10,
+    paddingVertical: 5, borderRadius: 14,
   },
-  memberDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' },
-  memberChipName: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  memberChipDim: { opacity: 0.45 },
+  memberDot: { width: 7, height: 7, borderRadius: 3.5 },
+  memberName: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  noLocHint: { color: 'rgba(255,255,255,0.3)', fontSize: 11, paddingHorizontal: 16, marginTop: 6 },
+
   destCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#0F1724', paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+    backgroundColor: '#080C14', paddingHorizontal: 16, paddingVertical: 14, gap: 12,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)',
   },
   destName: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   destDates: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 },
+  refreshBtn: {
+    width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(140,198,63,0.1)', borderRadius: 18,
+  },
 });

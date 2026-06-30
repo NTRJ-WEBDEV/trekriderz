@@ -1,7 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
+import { translateText } from '@/lib/translate';
 
 export interface ChatMessage {
   id: string;
@@ -24,6 +26,33 @@ interface MessageItemProps {
 export default function MessageItem({ message, seenBy, isLast }: MessageItemProps) {
   const currentUser = useAuthStore((state) => state.user);
   const isMe = message.user_id === currentUser?.id;
+  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+
+  const handleLongPress = () => {
+    if (!message.content) return;
+    Alert.alert(
+      'Message Options',
+      undefined,
+      [
+        {
+          text: translatedContent ? 'Show Original' : 'Translate to English',
+          onPress: async () => {
+            if (translatedContent) {
+              setTranslatedContent(null);
+              return;
+            }
+            setTranslating(true);
+            const result = await translateText(message.content);
+            setTranslating(false);
+            if (result) setTranslatedContent(result);
+            else Alert.alert('Translation failed', 'Please check your connection and try again.');
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
 
   return (
     <View style={[styles.container, isMe ? styles.myMessage : styles.theirMessage]}>
@@ -35,16 +64,31 @@ export default function MessageItem({ message, seenBy, isLast }: MessageItemProp
       )}
       <View style={styles.messageContent}>
         {!isMe && <Text style={styles.senderName}>{message.users.full_name}</Text>}
-        <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
-          {message.image_url && (
-            <Image source={{ uri: message.image_url }} style={styles.messageImage} />
-          )}
-          {message.content ? (
-            <Text style={[styles.text, isMe ? styles.myText : styles.theirText]}>
-              {message.content}
-            </Text>
-          ) : null}
-        </View>
+        <TouchableOpacity onLongPress={handleLongPress} activeOpacity={0.85} delayLongPress={400}>
+          <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+            {message.image_url && (
+              <Image source={{ uri: message.image_url }} style={styles.messageImage} />
+            )}
+            {message.content ? (
+              <>
+                <Text style={[styles.text, isMe ? styles.myText : styles.theirText]}>
+                  {translatedContent || message.content}
+                </Text>
+                {translatedContent && (
+                  <View style={styles.translatedRow}>
+                    <Ionicons name="language" size={10} color={isMe ? 'rgba(255,255,255,0.6)' : '#8CC63F'} />
+                    <Text style={[styles.translatedLabel, isMe && styles.translatedLabelMe]}>
+                      Translated
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : null}
+            {translating && (
+              <ActivityIndicator size="small" color={isMe ? '#FFF' : '#8CC63F'} style={{ marginTop: 4 }} />
+            )}
+          </View>
+        </TouchableOpacity>
         <View style={styles.footer}>
           <Text style={[styles.time, isMe && styles.myTime]}>
             {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -52,9 +96,9 @@ export default function MessageItem({ message, seenBy, isLast }: MessageItemProp
           {seenBy && seenBy.length > 0 && (
             <View style={styles.seenContainer}>
               {seenBy.slice(0, 3).map((m, idx) => (
-                <Image 
-                  key={idx} 
-                  source={m.users.avatar_url ? { uri: m.users.avatar_url } : require('@/assets/images/icon.png')} 
+                <Image
+                  key={idx}
+                  source={m.users.avatar_url ? { uri: m.users.avatar_url } : require('@/assets/images/icon.png')}
                   style={styles.miniSeenAvatar}
                 />
               ))}
@@ -83,10 +127,13 @@ const styles = StyleSheet.create({
   myText: { color: '#FFFFFF' },
   theirText: { color: '#F9FAFB' },
   messageImage: { width: 220, height: 160, borderRadius: 12, marginBottom: 8 },
+  translatedRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  translatedLabel: { fontSize: 10, color: '#8CC63F', fontStyle: 'italic' },
+  translatedLabelMe: { color: 'rgba(255,255,255,0.65)' },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
   time: { fontSize: 10, color: '#9CA3AF', flex: 1 },
   myTime: { textAlign: 'right', marginRight: 4 },
   seenContainer: { flexDirection: 'row', alignItems: 'center', marginLeft: 6 },
   miniSeenAvatar: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: '#080C14', marginLeft: -4 },
-  plusSeen: { fontSize: 8, color: '#9CA3AF', marginLeft: 2, fontWeight: 'bold' }
+  plusSeen: { fontSize: 8, color: '#9CA3AF', marginLeft: 2, fontWeight: 'bold' },
 });

@@ -1,11 +1,15 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function TabsLayout() {
   const { bottom } = useSafeAreaInsets();
+  const { user } = useAuthStore();
+  const router = useRouter();
+  const isAdmin = (user as any)?.role === 'admin';
 
   return (
     <>
@@ -81,6 +85,22 @@ export default function TabsLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            href: null,
+            tabBarButton: isAdmin ? () => (
+              <TouchableOpacity
+                onPress={() => router.push('/admin')}
+                style={styles.adminTabBtn}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="settings-outline" size={22} color="#8CC63F" />
+                <Text style={styles.adminTabLabel}>Admin</Text>
+              </TouchableOpacity>
+            ) : () => null,
+          }}
+        />
         <Tabs.Screen name="chats" options={{ href: null }} />
         <Tabs.Screen name="feed" options={{ href: null }} />
       </Tabs>
@@ -114,5 +134,18 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
+  },
+  adminTabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  adminTabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8CC63F',
+    marginTop: 2,
   },
 });

@@ -78,7 +78,9 @@ export default function CreateExpeditionScreen() {
     );
   }
 
-  if (!isPremium || !guideId) {
+  const isAdmin = (user as any)?.role === 'admin';
+
+  if ((!isPremium || !guideId) && !isAdmin) {
     return (
       <View style={styles.container}>
         <SafeAreaView style={{ flex: 1 }}>
@@ -157,6 +159,11 @@ export default function CreateExpeditionScreen() {
     const invalidDay = itineraryDays.some((d) => !d.title);
     if (invalidDay) {
       Alert.alert('Missing Fields', 'Please ensure all itinerary days have a title.');
+      return;
+    }
+
+    if (!guideId) {
+      Alert.alert('No Guide Profile', 'Please register as a guide first before creating an expedition.');
       return;
     }
 

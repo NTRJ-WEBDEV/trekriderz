@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, StatusBar, Image, ScrollView,
+  Modal, Dimensions, TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -198,27 +199,29 @@ const weatherStyles = StyleSheet.create({
   sublabel: { fontSize: 9, marginTop: 2, textAlign: 'center', fontStyle: 'italic' },
 });
 
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
 export default function ExploreScreen() {
-  const isDark = true; // App is always dark-themed
   const colors = {
     bg: '#000',
     text: '#fff',
     subtext: '#A8A8A8',
     border: '#262626',
-    headerBg: '#000',
     weatherCard: 'rgba(255,255,255,0.06)',
     weatherBorder: 'rgba(255,255,255,0.1)',
   };
 
   const { user } = useAuthStore();
   const [posts, setPosts] = useState<any[]>([]);
+  const [storyCircles, setStoryCircles] = useState<any[]>([]);
+  const [storyViewer, setStoryViewer] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchPosts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('posts')
-        .select('*, users:user_id(id, full_name, avatar_url)')
+        .select('*, users:user_id(id, full_name, avatar_url, email)')
         .eq('visibility', 'public')
         .or('post_type.is.null,post_type.neq.trip_story')
         .order('created_at', { ascending: false })
@@ -244,8 +247,9 @@ export default function ExploreScreen() {
       setPosts(data.map((p: any) => ({
         id: p.id,
         user: {
-          name: p.users?.full_name || 'Traveler',
-          avatar: p.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.users?.full_name}`,
+          name: p.users?.full_name || p.users?.email?.split('@')[0] || 'Rider',
+          avatar: p.users?.avatar_url ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(p.users?.full_name || 'R')}&background=8CC63F&color=fff`,
           id: p.user_id,
         },
         images: Array.isArray(p.media) ? p.media : [],
@@ -263,44 +267,86 @@ export default function ExploreScreen() {
     }
   }, [user?.id]);
 
-  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+  // Fetch 24h story circles — separate from the main feed
+  const fetchStoryCircles = useCallback(async () => {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const { data } = await supabase
+        .from('posts')
+        .select('id, media, content, user_id, created_at, users:user_id(id, full_name, avatar_url, email)')
+        .eq('visibility', 'public')
+        .or('post_type.is.null,post_type.neq.trip_story')
+        .gt('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      // One circle per user, only posts that have media or content
+      const seen = new Set<string>();
+      const circles: any[] = [];
+      for (const p of data || []) {
+        if (!seen.has(p.user_id)) {
+          seen.add(p.user_id);
+          const u = p.users as any;
+          const name = u?.full_name || u?.email?.split('@')[0] || 'User';
+          circles.push({
+            postId: p.id,
+            userId: p.user_id,
+            name,
+            avatar: u?.avatar_url ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8CC63F&color=fff`,
+            image: Array.isArray(p.media) && p.media.length > 0 ? p.media[0] : null,
+            content: p.content,
+          });
+        }
+      }
+      setStoryCircles(circles);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchPosts(); fetchStoryCircles(); }, [fetchPosts, fetchStoryCircles]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchPosts();
+    await Promise.all([fetchPosts(), fetchStoryCircles()]);
     setRefreshing(false);
   };
+
+  const myName = (user as any)?.user_metadata?.full_name?.split(' ')[0] || 'You';
+  const myAvatar = (user as any)?.user_metadata?.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(myName)}&background=8CC63F&color=fff`;
 
   const HeaderComponent = () => (
     <>
       <WeatherStrip userId={user?.id} colors={colors} />
       <View style={[styles.storiesSection, { borderBottomColor: colors.border }]}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={[
-            { id: 'add', name: 'Your Story', isAdd: true },
-            ...posts.map((p: any) => ({ id: p.id, name: p.user?.name, avatar: p.user?.avatar, isAdd: false })),
-          ]}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.storiesList}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.storyItem}>
-              <View style={[styles.storyRing, { borderColor: item.isAdd ? 'transparent' : '#C13584' }]}>
-                {item.isAdd ? (
-                  <View style={[styles.addStoryBtn, { backgroundColor: colors.border }]}>
-                    <Ionicons name="add" size={24} color="#3897F0" />
-                  </View>
-                ) : (
-                  <Image source={{ uri: (item as any).avatar }} style={styles.storyAvatar} />
-                )}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesList}>
+          {/* "Your Story" add button */}
+          <TouchableOpacity style={styles.storyItem} onPress={() => router.push('/post/create' as any)}>
+            <View style={styles.storyRing}>
+              <Image source={{ uri: myAvatar }} style={styles.storyAvatar} />
+              <View style={styles.addBadge}>
+                <Ionicons name="add" size={12} color="#FFF" />
+              </View>
+            </View>
+            <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>Your Story</Text>
+          </TouchableOpacity>
+
+          {/* 24h story circles — other users */}
+          {storyCircles.map((item) => (
+            <TouchableOpacity
+              key={item.postId}
+              style={styles.storyItem}
+              onPress={() => setStoryViewer(item)}
+            >
+              <View style={[styles.storyRing, styles.storyRingActive]}>
+                <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
               </View>
               <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>
-                {item.isAdd ? 'Your Story' : item.name.split(' ')[0]}
+                {item.name.split(' ')[0]}
               </Text>
             </TouchableOpacity>
-          )}
-        />
+          ))}
+        </ScrollView>
       </View>
     </>
   );
@@ -309,11 +355,49 @@ export default function ExploreScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
       <StatusBar barStyle="light-content" />
 
+      {/* ── Full-screen story viewer ── */}
+      <Modal visible={!!storyViewer} transparent animationType="fade" onRequestClose={() => setStoryViewer(null)}>
+        <TouchableWithoutFeedback onPress={() => setStoryViewer(null)}>
+          <View style={storyStyles.overlay}>
+            <TouchableWithoutFeedback>
+              <View style={storyStyles.card}>
+                {storyViewer?.image ? (
+                  <Image source={{ uri: storyViewer.image }} style={storyStyles.image} resizeMode="cover" />
+                ) : (
+                  <View style={storyStyles.textOnly}>
+                    <Text style={storyStyles.textContent}>{storyViewer?.content}</Text>
+                  </View>
+                )}
+                {/* User badge */}
+                <View style={storyStyles.userRow}>
+                  <Image source={{ uri: storyViewer?.avatar }} style={storyStyles.userAvatar} />
+                  <Text style={storyStyles.userName}>{storyViewer?.name}</Text>
+                  <Text style={storyStyles.timer}>• 24h</Text>
+                </View>
+                {/* Close */}
+                <TouchableOpacity style={storyStyles.closeBtn} onPress={() => setStoryViewer(null)}>
+                  <Ionicons name="close" size={22} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>TrekRiderz</Text>
-        <TouchableOpacity onPress={() => router.push('/post/create' as any)}>
-          <Ionicons name="create-outline" size={26} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={() => router.push('/map' as any)}
+            style={styles.mapBtn}
+          >
+            <Ionicons name="map-outline" size={18} color="#8CC63F" />
+            <Text style={styles.mapBtnText}>Map</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/post/create' as any)}>
+            <Ionicons name="create-outline" size={26} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -342,12 +426,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mapBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(140,198,63,0.12)', borderWidth: 1, borderColor: 'rgba(140,198,63,0.3)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
+  },
+  mapBtnText: { color: '#8CC63F', fontSize: 13, fontWeight: '700' },
   headerTitle: { fontSize: 22, fontWeight: '700', fontStyle: 'italic' },
   storiesSection: { paddingVertical: 12, borderBottomWidth: 0.5 },
   storiesList: { paddingHorizontal: 12, gap: 12 },
   storyItem: { alignItems: 'center', width: 68 },
-  storyRing: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, padding: 2, marginBottom: 4 },
-  storyAvatar: { width: 52, height: 52, borderRadius: 26 },
-  addStoryBtn: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  storyRing: {
+    width: 64, height: 64, borderRadius: 32, borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.15)', padding: 2, marginBottom: 5, position: 'relative',
+  },
+  storyRingActive: { borderColor: '#C13584' },
+  storyAvatar: { width: 55, height: 55, borderRadius: 28 },
+  addBadge: {
+    position: 'absolute', bottom: -2, right: -2,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: '#3897F0', borderWidth: 1.5, borderColor: '#000',
+    alignItems: 'center', justifyContent: 'center',
+  },
   storyName: { fontSize: 11, textAlign: 'center' },
+});
+
+const storyStyles = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.88)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  card: {
+    width: SCREEN_W - 32, maxHeight: SCREEN_H * 0.82,
+    borderRadius: 20, overflow: 'hidden', backgroundColor: '#111',
+  },
+  image: { width: '100%', aspectRatio: 9 / 16 },
+  textOnly: {
+    padding: 28, minHeight: 300, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#1C1C2E',
+  },
+  textContent: { color: '#FFF', fontSize: 18, lineHeight: 28, textAlign: 'center', fontWeight: '500' },
+  userRow: {
+    position: 'absolute', top: 16, left: 16, right: 48,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  userAvatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: '#FFF' },
+  userName: { color: '#FFF', fontWeight: '700', fontSize: 14, flex: 1 },
+  timer: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
+  closeBtn: {
+    position: 'absolute', top: 14, right: 14,
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
+  },
 });

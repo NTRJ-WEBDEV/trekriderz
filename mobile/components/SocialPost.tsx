@@ -1,21 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Share } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Share, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import YouTubePlayer from './YouTubePlayer';
+import { translateText } from '@/lib/translate';
 
 export default function SocialPost({ post, onRefresh }: any) {
   const { user } = useAuthStore();
-  const [liked, setLiked] = useState(false); // Should check from post_likes table
+  const [liked, setLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.likes_count || 0);
+  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
 
   const handleLike = async () => {
     try {
       const newLiked = !liked;
       setLiked(newLiked);
       setLikesCount((prev: number) => newLiked ? prev + 1 : prev - 1);
-      
       if (newLiked) {
         await supabase.from('post_likes').insert({ post_id: post.id, user_id: user?.id });
       } else {
@@ -37,13 +39,24 @@ export default function SocialPost({ post, onRefresh }: any) {
     }
   };
 
+  const handleTranslate = async () => {
+    if (translatedContent) {
+      setTranslatedContent(null);
+      return;
+    }
+    setTranslating(true);
+    const result = await translateText(post.content);
+    setTranslatedContent(result);
+    setTranslating(false);
+  };
+
   return (
     <View style={styles.container}>
       {/* Post Header */}
       <View style={styles.header}>
-        <Image 
-          source={{ uri: post.users?.avatar_url || 'https://ui-avatars.com/api/?name=' + post.users?.full_name }} 
-          style={styles.avatar} 
+        <Image
+          source={{ uri: post.users?.avatar_url || 'https://ui-avatars.com/api/?name=' + post.users?.full_name }}
+          style={styles.avatar}
         />
         <View style={styles.headerText}>
           <Text style={styles.userName}>{post.users?.full_name}</Text>
@@ -53,13 +66,19 @@ export default function SocialPost({ post, onRefresh }: any) {
       </View>
 
       {/* Post Content */}
-      <Text style={styles.content}>{post.content}</Text>
-      
+      <Text style={styles.content}>
+        {translatedContent || post.content}
+      </Text>
+      {translatedContent && (
+        <TouchableOpacity onPress={() => setTranslatedContent(null)}>
+          <Text style={styles.translatedLabel}>Translated · Tap to show original</Text>
+        </TouchableOpacity>
+      )}
+
       {post.media && post.media.length > 0 && (
         <Image source={{ uri: post.media[0] }} style={styles.postImage} resizeMode="contain" />
       )}
 
-      {/* YouTube inline player */}
       {post.youtube_url && (
         <YouTubePlayer url={post.youtube_url} height={220} />
       )}
@@ -79,6 +98,21 @@ export default function SocialPost({ post, onRefresh }: any) {
         <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
           <Ionicons name="share-social-outline" size={20} color="#B8BCC8" />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={handleTranslate}
+          disabled={translating}
+        >
+          {translating
+            ? <ActivityIndicator size="small" color="#B8BCC8" />
+            : <Ionicons
+                name="language"
+                size={20}
+                color={translatedContent ? '#8CC63F' : '#B8BCC8'}
+              />
+          }
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -91,7 +125,8 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   userName: { color: '#FFF', fontWeight: '700', fontSize: 15 },
   time: { color: '#6B7280', fontSize: 12 },
-  content: { color: '#E5E7EB', fontSize: 14, lineHeight: 20, marginBottom: 12 },
+  content: { color: '#E5E7EB', fontSize: 14, lineHeight: 20, marginBottom: 6 },
+  translatedLabel: { color: '#8CC63F', fontSize: 11, marginBottom: 10, fontStyle: 'italic' },
   postImage: { width: '100%', minHeight: 180, maxHeight: 420, borderRadius: 16, marginBottom: 12, backgroundColor: '#000' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', paddingTop: 12 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },

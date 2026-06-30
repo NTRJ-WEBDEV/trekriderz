@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -32,7 +32,7 @@ export default function GuideRegisterScreen() {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [coords, setCoords] = useState<[number, number] | null>(null);
-  const [specialization, setSpecialization] = useState('');
+  const [specializations, setSpecializations] = useState<string[]>([]);
   const [experience, setExperience] = useState('');
   const [ratePerDay, setRatePerDay] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['Hindi', 'English']);
@@ -71,8 +71,8 @@ export default function GuideRegisterScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!name || !location || !specialization || !experience || !ratePerDay || !bio) {
-      Alert.alert('Missing Fields', 'Please fill in all required fields.');
+    if (!name || !location || specializations.length === 0 || !experience || !ratePerDay || !bio) {
+      Alert.alert('Missing Fields', 'Please fill in all required fields and select at least one specialization.');
       return;
     }
     if (selectedLanguages.length === 0) {
@@ -105,7 +105,7 @@ export default function GuideRegisterScreen() {
         location: location.trim(),
         lat: coords ? coords[1] : null,
         lng: coords ? coords[0] : null,
-        specialization: specialization,
+        specializations: specializations,
         experience_years: parseInt(experience),
         rate_per_day: parseFloat(ratePerDay),
         languages: selectedLanguages,
@@ -160,6 +160,11 @@ export default function GuideRegisterScreen() {
         </View>
       </View>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+      >
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -219,22 +224,28 @@ export default function GuideRegisterScreen() {
           )}
         </Field>
 
-        <Field label="Specialization *">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {SPECIALIZATIONS.map((s) => (
-              <TouchableOpacity
-                key={s.id}
-                style={[styles.specChip, specialization === s.id && styles.specChipActive]}
-                onPress={() => setSpecialization(s.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.specEmoji}>{s.emoji}</Text>
-                <Text style={[styles.specLabel, specialization === s.id && styles.specLabelActive]}>
-                  {s.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        <Field label={`Specializations * ${specializations.length > 0 ? `(${specializations.length} selected)` : '— pick all that apply'}`}>
+          <View style={styles.chipGrid}>
+            {SPECIALIZATIONS.map((s) => {
+              const active = specializations.includes(s.id);
+              return (
+                <TouchableOpacity
+                  key={s.id}
+                  style={[styles.specChip, active && styles.specChipActive]}
+                  onPress={() =>
+                    setSpecializations((prev) =>
+                      prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]
+                    )
+                  }
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.specEmoji}>{s.emoji}</Text>
+                  <Text style={[styles.specLabel, active && styles.specLabelActive]}>{s.label}</Text>
+                  {active && <Ionicons name="checkmark-circle" size={13} color="#000" style={{ marginLeft: 2 }} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </Field>
 
         <View style={styles.row}>
@@ -317,6 +328,7 @@ export default function GuideRegisterScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <MapPickerModal
         visible={showMap}
@@ -405,6 +417,7 @@ const styles = StyleSheet.create({
   },
   mapPinText: { fontSize: 12, color: '#8CC63F', fontWeight: '600', flex: 1 },
 
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chipRow: { gap: 8, paddingBottom: 4 },
   specChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,

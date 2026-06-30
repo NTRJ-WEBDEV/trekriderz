@@ -35,6 +35,7 @@ export default function CreateHomestayScreen() {
   const [description, setDescription] = useState('');
   const [pricePerNight, setPricePerNight] = useState('');
   const [rooms, setRooms] = useState('');
+  const [maxGuests, setMaxGuests] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,7 +71,7 @@ export default function CreateHomestayScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!name || !location || !description || !pricePerNight || !rooms) {
+    if (!name || !location || !description || !pricePerNight || !rooms || !maxGuests) {
       Alert.alert('Missing Fields', 'Please fill in all required fields.');
       return;
     }
@@ -86,6 +87,7 @@ export default function CreateHomestayScreen() {
         description: description.trim(),
         price_per_night: parseFloat(pricePerNight),
         rooms: parseInt(rooms),
+        capacity: parseInt(maxGuests),
         contact_phone: phone.trim() || null,
         amenities: selectedAmenities,
         status: 'pending',
@@ -235,6 +237,17 @@ export default function CreateHomestayScreen() {
             />
           </Field>
         </View>
+
+        <Field label="Max Guests *">
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 8"
+            placeholderTextColor="#555"
+            keyboardType="numeric"
+            value={maxGuests}
+            onChangeText={setMaxGuests}
+          />
+        </Field>
 
         <Field label="Contact Phone">
           <TextInput

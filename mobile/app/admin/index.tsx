@@ -15,7 +15,7 @@ const BG = '#080C14';
 const CARD = 'rgba(255,255,255,0.05)';
 const BORDER = 'rgba(255,255,255,0.07)';
 
-type Tab = 'homestays' | 'guides' | 'communities' | 'users';
+type Tab = 'homestays' | 'guides' | 'expeditions' | 'communities' | 'users';
 
 const ROLES = ['user', 'guide', 'homestay_owner', 'admin'] as const;
 const CATEGORIES = ['general', 'trekking', 'travel', 'photography', 'gear', 'safety', 'guides', 'homestays'];
@@ -33,6 +33,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ users: 0, pendingHomestays: 0, pendingGuides: 0, activeTrips: 0 });
   const [homestays, setHomestays] = useState<any[]>([]);
   const [guides, setGuides] = useState<any[]>([]);
+  const [expeditions, setExpeditions] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +54,7 @@ export default function AdminDashboard() {
     try {
       const [
         usersRes, pendingHsRes, pendingGRes, tripsRes,
-        hsRes, gRes, commRes, usersListRes,
+        hsRes, gRes, expRes, commRes, usersListRes,
       ] = await Promise.all([
         supabase.from('users').select('id', { count: 'exact', head: true }),
         supabase.from('homestays').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -67,6 +68,10 @@ export default function AdminDashboard() {
           .select('*')
           .eq('status', 'pending')
           .order('created_at', { ascending: true }),
+        supabase.from('guided_expeditions')
+          .select('id, title, destination, start_date, end_date, status, difficulty, max_seats, booked_seats, created_at, guide:guides(name)')
+          .order('start_date', { ascending: true })
+          .limit(60),
         supabase.from('communities')
           .select('*, creator:created_by(full_name)')
           .order('created_at', { ascending: false })
@@ -85,6 +90,7 @@ export default function AdminDashboard() {
       });
       setHomestays(hsRes.data || []);
       setGuides(gRes.data || []);
+      setExpeditions(expRes.data || []);
       setCommunities(commRes.data || []);
       setUsers(usersListRes.data || []);
     } catch (e) {
@@ -236,6 +242,51 @@ export default function AdminDashboard() {
     );
   };
 
+  // ── Expeditions ───────────────────────────────────────────────────────────
+
+  const handleExpeditionStatus = (id: string, currentStatus: string) => {
+    const next = currentStatus === 'published' ? 'draft' : 'published';
+    Alert.alert(
+      `${next === 'published' ? 'Publish' : 'Unpublish'} Expedition?`,
+      `Set status to "${next}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: next === 'published' ? 'Publish' : 'Unpublish',
+          onPress: async () => {
+            try {
+              await supabase.from('guided_expeditions').update({ status: next }).eq('id', id);
+              setExpeditions(prev => prev.map(e => e.id === id ? { ...e, status: next } : e));
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Could not update status.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteExpedition = (id: string, title: string) => {
+    Alert.alert(
+      'Delete Expedition',
+      `Delete "${title}"? This will remove all packages, bookings and itinerary data.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('guided_expeditions').delete().eq('id', id);
+              setExpeditions(prev => prev.filter(e => e.id !== id));
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Could not delete expedition.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // ── Users ─────────────────────────────────────────────────────────────────
 
   const handleRoleChange = (userId: string, currentRole: string) => {
@@ -309,6 +360,7 @@ export default function AdminDashboard() {
             {([
               { key: 'homestays', label: 'Homestays', icon: 'home-outline', badge: stats.pendingHomestays },
               { key: 'guides', label: 'Guides', icon: 'ribbon-outline', badge: stats.pendingGuides },
+              { key: 'expeditions', label: 'Expeditions', icon: 'map-outline', badge: 0 },
               { key: 'communities', label: 'Communities', icon: 'people-outline', badge: 0 },
               { key: 'users', label: 'Users', icon: 'person-outline', badge: 0 },
             ] as const).map((t) => (
@@ -355,6 +407,41 @@ export default function AdminDashboard() {
                         onApprove={() => handleApprove(item.id, 'guides')}
                         onReject={() => openRejectModal(item.id, 'guides')}
                       />
+                ))
+              )}
+            </>
+          )}
+
+          {/* ── Expeditions ──────────────────────────────────────────────── */}
+          {tab === 'expeditions' && (
+            <>
+              <TouchableOpacity
+                style={styles.createBtn}
+                onPress={() => router.push('/expeditions/create' as any)}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={GREEN} />
+                <Text style={styles.createBtnText}>Create Expedition</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.sectionLabel}>
+                {expeditions.length} expedition{expeditions.length !== 1 ? 's' : ''}
+              </Text>
+
+              {expeditions.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="map-outline" size={40} color={GREEN} />
+                  <Text style={styles.emptyText}>No expeditions yet</Text>
+                  <Text style={styles.emptySubText}>Create your first TrekRiderz expedition above.</Text>
+                </View>
+              ) : (
+                expeditions.map(e => (
+                  <ExpeditionAdminCard
+                    key={e.id}
+                    item={e}
+                    onToggleStatus={() => handleExpeditionStatus(e.id, e.status)}
+                    onDelete={() => handleDeleteExpedition(e.id, e.title)}
+                    onEdit={() => router.push(`/expeditions/manage/${e.id}` as any)}
+                  />
                 ))
               )}
             </>
@@ -745,6 +832,127 @@ function GuidePendingCard({ item, loading, onApprove, onReject }: any) {
     </View>
   );
 }
+
+function ExpeditionAdminCard({
+  item, onToggleStatus, onDelete, onEdit,
+}: { item: any; onToggleStatus: () => void; onDelete: () => void; onEdit: () => void }) {
+  const statusColor: Record<string, string> = {
+    published: '#22C55E',
+    draft: '#9CA3AF',
+    full: '#3897F0',
+    ongoing: '#F59E0B',
+    completed: '#8B5CF6',
+    cancelled: '#EF4444',
+  };
+  const diffColor: Record<string, string> = {
+    easy: '#22C55E', moderate: '#F59E0B', challenging: '#EF4444', expert: '#8B5CF6',
+  };
+  const color = statusColor[item.status] || '#9CA3AF';
+  const isPublished = item.status === 'published';
+  const seatsLeft = (item.max_seats || 0) - (item.booked_seats || 0);
+
+  return (
+    <View style={expStyles.card}>
+      <View style={expStyles.row}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={expStyles.title} numberOfLines={1}>{item.title}</Text>
+          <View style={expStyles.metaRow}>
+            <Ionicons name="location-outline" size={12} color={GREEN} />
+            <Text style={expStyles.meta}>{item.destination}</Text>
+          </View>
+          {item.guide?.name && (
+            <Text style={expStyles.guideName}>by {item.guide.name}</Text>
+          )}
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <View style={[expStyles.statusBadge, { borderColor: `${color}44`, backgroundColor: `${color}12` }]}>
+            <Text style={[expStyles.statusText, { color }]}>{item.status}</Text>
+          </View>
+          <View style={[expStyles.diffBadge, { backgroundColor: `${diffColor[item.difficulty] || '#9CA3AF'}15` }]}>
+            <Text style={[expStyles.diffText, { color: diffColor[item.difficulty] || '#9CA3AF' }]}>
+              {item.difficulty}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={expStyles.infoRow}>
+        <View style={expStyles.infoChip}>
+          <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.4)" />
+          <Text style={expStyles.infoText}>
+            {new Date(item.start_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            {item.start_date !== item.end_date &&
+              ` – ${new Date(item.end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
+          </Text>
+        </View>
+        <View style={expStyles.infoChip}>
+          <Ionicons name="people-outline" size={11} color="rgba(255,255,255,0.4)" />
+          <Text style={expStyles.infoText}>{seatsLeft}/{item.max_seats} seats left</Text>
+        </View>
+      </View>
+
+      <View style={expStyles.actions}>
+        <TouchableOpacity style={expStyles.editBtn} onPress={onEdit}>
+          <Ionicons name="create-outline" size={14} color="rgba(255,255,255,0.6)" />
+          <Text style={expStyles.editText}>Manage</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[expStyles.toggleBtn, isPublished && expStyles.toggleBtnActive]}
+          onPress={onToggleStatus}
+        >
+          <Ionicons name={isPublished ? 'eye-off-outline' : 'eye-outline'} size={14} color={isPublished ? '#FFF' : GREEN} />
+          <Text style={[expStyles.toggleText, isPublished && expStyles.toggleTextActive]}>
+            {isPublished ? 'Unpublish' : 'Publish'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={expStyles.deleteBtn} onPress={onDelete}>
+          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const expStyles = StyleSheet.create({
+  card: {
+    backgroundColor: CARD, borderRadius: 16, marginBottom: 12,
+    borderWidth: 1, borderColor: BORDER, padding: 16, gap: 10,
+  },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  title: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  meta: { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
+  guideName: { color: 'rgba(255,255,255,0.35)', fontSize: 11 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  diffBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  diffText: { fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
+  infoRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  infoChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  infoText: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  editBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: BORDER,
+  },
+  editText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600' },
+  toggleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(140,198,63,0.35)', backgroundColor: 'rgba(140,198,63,0.06)',
+  },
+  toggleBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  toggleText: { color: GREEN, fontSize: 12, fontWeight: '700' },
+  toggleTextActive: { color: 'rgba(255,255,255,0.5)' },
+  deleteBtn: {
+    width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)', backgroundColor: 'rgba(239,68,68,0.06)',
+  },
+});
 
 const cardStyles = StyleSheet.create({
   card: { backgroundColor: CARD, borderRadius: 18, marginBottom: 14, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },

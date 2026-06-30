@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { haptic } from '@/lib/haptics';
+import { translateText } from '@/lib/translate';
 
 const { width } = Dimensions.get('window');
 const ACCENT = '#EC4899';
@@ -73,6 +74,9 @@ export default function StoryDetailScreen() {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [liking, setLiking] = useState(false);
+  const [translatedTitle, setTranslatedTitle] = useState<string | null>(null);
+  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -126,6 +130,23 @@ export default function StoryDetailScreen() {
     await Share.share({ message: `${story.title || 'A TrekRiderz Story'}\n\n${story.content.slice(0, 200)}…` });
   };
 
+  const handleTranslate = async () => {
+    if (translatedContent) {
+      setTranslatedTitle(null);
+      setTranslatedContent(null);
+      return;
+    }
+    if (!story) return;
+    setTranslating(true);
+    const [title, content] = await Promise.all([
+      story.title ? translateText(story.title) : Promise.resolve(null),
+      translateText(story.content),
+    ]);
+    setTranslatedTitle(title);
+    setTranslatedContent(content);
+    setTranslating(false);
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -169,9 +190,21 @@ export default function StoryDetailScreen() {
               <TouchableOpacity style={styles.circleBtn} onPress={() => router.back()}>
                 <Ionicons name="arrow-back" size={20} color="#FFF" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.circleBtn} onPress={handleShare}>
-                <Ionicons name="share-outline" size={20} color="#FFF" />
-              </TouchableOpacity>
+              <View style={styles.topBarRight}>
+                <TouchableOpacity
+                  style={[styles.circleBtn, translatedContent && styles.circleBtnActive]}
+                  onPress={handleTranslate}
+                  disabled={translating}
+                >
+                  {translating
+                    ? <ActivityIndicator size="small" color="#FFF" />
+                    : <Ionicons name="language" size={20} color="#FFF" />
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.circleBtn} onPress={handleShare}>
+                  <Ionicons name="share-outline" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
             </View>
           </SafeAreaView>
         </View>
@@ -186,7 +219,15 @@ export default function StoryDetailScreen() {
           )}
 
           {/* Title */}
-          <Text style={styles.title}>{story.title || 'Untitled Story'}</Text>
+          <Text style={styles.title}>{translatedTitle || story.title || 'Untitled Story'}</Text>
+          {translatedContent && (
+            <TouchableOpacity onPress={() => { setTranslatedTitle(null); setTranslatedContent(null); }}>
+              <View style={styles.translatedBadge}>
+                <Ionicons name="language" size={12} color={ACCENT} />
+                <Text style={styles.translatedBadgeText}>Translated · Tap to show original</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Author row */}
           <View style={styles.authorRow}>
@@ -224,7 +265,7 @@ export default function StoryDetailScreen() {
 
           {/* Story content with interleaved photos */}
           <View style={styles.contentBlock}>
-            {renderContent(story.content, extraImages)}
+            {renderContent(translatedContent || story.content, extraImages)}
           </View>
 
           {/* Any remaining extra images */}
@@ -275,9 +316,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8,12,20,0.35)',
   },
   topBar: {
-    flexDirection: 'row', justifyContent: 'space-between',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: 12,
   },
+  topBarRight: { flexDirection: 'row', gap: 8 },
+  circleBtnActive: { backgroundColor: ACCENT + 'CC' },
+  translatedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: ACCENT + '15', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 5,
+    alignSelf: 'flex-start', marginBottom: 12,
+  },
+  translatedBadgeText: { fontSize: 11, color: ACCENT, fontStyle: 'italic', fontWeight: '600' },
   circleBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(8,12,20,0.55)',

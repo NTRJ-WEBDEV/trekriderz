@@ -2,12 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const STATS = [
+const DEFAULT_STATS = [
   { value: 200, suffix: "+", label: "Trips Organised" },
   { value: 6, suffix: "", label: "Countries" },
   { value: 1500, suffix: "+", label: "Trekkers Guided" },
   { value: 35, suffix: "+", label: "Western Ghats Trails" },
 ];
+
+interface StatsProps {
+  trips?: string;
+  countries?: string;
+  trekkers?: string;
+  trails?: string;
+}
 
 function useCounter(target: number, duration = 1800, active: boolean) {
   const [count, setCount] = useState(0);
@@ -43,7 +50,7 @@ function StatItem({ value, suffix, label, active }: { value: number; suffix: str
   );
 }
 
-export default function AnimatedStats() {
+export default function AnimatedStats({ trips, countries, trekkers, trails }: StatsProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
 
@@ -56,11 +63,18 @@ export default function AnimatedStats() {
     return () => observer.disconnect();
   }, []);
 
+  const stats = [
+    { value: parseInt(trips || "200") || 200, suffix: "+", label: "Trips Organised" },
+    { value: parseInt(countries || "6") || 6, suffix: "", label: "Countries" },
+    { value: parseInt(trekkers || "1500") || 1500, suffix: "+", label: "Trekkers Guided" },
+    { value: parseInt(trails || "35") || 35, suffix: "+", label: "Western Ghats Trails" },
+  ];
+
   return (
     <div ref={ref} className="relative py-12 my-8 mx-4 md:mx-8">
       <div className="max-w-5xl mx-auto glass-card rounded-2xl py-10 px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x-0 md:divide-x divide-white/5">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <StatItem key={s.label} {...s} active={active} />
           ))}
         </div>

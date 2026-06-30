@@ -3,8 +3,14 @@ import { usePathname } from "next/navigation";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import VideoBackground from "./VideoBackground";
+import type { SiteSettings } from "@/lib/site-settings";
 
-export default function WebsiteShell({ children }: { children: React.ReactNode }) {
+interface WebsiteShellProps {
+  children: React.ReactNode;
+  siteSettings?: Partial<SiteSettings>;
+}
+
+export default function WebsiteShell({ children, siteSettings }: WebsiteShellProps) {
   const pathname = usePathname();
   if (pathname.startsWith("/admin")) return <>{children}</>;
   return (
@@ -13,7 +19,7 @@ export default function WebsiteShell({ children }: { children: React.ReactNode }
       <div className="relative z-10 min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-1">{children}</main>
-        <Footer />
+        <Footer settings={siteSettings} />
       </div>
     </>
   );

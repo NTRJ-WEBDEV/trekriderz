@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import AnimatedStats from "@/components/AnimatedStats";
 import TripCard, { Trip } from "@/components/TripCard";
-import { BUSINESS_WA } from "@/lib/constants";
+import { getSiteSettings } from "@/lib/site-settings";
 
 export const revalidate = 60;
 
@@ -51,37 +51,25 @@ const DESTINATIONS = [
 ];
 
 const YOUTUBE_SHORTS = [
-  {
-    id: "placeholder-1",
-    title: "Western Ghats Trek Highlights",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-  },
-  {
-    id: "placeholder-2",
-    title: "Nepal Base Camp Journey",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-  },
-  {
-    id: "placeholder-3",
-    title: "Bhutan Kingdom Tour",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-  },
-  {
-    id: "placeholder-4",
-    title: "Coorg Coffee Trail",
-    embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-  },
+  { id: "placeholder-1", title: "Western Ghats Trek Highlights", embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" },
+  { id: "placeholder-2", title: "Nepal Base Camp Journey", embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" },
+  { id: "placeholder-3", title: "Bhutan Kingdom Tour", embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" },
+  { id: "placeholder-4", title: "Coorg Coffee Trail", embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" },
 ];
+
+function db() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 async function getFeaturedTrips(): Promise<Trip[]> {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    const { data } = await supabase
+    const { data } = await db()
       .from("trips")
-      .select("id,name,type,country,destination,duration_days,price_inr,difficulty,special_tag,cover_image")
+      .select("id,name,type,country,destination,duration_days,price_inr,difficulty,special_tag,cover_photo_url")
+      .eq("is_featured", true)
       .eq("status", "active")
       .limit(3);
     return (data && data.length > 0 ? data : SAMPLE_TRIPS) as Trip[];
@@ -90,16 +78,28 @@ async function getFeaturedTrips(): Promise<Trip[]> {
   }
 }
 
+async function getSpecialPackages(): Promise<{ birthday: Trip | null; anniversary: Trip | null }> {
+  try {
+    const { data } = await db()
+      .from("trips")
+      .select("id,name,type,country,destination,duration_days,price_inr,difficulty,special_tag,cover_photo_url")
+      .in("special_tag", ["Birthday", "Anniversary"])
+      .eq("status", "active")
+      .limit(10);
+    const birthday = (data || []).find((t: any) => t.special_tag === "Birthday") ?? null;
+    const anniversary = (data || []).find((t: any) => t.special_tag === "Anniversary") ?? null;
+    return { birthday, anniversary };
+  } catch {
+    return { birthday: null, anniversary: null };
+  }
+}
+
 async function getYoutubeVideos() {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    const { data } = await supabase
+    const { data } = await db()
       .from("youtube_videos")
       .select("*")
-      .order("created_at", { ascending: false })
+      .order("display_order", { ascending: true })
       .limit(4);
     return data && data.length > 0 ? data : YOUTUBE_SHORTS;
   } catch {
@@ -108,7 +108,15 @@ async function getYoutubeVideos() {
 }
 
 export default async function Home() {
-  const [trips, videos] = await Promise.all([getFeaturedTrips(), getYoutubeVideos()]);
+  const [trips, videos, specialPackages, settings] = await Promise.all([
+    getFeaturedTrips(),
+    getYoutubeVideos(),
+    getSpecialPackages(),
+    getSiteSettings(),
+  ]);
+
+  const { birthday, anniversary } = specialPackages;
+  const waNumber = settings.whatsapp_number;
 
   return (
     <>
@@ -127,20 +135,13 @@ export default async function Home() {
             Trek. Travel. Connect.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/trips"
-              className="btn-accent px-8 py-4 rounded-full font-bold text-sm md:text-base"
-            >
+            <Link href="/trips" className="btn-accent px-8 py-4 rounded-full font-bold text-sm md:text-base">
               Explore Trips
             </Link>
-            <Link
-              href="/plan"
-              className="btn-ghost px-8 py-4 rounded-full font-bold text-sm md:text-base backdrop-blur-sm"
-            >
+            <Link href="/plan" className="btn-ghost px-8 py-4 rounded-full font-bold text-sm md:text-base backdrop-blur-sm">
               Plan My Custom Trip
             </Link>
           </div>
-          {/* Scroll hint */}
           <div className="mt-16 flex flex-col items-center gap-2 text-white/30 text-xs animate-bounce">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" />
@@ -151,7 +152,12 @@ export default async function Home() {
       </section>
 
       {/* ─── STATS ─── */}
-      <AnimatedStats />
+      <AnimatedStats
+        trips={settings.stat_trips}
+        countries={settings.stat_countries}
+        trekkers={settings.stat_trekkers}
+        trails={settings.stat_trails}
+      />
 
       {/* ─── FEATURED TRIPS ─── */}
       <section className="py-20 px-5 md:px-8">
@@ -165,10 +171,7 @@ export default async function Home() {
                 FEATURED TRIPS
               </h2>
             </div>
-            <Link
-              href="/trips"
-              className="hidden md:inline-flex btn-ghost px-5 py-2.5 rounded-full text-sm font-medium"
-            >
+            <Link href="/trips" className="hidden md:inline-flex btn-ghost px-5 py-2.5 rounded-full text-sm font-medium">
               View All →
             </Link>
           </div>
@@ -178,10 +181,7 @@ export default async function Home() {
             ))}
           </div>
           <div className="text-center mt-8 md:hidden">
-            <Link
-              href="/trips"
-              className="btn-accent px-8 py-3 rounded-full font-bold inline-block"
-            >
+            <Link href="/trips" className="btn-accent px-8 py-3 rounded-full font-bold inline-block">
               View All Trips
             </Link>
           </div>
@@ -227,16 +227,24 @@ export default async function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Birthday */}
             <div className="glass-card rounded-2xl overflow-hidden group">
-              <div className="h-48 img-placeholder flex-col gap-2">
-                <span className="text-4xl opacity-30">🎂</span>
-                <span className="text-[10px]">📸 Birthday trip photo</span>
+              <div className="h-48 relative overflow-hidden">
+                {birthday?.cover_photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={birthday.cover_photo_url} alt={birthday.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full img-placeholder flex flex-col items-center justify-center gap-2">
+                    <span className="text-4xl opacity-30">🎂</span>
+                    <span className="text-[10px] text-white/30">Add a Birthday trip in CMS with special tag &quot;Birthday&quot;</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#080c14]/80 to-transparent pointer-events-none" />
               </div>
               <div className="p-6">
                 <div className="inline-flex items-center gap-2 bg-pink-500/10 border border-pink-500/20 rounded-full px-3 py-1 text-pink-400 text-xs font-bold mb-3">
                   🎉 Birthday Escapes
                 </div>
                 <h3 className="font-display text-3xl text-white mb-2">
-                  BIRTHDAY TREK
+                  {birthday ? birthday.name.toUpperCase() : "BIRTHDAY TREK"}
                 </h3>
                 <p className="text-white/55 text-sm mb-4 leading-relaxed">
                   Celebrate your birthday on a mountain peak or a riverside
@@ -244,12 +252,11 @@ export default async function Home() {
                   group memories guaranteed.
                 </p>
                 <p className="text-accent font-bold mb-4">
-                  Starting ₹2,999/person
+                  {birthday?.price_inr
+                    ? `Starting ₹${birthday.price_inr.toLocaleString("en-IN")}/person`
+                    : "Starting ₹2,999/person"}
                 </p>
-                <Link
-                  href="/special"
-                  className="btn-accent px-6 py-2.5 rounded-full text-sm font-bold inline-block"
-                >
+                <Link href="/special" className="btn-accent px-6 py-2.5 rounded-full text-sm font-bold inline-block">
                   Plan Birthday Trip
                 </Link>
               </div>
@@ -257,16 +264,24 @@ export default async function Home() {
 
             {/* Anniversary */}
             <div className="glass-card rounded-2xl overflow-hidden group">
-              <div className="h-48 img-placeholder flex-col gap-2">
-                <span className="text-4xl opacity-30">💑</span>
-                <span className="text-[10px]">📸 Anniversary trip photo</span>
+              <div className="h-48 relative overflow-hidden">
+                {anniversary?.cover_photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={anniversary.cover_photo_url} alt={anniversary.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full img-placeholder flex flex-col items-center justify-center gap-2">
+                    <span className="text-4xl opacity-30">💑</span>
+                    <span className="text-[10px] text-white/30">Add an Anniversary trip in CMS with special tag &quot;Anniversary&quot;</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#080c14]/80 to-transparent pointer-events-none" />
               </div>
               <div className="p-6">
                 <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 rounded-full px-3 py-1 text-rose-400 text-xs font-bold mb-3">
                   ❤️ Anniversary Trips
                 </div>
                 <h3 className="font-display text-3xl text-white mb-2">
-                  ANNIVERSARY ESCAPE
+                  {anniversary ? anniversary.name.toUpperCase() : "ANNIVERSARY ESCAPE"}
                 </h3>
                 <p className="text-white/55 text-sm mb-4 leading-relaxed">
                   Romantic getaways to Coorg coffee estates, Munnar hillside
@@ -274,12 +289,11 @@ export default async function Home() {
                   request.
                 </p>
                 <p className="text-accent font-bold mb-4">
-                  Starting ₹5,999/couple
+                  {anniversary?.price_inr
+                    ? `Starting ₹${anniversary.price_inr.toLocaleString("en-IN")}/couple`
+                    : "Starting ₹5,999/couple"}
                 </p>
-                <Link
-                  href="/special"
-                  className="btn-accent px-6 py-2.5 rounded-full text-sm font-bold inline-block"
-                >
+                <Link href="/special" className="btn-accent px-6 py-2.5 rounded-full text-sm font-bold inline-block">
                   Plan Anniversary Trip
                 </Link>
               </div>
@@ -301,7 +315,7 @@ export default async function Home() {
               </h2>
             </div>
             <a
-              href="https://youtube.com/@trekriderz"
+              href={settings.youtube_url}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden md:inline-flex btn-ghost px-5 py-2.5 rounded-full text-sm font-medium"
@@ -330,7 +344,7 @@ export default async function Home() {
           </div>
           <div className="text-center mt-8">
             <a
-              href="https://youtube.com/@trekriderz"
+              href={settings.youtube_url}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-accent px-8 py-3 rounded-full font-bold inline-block"
@@ -357,14 +371,11 @@ export default async function Home() {
               will WhatsApp you within 24 hours.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/plan"
-                className="btn-accent px-8 py-4 rounded-full font-bold text-base"
-              >
+              <Link href="/plan" className="btn-accent px-8 py-4 rounded-full font-bold text-base">
                 Plan My Custom Trip →
               </Link>
               <a
-                href={`https://wa.me/${BUSINESS_WA}?text=Hi%2C%20I%27d%20like%20to%20plan%20a%20custom%20trip!`}
+                href={`https://wa.me/${waNumber}?text=Hi%2C%20I%27d%20like%20to%20plan%20a%20custom%20trip!`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-ghost px-8 py-4 rounded-full font-bold text-base"

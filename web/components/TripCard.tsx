@@ -27,6 +27,7 @@ export interface Trip {
   difficulty?: string;
   special_tag?: string;
   cover_image?: string;
+  cover_photo_url?: string;
   status?: string;
 }
 
@@ -39,10 +40,10 @@ export default function TripCard({ trip }: { trip: Trip }) {
       <div className="glass-card rounded-2xl overflow-hidden hover:border-accent/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(173,255,47,0.08)]">
         {/* Image */}
         <div className="relative h-52 w-full img-placeholder">
-          {trip.cover_image ? (
+          {(trip.cover_photo_url || trip.cover_image) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={trip.cover_image}
+              src={trip.cover_photo_url || trip.cover_image}
               alt={trip.name}
               className="absolute inset-0 w-full h-full object-cover"
             />

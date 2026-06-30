@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter, Bebas_Neue } from "next/font/google";
 import { Providers } from "./providers";
 import WebsiteShell from "@/components/WebsiteShell";
+import { getSiteSettings } from "@/lib/site-settings";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -32,18 +33,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const siteSettings = await getSiteSettings();
+
   return (
     <html lang="en">
       <body
         className={`${inter.variable} ${bebasNeue.variable} font-sans bg-dark-900 text-white overflow-x-hidden`}
       >
         <Providers>
-          <WebsiteShell>{children}</WebsiteShell>
+          <WebsiteShell siteSettings={siteSettings}>{children}</WebsiteShell>
         </Providers>
       </body>
     </html>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BUSINESS_WA } from "@/lib/constants";
+import type { SiteSettings } from "@/lib/site-settings";
 
 const EXPLORE_LINKS = [
   ["Treks & Tours", "/trips"],
@@ -19,7 +19,20 @@ const DESTINATIONS = [
   ["Cambodia", "/trips?country=Cambodia"],
 ];
 
-export default function Footer() {
+interface FooterProps {
+  settings?: Partial<SiteSettings>;
+}
+
+export default function Footer({ settings }: FooterProps) {
+  const wa = settings?.whatsapp_number ?? "917339231537";
+  const email = settings?.email ?? "hello@trekriderz.com";
+  const instagram = settings?.instagram_url ?? "https://instagram.com/trekriderz";
+  const youtube = settings?.youtube_url ?? "https://youtube.com/@trekriderz";
+
+  const displayPhone = wa.startsWith("91") && wa.length >= 12
+    ? `+91 ${wa.slice(2, 7)} ${wa.slice(7)}`
+    : `+${wa}`;
+
   return (
     <footer className="relative glass border-t border-white/5">
       <div className="max-w-7xl mx-auto px-5 md:px-8 py-14">
@@ -37,7 +50,7 @@ export default function Footer() {
               Himalayas and beyond.
             </p>
             <a
-              href={`https://wa.me/${BUSINESS_WA}?text=Hi%20TrekRiderz!`}
+              href={`https://wa.me/${wa}?text=Hi%20TrekRiderz!`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 btn-accent px-5 py-2.5 rounded-full text-sm"
@@ -89,21 +102,21 @@ export default function Footer() {
             </h4>
             <div className="flex flex-col gap-3 text-sm text-white/55">
               <a
-                href={`https://wa.me/${BUSINESS_WA}`}
+                href={`https://wa.me/${wa}`}
                 className="hover:text-accent transition-colors"
               >
-                📱 +91 99999 99999
+                📱 {displayPhone}
               </a>
               <a
-                href="mailto:hello@trekriderz.com"
+                href={`mailto:${email}`}
                 className="hover:text-accent transition-colors"
               >
-                ✉️ hello@trekriderz.com
+                ✉️ {email}
               </a>
               <span>📍 Karnataka, India</span>
               <div className="mt-3 pt-3 border-t border-white/10">
                 <a
-                  href="https://instagram.com/trekriderz"
+                  href={instagram}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-accent transition-colors block mb-1"
@@ -111,7 +124,7 @@ export default function Footer() {
                   Instagram
                 </a>
                 <a
-                  href="https://youtube.com/@trekriderz"
+                  href={youtube}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-accent transition-colors block"

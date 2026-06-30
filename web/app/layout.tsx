@@ -2,9 +2,7 @@ import "@/app/globals.css";
 import type { Metadata } from "next";
 import { Inter, Bebas_Neue } from "next/font/google";
 import { Providers } from "./providers";
-import VideoBackground from "@/components/VideoBackground";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import WebsiteShell from "@/components/WebsiteShell";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,14 +42,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${bebasNeue.variable} font-sans bg-dark-900 text-white overflow-x-hidden`}
       >
-        <VideoBackground />
-        <div className="relative z-10 min-h-screen flex flex-col">
-          <Navbar />
-          <main className="flex-1">
-            <Providers>{children}</Providers>
-          </main>
-          <Footer />
-        </div>
+        <Providers>
+          <WebsiteShell>{children}</WebsiteShell>
+        </Providers>
       </body>
     </html>
   );

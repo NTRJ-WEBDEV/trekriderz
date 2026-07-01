@@ -85,14 +85,11 @@
         {
           "android": {
             "kotlinVersion": "1.9.24",
-            "newArchEnabled": false,
-            "gradleProperties": {
-              "org.gradle.jvmargs": "-Xmx4096m -XX:MaxMetaspaceSize=512m",
-              "org.gradle.parallel": "true"
-            }
+            "newArchEnabled": false
           }
         }
-      ]
+      ],
+      "./plugins/withGradleProperties"
     ],
     "experiments": {
       "typedRoutes": true

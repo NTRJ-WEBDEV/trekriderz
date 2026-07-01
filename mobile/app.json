@@ -70,7 +70,7 @@
       "url": "https://u.expo.dev/946b44e9-cee5-4d14-93c3-0492cbb2dd9f"
     },
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "appVersion"
     },
     "web": {
       "bundler": "metro"

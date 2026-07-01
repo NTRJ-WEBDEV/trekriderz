@@ -18,8 +18,6 @@ module.exports = function withCustomGradleProperties(config) {
 
     set("org.gradle.jvmargs", "-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError");
     set("org.gradle.parallel", "true");
-    set("org.gradle.daemon", "true");
-    set("org.gradle.caching", "true");
 
     return props;
   });

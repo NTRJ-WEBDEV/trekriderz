@@ -22,7 +22,7 @@
         "applinks:trekriderz.app"
       ]
     },
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "android": {
       "package": "com.trekriderz.app",
 

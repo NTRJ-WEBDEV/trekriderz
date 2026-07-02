@@ -18,9 +18,9 @@ module.exports = function withCustomGradleProperties(config) {
 
     set("org.gradle.jvmargs", "-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError");
     set("org.gradle.parallel", "true");
-    // expo-updates reads kspVersion from gradle.properties before kotlinVersion ext is set,
-    // otherwise it falls back to KSP 1.9.24 which is incompatible with Kotlin 2.0.21
-    set("kspVersion", "2.0.21-1.0.28");
+    // KSP K1 backend calls KotlinTypeMapper.LANGUAGE_VERSION_SETTINGS_DEFAULT which was
+    // removed in Kotlin 2.0.x. Force K2 backend — Room 2.6.1 (used by expo-updates) supports it.
+    set("ksp.useK2", "true");
 
     return props;
   });

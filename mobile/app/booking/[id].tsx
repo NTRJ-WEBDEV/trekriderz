@@ -85,7 +85,7 @@ export default function BookingScreen() {
       setBlockedDates(blocked);
       if (homestay?.cancellation_policy) setCancellationPolicy(homestay.cancellation_policy);
     } catch (e) {
-      console.log('Error fetching blocked dates', e);
+      if (__DEV__) console.log('Error fetching blocked dates', e);
     }
   };
 
@@ -162,8 +162,8 @@ export default function BookingScreen() {
             bookingId: data.booking_id,
             amount: totalPrice,
             description: `Booking for ${name}`,
-            userEmail: userProfile?.email || user?.email || 'user@example.com',
-            userPhone: userProfile?.phone || '+919999999999',
+            userEmail: userProfile?.email || user?.email || '',
+            userPhone: userProfile?.phone || '',
           },
         });
 

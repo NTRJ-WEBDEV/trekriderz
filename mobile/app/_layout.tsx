@@ -57,7 +57,7 @@ export default function RootLayout() {
         // Sync service initialized via background location
 
         const recListener = addNotificationReceivedListener((notif) => {
-          console.log('Foreground Notif:', notif);
+          if (__DEV__) console.log('Foreground Notif:', notif);
         });
 
         const resListener = addNotificationResponseListener((res) => {

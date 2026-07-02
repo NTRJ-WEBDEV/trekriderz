@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+
+const WHATSAPP_NUMBER = process.env.EXPO_PUBLIC_BUSINESS_WHATSAPP || '917339231537';
 import { Calendar } from 'react-native-calendars';
 
 export default function BookingScreen() {
@@ -24,7 +27,6 @@ export default function BookingScreen() {
   }>();
 
   const { user } = useAuthStore();
-  const [userProfile, setUserProfile] = useState<{ email: string; phone: string } | null>(null);
 
   const pricePerNight = parseInt(price || '0', 10);
   const [selectedDates, setSelectedDates] = useState<{ [key: string]: any }>({});
@@ -36,29 +38,7 @@ export default function BookingScreen() {
 
   useEffect(() => {
     fetchBlockedDates();
-    fetchUserProfile();
-  }, [id, user]);
-
-  const fetchUserProfile = async () => {
-    if (!user) return;
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('email, phone')
-        .eq('id', user.id)
-        .single();
-      if (data) {
-        setUserProfile({
-          email: data.email || user.email || '',
-          phone: data.phone || '',
-        });
-      } else {
-        setUserProfile({ email: user.email || '', phone: '' });
-      }
-    } catch (e) {
-      setUserProfile({ email: user.email || '', phone: '' });
-    }
-  };
+  }, [id]);
 
   const [cancellationPolicy, setCancellationPolicy] = useState('moderate');
 
@@ -137,63 +117,28 @@ export default function BookingScreen() {
 
   const totalPrice = nights * pricePerNight;
 
-  const handleBooking = async () => {
+  const handleBooking = () => {
     if (!startDate || !endDate) {
       Alert.alert('Select Dates', 'Please select check-in and check-out dates');
       return;
     }
 
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('create_booking_request', {
-        p_resource_id: id,
-        p_type: type || 'homestay',
-        p_start_date: startDate,
-        p_end_date: endDate,
-        p_guests: guests,
-        p_total_price: totalPrice,
-      });
+    const typeLabel = type === 'guide' ? 'Guide' : 'Homestay';
+    const checkInLabel = type === 'guide' ? 'Start Date' : 'Check-in';
+    const checkOutLabel = type === 'guide' ? 'End Date' : 'Check-out';
 
-      if (error) throw error;
+    const message = encodeURIComponent(
+      `Hi TrekRiderz! I'd like to book:\n\n` +
+      `*${typeLabel}:* ${name || 'Property'}\n` +
+      `*${checkInLabel}:* ${startDate}\n` +
+      `*${checkOutLabel}:* ${endDate}\n` +
+      `*Guests:* ${guests}\n` +
+      `*Duration:* ${nights} ${nights === 1 ? unitLabel : unitLabelPlural}\n` +
+      `*Total:* ₹${totalPrice.toLocaleString('en-IN')}\n\n` +
+      `Please confirm availability.`
+    );
 
-      if (data.success) {
-        const { data: paymentData, error: paymentError } = await supabase.functions.invoke('create-payment', {
-          body: {
-            bookingId: data.booking_id,
-            amount: totalPrice,
-            description: `Booking for ${name}`,
-            userEmail: userProfile?.email || user?.email || '',
-            userPhone: userProfile?.phone || '',
-          },
-        });
-
-        if (paymentError) {
-          Alert.alert(
-            'Payment Error',
-            'Booking created but payment link failed. Please try again from My Bookings.'
-          );
-          router.push('/(tabs)/profile');
-          return;
-        }
-
-        if (paymentData?.paymentLink) {
-          const { Linking } = require('react-native');
-          Linking.openURL(paymentData.paymentLink);
-          Alert.alert(
-            'Payment Started',
-            'Please complete the payment in the browser. Your booking will be confirmed once paid.',
-            [{ text: 'OK', onPress: () => router.push('/(tabs)/profile') }]
-          );
-        }
-      } else {
-        Alert.alert('Booking Failed', data.message || 'Dates might be unavailable');
-      }
-    } catch (error: any) {
-      console.error('Booking error:', error);
-      Alert.alert('Error', error.message || 'Failed to submit booking request');
-    } finally {
-      setLoading(false);
-    }
+    Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${message}`);
   };
 
   const unitLabel = type === 'guide' ? 'day' : 'night';
@@ -332,15 +277,11 @@ export default function BookingScreen() {
           </Text>
         )}
         <TouchableOpacity
-          style={[styles.confirmBtn, loading && styles.confirmBtnDisabled]}
+          style={styles.confirmBtn}
           onPress={handleBooking}
-          disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.confirmBtnText}>Confirm Booking</Text>
-          )}
+          <Ionicons name="logo-whatsapp" size={20} color="#FFF" style={{ marginRight: 8 }} />
+          <Text style={styles.confirmBtnText}>Book via WhatsApp</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -537,13 +478,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   confirmBtn: {
-    backgroundColor: '#8CC63F',
+    backgroundColor: '#25D366',
     borderRadius: 14,
     paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  confirmBtnDisabled: {
-    opacity: 0.6,
+    justifyContent: 'center',
   },
   confirmBtnText: {
     color: '#FFF',

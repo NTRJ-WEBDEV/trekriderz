@@ -9,7 +9,10 @@ import {
   Alert,
   Share,
   Dimensions,
+  Linking,
 } from 'react-native';
+
+const WHATSAPP_NUMBER = process.env.EXPO_PUBLIC_BUSINESS_WHATSAPP || '917339231537';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -355,6 +358,21 @@ export default function ExpeditionDetailScreen() {
             </Text>
           )}
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.waBtn}
+          onPress={() => {
+            const msg = encodeURIComponent(
+              `Hi TrekRiderz! I'm interested in the expedition:\n\n` +
+              `*${expedition?.title || 'Expedition'}*\n` +
+              (selectedPackage ? `*Package:* ${selectedPackage.name} — ₹${selectedPackage.price_per_person.toLocaleString('en-IN')}/person\n` : '') +
+              `\nPlease share more details.`
+            );
+            Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`);
+          }}
+        >
+          <Ionicons name="logo-whatsapp" size={18} color="#25D366" style={{ marginRight: 6 }} />
+          <Text style={styles.waBtnText}>Enquire on WhatsApp</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -617,5 +635,20 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  waBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#25D366',
+  },
+  waBtnText: {
+    color: '#25D366',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

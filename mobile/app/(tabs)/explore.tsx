@@ -14,48 +14,6 @@ import { fetchWeatherOpenMeteo } from '@/lib/weather';
 import { searchPlaces } from '@/lib/geocoding';
 import PostCard from '@/components/PostCard';
 
-const MOCK_POSTS = [
-  {
-    id: 'mock1',
-    user: { name: 'Arun Kumar', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Arun', id: 'u1' },
-    images: [
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
-      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800',
-    ],
-    content: 'Just completed Triund Trek! The view from the top is absolutely breathtaking 🏔️ #Triund #HimachalPradesh',
-    likes_count: 142,
-    comments_count: 23,
-    timestamp: '2 hours ago',
-    location: 'Triund, Himachal Pradesh',
-    liked: false,
-    trip: { status: 'completed', trip_type: 'trek', destination: 'Triund, HP', title: 'Triund Trek' },
-  },
-  {
-    id: 'mock2',
-    user: { name: 'Priya Sharma', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya', id: 'u2' },
-    images: ['https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800'],
-    content: 'Solo bike trip to Spiti Valley complete! 900km in 5 days. India is beautiful 🏍️',
-    likes_count: 89,
-    comments_count: 15,
-    timestamp: '5 hours ago',
-    location: 'Spiti Valley, HP',
-    liked: true,
-    trip: { status: 'completed', trip_type: 'bike', destination: 'Spiti Valley', title: 'Spiti Ride' },
-  },
-  {
-    id: 'mock3',
-    user: { name: 'Rahul Nair', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul', id: 'u3' },
-    images: ['https://images.unsplash.com/photo-1587502537745-84b86da1204f?w=800'],
-    content: 'Kedarkantha summit done ✅ -10°C but worth every step. Tip: start at 2am for sunrise views!',
-    likes_count: 203,
-    comments_count: 41,
-    timestamp: '1 day ago',
-    location: 'Kedarkantha, Uttarakhand',
-    liked: false,
-    trip: { status: 'completed', trip_type: 'trek', destination: 'Kedarkantha', title: 'Winter Summit' },
-  },
-];
-
 const TRIP_EMOJI: Record<string, string> = {
   trek: '⛰️', bike: '🏍️', temple: '🛕', backpacking: '🎒', weekend: '🌄',
 };

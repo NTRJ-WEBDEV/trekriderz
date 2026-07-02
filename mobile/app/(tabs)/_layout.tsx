@@ -33,24 +33,29 @@ export default function TabsLayout() {
           },
         }}
       >
+        {/* Home */}
         <Tabs.Screen
           name="index"
           options={{
             title: 'Home',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="home-outline" color={color} size={size} />
+              <Ionicons name="home-outline" size={size} color={color} />
             ),
           }}
         />
+
+        {/* Feed (Instagram-style posts + stories) */}
         <Tabs.Screen
           name="explore"
           options={{
-            title: 'Explore',
+            title: 'Feed',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="compass-outline" color={color} size={size} />
+              <Ionicons name="newspaper-outline" size={size} color={color} />
             ),
           }}
         />
+
+        {/* Create — floating green button */}
         <Tabs.Screen
           name="create"
           options={{
@@ -63,28 +68,45 @@ export default function TabsLayout() {
               </View>
             ),
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="add-circle-outline" color={color} size={size} />
+              <Ionicons name="add-circle-outline" size={size} color={color} />
             ),
           }}
         />
+
+        {/* Discover — browse guides, homestays, trips, vehicles */}
         <Tabs.Screen
-          name="notifications"
+          name="discover"
           options={{
-            title: 'Alerts',
+            title: 'Discover',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="notifications-outline" color={color} size={size} />
+              <Ionicons name="compass-outline" size={size} color={color} />
             ),
           }}
         />
+
+        {/* Chat — direct messages */}
+        <Tabs.Screen
+          name="chats"
+          options={{
+            title: 'Chat',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
+            ),
+          }}
+        />
+
+        {/* Profile */}
         <Tabs.Screen
           name="profile"
           options={{
             title: 'Profile',
             tabBarIcon: ({ color, size }) => (
-              <TabBarIcon name="person-outline" color={color} size={size} />
+              <Ionicons name="person-outline" size={size} color={color} />
             ),
           }}
         />
+
+        {/* Admin — visible only to admins */}
         <Tabs.Screen
           name="admin"
           options={{
@@ -100,16 +122,12 @@ export default function TabsLayout() {
             ) : () => null,
           }}
         />
-        <Tabs.Screen name="chats" options={{ href: null }} />
+
+        {/* Hidden tabs — accessible via deep link / router.push only */}
+        <Tabs.Screen name="notifications" options={{ href: null }} />
         <Tabs.Screen name="feed" options={{ href: null }} />
       </Tabs>
     </>
-  );
-}
-
-function TabBarIcon({ name, color, size }: { name: any; color: string; size: number }) {
-  return (
-    <Ionicons name={name} size={size} color={color} />
   );
 }
 

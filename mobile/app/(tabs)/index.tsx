@@ -85,8 +85,23 @@ export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
   const [trips, setTrips] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [profile, setProfile] = useState<{ full_name?: string; avatar_url?: string } | null>(null);
 
-  useEffect(() => { fetchTrips(); }, []);
+  useEffect(() => {
+    if (user?.id) {
+      fetchTrips();
+      fetchProfile();
+    }
+  }, [user?.id]);
+
+  const fetchProfile = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('full_name, avatar_url')
+      .eq('id', user?.id)
+      .single();
+    if (data) setProfile(data);
+  };
 
   const fetchTrips = async () => {
     const { data } = await supabase
@@ -100,9 +115,9 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const firstName = user?.user_metadata?.full_name?.split(' ')[0] || 'Adventurer';
-  const avatarUrl = user?.user_metadata?.avatar_url ||
-    `https://ui-avatars.com/api/?name=${firstName}&background=8CC63F&color=fff`;
+  const firstName = (profile?.full_name || user?.user_metadata?.full_name)?.split(' ')[0] || 'Adventurer';
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}&background=8CC63F&color=fff`;
 
   const TRIP_EMOJI: Record<string, string> = {
     trek: '⛰️', bike: '🏍️', temple: '🛕', backpacking: '🎒', weekend: '🌄',
@@ -113,7 +128,7 @@ export default function HomeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTrips(); }} tintColor="#8CC63F" />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchTrips(); fetchProfile(); }} tintColor="#8CC63F" />
         }
       >
         {/* ── HERO ── */}

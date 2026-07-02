@@ -172,6 +172,7 @@ export default function RootLayout() {
         <Stack.Screen name="stories/index" />
         <Stack.Screen name="stories/[id]" />
         <Stack.Screen name="stories/create" />
+        <Stack.Screen name="user/[id]" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

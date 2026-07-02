@@ -15,7 +15,7 @@ const BG = '#080C14';
 const CARD = 'rgba(255,255,255,0.05)';
 const BORDER = 'rgba(255,255,255,0.07)';
 
-type Tab = 'homestays' | 'guides' | 'expeditions' | 'communities' | 'users';
+type Tab = 'homestays' | 'guides' | 'expeditions' | 'communities' | 'users' | 'vehicles' | 'reports';
 
 const ROLES = ['user', 'guide', 'homestay_owner', 'admin'] as const;
 const CATEGORIES = ['general', 'trekking', 'travel', 'photography', 'gear', 'safety', 'guides', 'homestays'];
@@ -36,6 +36,8 @@ export default function AdminDashboard() {
   const [expeditions, setExpeditions] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -55,6 +57,7 @@ export default function AdminDashboard() {
       const [
         usersRes, pendingHsRes, pendingGRes, tripsRes,
         hsRes, gRes, expRes, commRes, usersListRes,
+        vehiclesRes, reportsRes,
       ] = await Promise.all([
         supabase.from('users').select('id', { count: 'exact', head: true }),
         supabase.from('homestays').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -80,6 +83,14 @@ export default function AdminDashboard() {
           .select('id, full_name, email, role, created_at')
           .order('created_at', { ascending: false })
           .limit(60),
+        supabase.from('rentals')
+          .select('id, vehicle_type, vehicle_name, location, price_per_day, status, created_at, owner:users!owner_id(full_name, email)')
+          .order('created_at', { ascending: false })
+          .limit(60),
+        supabase.from('post_reports')
+          .select('id, reason, status, created_at, reporter:users!reporter_id(full_name), post:posts!post_id(content, user_id)')
+          .order('created_at', { ascending: false })
+          .limit(50),
       ]);
 
       setStats({
@@ -93,6 +104,8 @@ export default function AdminDashboard() {
       setExpeditions(expRes.data || []);
       setCommunities(commRes.data || []);
       setUsers(usersListRes.data || []);
+      setVehicles(vehiclesRes.data || []);
+      setReports(reportsRes.data || []);
     } catch (e) {
       console.error('Admin load error:', e);
     } finally {
@@ -363,6 +376,8 @@ export default function AdminDashboard() {
               { key: 'expeditions', label: 'Expeditions', icon: 'map-outline', badge: 0 },
               { key: 'communities', label: 'Communities', icon: 'people-outline', badge: 0 },
               { key: 'users', label: 'Users', icon: 'person-outline', badge: 0 },
+              { key: 'vehicles', label: 'Vehicles', icon: 'car-outline', badge: 0 },
+              { key: 'reports', label: 'Reports', icon: 'flag-outline', badge: reports.length },
             ] as const).map((t) => (
               <TouchableOpacity
                 key={t.key}
@@ -483,6 +498,55 @@ export default function AdminDashboard() {
                   item={u}
                   onRoleChange={() => handleRoleChange(u.id, u.role || 'user')}
                 />
+              ))}
+            </>
+          )}
+
+          {/* ── Vehicles ─────────────────────────────────────────────────── */}
+          {tab === 'vehicles' && (
+            <>
+              <Text style={styles.sectionLabel}>{vehicles.length} vehicle listings</Text>
+              {vehicles.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="car-outline" size={40} color={GREEN} />
+                  <Text style={styles.emptyText}>No vehicles yet</Text>
+                </View>
+              ) : vehicles.map(v => (
+                <VehicleAdminRow key={v.id} item={v} onApprove={async () => {
+                  await supabase.from('rentals').update({ status: 'approved' }).eq('id', v.id);
+                  setVehicles(prev => prev.map(x => x.id === v.id ? { ...x, status: 'approved' } : x));
+                }} onReject={async () => {
+                  await supabase.from('rentals').update({ status: 'rejected' }).eq('id', v.id);
+                  setVehicles(prev => prev.filter(x => x.id !== v.id));
+                }} />
+              ))}
+            </>
+          )}
+
+          {/* ── Reports ──────────────────────────────────────────────────── */}
+          {tab === 'reports' && (
+            <>
+              <Text style={styles.sectionLabel}>{reports.length} reported posts</Text>
+              {reports.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="flag-outline" size={40} color={GREEN} />
+                  <Text style={styles.emptyText}>No reports</Text>
+                </View>
+              ) : reports.map(r => (
+                <ReportRow key={r.id} item={r} onDismiss={async () => {
+                  await supabase.from('post_reports').update({ status: 'dismissed' }).eq('id', r.id);
+                  setReports(prev => prev.filter(x => x.id !== r.id));
+                }} onRemove={async () => {
+                  Alert.alert('Remove Post', 'Delete the reported post?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: async () => {
+                      const postId = Array.isArray(r.post) ? r.post[0]?.id ?? r.post_id : r.post?.id ?? r.post_id;
+                      if (postId) await supabase.from('posts').delete().eq('id', postId);
+                      await supabase.from('post_reports').update({ status: 'actioned' }).eq('id', r.id);
+                      setReports(prev => prev.filter(x => x.id !== r.id));
+                    }},
+                  ]);
+                }} />
               ))}
             </>
           )}
@@ -1049,4 +1113,97 @@ const styles = StyleSheet.create({
   categoryChipText: { color: GREEN, fontSize: 13, fontWeight: '600', textTransform: 'capitalize' },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toggleLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 14 },
+});
+
+// ── Vehicle admin row ────────────────────────────────────────────────────────
+
+function VehicleAdminRow({ item, onApprove, onReject }: { item: any; onApprove: () => void; onReject: () => void }) {
+  const owner = Array.isArray(item.owner) ? item.owner[0] : item.owner;
+  const statusColor: Record<string, string> = { pending: '#F59E0B', approved: '#22C55E', rejected: '#EF4444' };
+  const color = statusColor[item.status] || '#9CA3AF';
+  return (
+    <View style={vStyles.card}>
+      <View style={vStyles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={vStyles.name} numberOfLines={1}>{item.vehicle_name || item.vehicle_type}</Text>
+          <Text style={vStyles.meta}>{item.location} · ₹{(item.price_per_day || 0).toLocaleString('en-IN')}/day</Text>
+          {owner?.full_name && <Text style={vStyles.owner}>by {owner.full_name}</Text>}
+        </View>
+        <View style={[vStyles.statusBadge, { borderColor: `${color}44`, backgroundColor: `${color}12` }]}>
+          <Text style={[vStyles.statusText, { color }]}>{item.status}</Text>
+        </View>
+      </View>
+      {item.status === 'pending' && (
+        <View style={vStyles.actions}>
+          <TouchableOpacity style={vStyles.rejectBtn} onPress={onReject}>
+            <Ionicons name="close" size={14} color="#EF4444" />
+            <Text style={vStyles.rejectText}>Reject</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={vStyles.approveBtn} onPress={onApprove}>
+            <Ionicons name="checkmark" size={14} color="#FFF" />
+            <Text style={vStyles.approveText}>Approve</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const vStyles = StyleSheet.create({
+  card: { backgroundColor: CARD, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  name: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  meta: { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
+  owner: { color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 2 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1 },
+  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  actions: { flexDirection: 'row', gap: 8 },
+  rejectBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.08)' },
+  rejectText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
+  approveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 10, backgroundColor: GREEN },
+  approveText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+});
+
+// ── Report row ───────────────────────────────────────────────────────────────
+
+function ReportRow({ item, onDismiss, onRemove }: { item: any; onDismiss: () => void; onRemove: () => void }) {
+  const reporter = Array.isArray(item.reporter) ? item.reporter[0] : item.reporter;
+  const post = Array.isArray(item.post) ? item.post[0] : item.post;
+  return (
+    <View style={rStyles.card}>
+      <View style={rStyles.row}>
+        <View style={rStyles.flagIcon}>
+          <Ionicons name="flag" size={16} color="#EF4444" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={rStyles.reason} numberOfLines={1}>{item.reason || 'No reason given'}</Text>
+          {reporter?.full_name && <Text style={rStyles.meta}>Reported by {reporter.full_name}</Text>}
+          {post?.content && <Text style={rStyles.postContent} numberOfLines={2}>"{post.content}"</Text>}
+        </View>
+      </View>
+      <View style={rStyles.actions}>
+        <TouchableOpacity style={rStyles.dismissBtn} onPress={onDismiss}>
+          <Text style={rStyles.dismissText}>Dismiss</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={rStyles.removeBtn} onPress={onRemove}>
+          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+          <Text style={rStyles.removeText}>Remove Post</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const rStyles = StyleSheet.create({
+  card: { backgroundColor: CARD, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', padding: 14, gap: 10 },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  flagIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.1)', justifyContent: 'center', alignItems: 'center' },
+  reason: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  meta: { color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  postContent: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontStyle: 'italic', marginTop: 4, lineHeight: 16 },
+  actions: { flexDirection: 'row', gap: 8 },
+  dismissBtn: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: BORDER },
+  dismissText: { color: 'rgba(255,255,255,0.5)', fontWeight: '600', fontSize: 13 },
+  removeBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.08)' },
+  removeText: { color: '#EF4444', fontWeight: '700', fontSize: 13 },
 });

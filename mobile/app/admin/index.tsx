@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState<any[]>([]);
   const [contentReports, setContentReports] = useState<any[]>([]);
   const [flaggedUsers, setFlaggedUsers] = useState<any[]>([]);
+  const [cleaningStories, setCleaningStories] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -340,6 +341,22 @@ export default function AdminDashboard() {
     );
   };
 
+  const handleCleanExpiredStories = async () => {
+    setCleaningStories(true);
+    try {
+      const { error, count } = await supabase
+        .from('stories_24h')
+        .delete({ count: 'exact' })
+        .lt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      Alert.alert('Done', `Removed ${count ?? 0} expired ${count === 1 ? 'story' : 'stories'}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not clean expired stories.');
+    } finally {
+      setCleaningStories(false);
+    }
+  };
+
   // ── Tab content ───────────────────────────────────────────────────────────
 
   const pendingList = tab === 'homestays' ? homestays : guides;
@@ -570,6 +587,26 @@ export default function AdminDashboard() {
           {/* ── Reports ──────────────────────────────────────────────────── */}
           {tab === 'reports' && (
             <>
+              <TouchableOpacity
+                style={styles.cleanStoriesBtn}
+                onPress={() => Alert.alert(
+                  'Clean Expired Stories',
+                  'Permanently delete all 24hr stories past their expiry time? (Until pg_cron is set up, this needs to be run manually.)',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Clean Up', onPress: handleCleanExpiredStories },
+                  ]
+                )}
+                disabled={cleaningStories}
+              >
+                {cleaningStories ? (
+                  <ActivityIndicator size="small" color={GREEN} />
+                ) : (
+                  <Ionicons name="trash-outline" size={16} color={GREEN} />
+                )}
+                <Text style={styles.cleanStoriesBtnText}>Clean Expired Stories</Text>
+              </TouchableOpacity>
+
               <Text style={styles.sectionLabel}>{reports.length} reported posts</Text>
               {reports.length === 0 ? (
                 <View style={styles.emptyCard}>
@@ -1256,6 +1293,12 @@ const detailStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  cleanStoriesBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(140,198,63,0.08)', borderWidth: 1, borderColor: 'rgba(140,198,63,0.3)',
+    borderRadius: 12, paddingVertical: 12, marginBottom: 16,
+  },
+  cleanStoriesBtnText: { color: GREEN, fontWeight: '700', fontSize: 13.5 },
   loadingText: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
   header: {
     flexDirection: 'row',

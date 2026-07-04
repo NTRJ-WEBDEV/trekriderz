@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, Image, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Alert,
+  KeyboardAvoidingView, Platform, Alert, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -15,6 +15,15 @@ const BG = '#080C14';
 const GREEN = '#8CC63F';
 
 type Tab = 'posts' | 'chat';
+
+const REPORT_REASONS = [
+  'Nudity or sexual content',
+  'Harassment or bullying',
+  'Hate speech',
+  'Spam or scam',
+  'Promotional content',
+  'Other',
+];
 
 export default function CommunityDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,6 +39,7 @@ export default function CommunityDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [chatInput, setChatInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const channelRef = useRef<any>(null);
 
@@ -153,6 +163,30 @@ export default function CommunityDetailScreen() {
     }
   };
 
+  const submitPostReport = async (reason: string) => {
+    const postId = reportPostId;
+    setReportPostId(null);
+    if (!postId || !user?.id) return;
+    try {
+      const { error } = await supabase.from('content_reports').insert({
+        reporter_id: user.id,
+        content_type: 'community_post',
+        content_id: postId,
+        reason,
+      });
+      if (error) {
+        if (error.code === '23505') {
+          Alert.alert('Already reported', "You've already reported this post. Our team will review it.");
+          return;
+        }
+        throw error;
+      }
+      Alert.alert('Thanks for reporting', "We'll review this soon.");
+    } catch {
+      Alert.alert('Error', 'Could not submit report. Please try again.');
+    }
+  };
+
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -237,12 +271,23 @@ export default function CommunityDetailScreen() {
                     <Text style={styles.postAvatarText}>{item.users?.full_name?.[0] ?? '?'}</Text>
                   </View>
                 )}
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.postUser}>{item.users?.full_name}</Text>
                   <Text style={styles.postTime}>
                     {new Date(item.created_at).toLocaleDateString([], { day: 'numeric', month: 'short' })}
                   </Text>
                 </View>
+                {item.user_id !== user?.id && (
+                  <TouchableOpacity
+                    onPress={() => Alert.alert('Post Options', undefined, [
+                      { text: 'Report', onPress: () => setReportPostId(item.id) },
+                      { text: 'Cancel', style: 'cancel' },
+                    ])}
+                    style={styles.postOptionsBtn}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color="rgba(255,255,255,0.4)" />
+                  </TouchableOpacity>
+                )}
               </View>
               {item.content ? <Text style={styles.postContent}>{item.content}</Text> : null}
               {item.media?.length > 0 && (
@@ -351,6 +396,35 @@ export default function CommunityDetailScreen() {
           )}
         </KeyboardAvoidingView>
       )}
+
+      {/* Report Reasons Modal */}
+      <Modal
+        visible={!!reportPostId}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setReportPostId(null)}
+      >
+        <View style={styles.reportOverlay}>
+          <View style={styles.reportSheet}>
+            <View style={styles.reportHeader}>
+              <Text style={styles.reportTitle}>Report Post</Text>
+              <TouchableOpacity onPress={() => setReportPostId(null)}>
+                <Ionicons name="close" size={24} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+            {REPORT_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={styles.reportReasonRow}
+                onPress={() => submitPostReport(reason)}
+              >
+                <Text style={styles.reportReasonText}>{reason}</Text>
+                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.4)" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -442,4 +516,21 @@ const styles = StyleSheet.create({
   manageBtnText: { color: GREEN, fontWeight: '700', fontSize: 12 },
   empty: { alignItems: 'center', paddingTop: 50, gap: 10 },
   emptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14 },
+  postOptionsBtn: { padding: 4 },
+  reportOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  reportSheet: {
+    backgroundColor: BG, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 16, paddingBottom: 32,
+  },
+  reportHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingBottom: 12, marginBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  reportTitle: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  reportReasonRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.07)',
+  },
+  reportReasonText: { color: '#FFF', fontSize: 14.5 },
 });

@@ -199,7 +199,7 @@ export default function ProfileScreen() {
           )}
 
           <Text style={styles.sectionLabel}>Host</Text>
-          <MenuItem icon="business-outline" title="Manage My Properties" onPress={() => router.push('/host')} />
+          <MenuItem icon="business-outline" title="Manage My Properties" onPress={() => router.push('/host/my-properties' as any)} />
           <MenuItem
             icon="add-circle-outline"
             title="List a New Homestay"

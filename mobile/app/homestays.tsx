@@ -22,37 +22,35 @@ const LOCATION_CHIPS = [
   { id: 'Rajasthan', label: 'Rajasthan', emoji: '🏰' },
 ];
 
-interface Homestay {
+interface PropertyCard {
   id: string;
   name: string;
-  location: string;
-  price_per_night: number;
-  rating: number;
-  photos: string[];
-  amenities: string[];
-  rooms: number;
-  capacity: number;
+  city: string;
+  state: string;
+  cover_photo_url: string | null;
+  property_type: string[];
+  room_types: { base_price: number }[];
 }
 
 export default function HomestaysScreen() {
-  const [homestays, setHomestays] = useState<Homestay[]>([]);
+  const [properties, setProperties] = useState<PropertyCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState('');
 
-  useEffect(() => { fetchHomestays(); }, []);
+  useEffect(() => { fetchProperties(); }, []);
 
-  const fetchHomestays = async () => {
+  const fetchProperties = async () => {
     setLoading(true);
     try {
       const { data } = await supabase
-        .from('homestays')
-        .select('*')
+        .from('properties')
+        .select('id, name, city, state, cover_photo_url, property_type, room_types(base_price)')
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(40);
-      setHomestays(data || []);
+      setProperties((data as any) || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -61,11 +59,10 @@ export default function HomestaysScreen() {
     }
   };
 
-  const filtered = homestays.filter((h) => {
-    const matchRegion = !region || h.location?.toLowerCase().includes(region.toLowerCase());
-    const matchSearch = !search ||
-      h.name?.toLowerCase().includes(search.toLowerCase()) ||
-      h.location?.toLowerCase().includes(search.toLowerCase());
+  const filtered = properties.filter((p) => {
+    const loc = `${p.city} ${p.state}`.toLowerCase();
+    const matchRegion = !region || loc.includes(region.toLowerCase());
+    const matchSearch = !search || p.name?.toLowerCase().includes(search.toLowerCase()) || loc.includes(search.toLowerCase());
     return matchRegion && matchSearch;
   });
 
@@ -132,7 +129,7 @@ export default function HomestaysScreen() {
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchHomestays(); }} tintColor="#8CC63F" />
+              <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchProperties(); }} tintColor="#8CC63F" />
             }
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -140,7 +137,7 @@ export default function HomestaysScreen() {
                 <Text style={styles.emptyText}>No homestays found</Text>
               </View>
             }
-            renderItem={({ item }) => <HomestayCard homestay={item} />}
+            renderItem={({ item }) => <PropertyCardView property={item} />}
           />
         )}
       </SafeAreaView>
@@ -148,15 +145,18 @@ export default function HomestaysScreen() {
   );
 }
 
-function HomestayCard({ homestay }: { homestay: Homestay }) {
+function PropertyCardView({ property }: { property: PropertyCard }) {
+  const prices = (property.room_types || []).map((r) => r.base_price).filter((p) => p != null);
+  const minPrice = prices.length ? Math.min(...prices) : null;
+
   return (
     <TouchableOpacity
       style={card.wrap}
-      onPress={() => router.push(`/homestay/${homestay.id}` as any)}
+      onPress={() => router.push(`/homestay/${property.id}` as any)}
       activeOpacity={0.88}
     >
-      {homestay.photos?.[0] ? (
-        <Image source={{ uri: homestay.photos[0] }} style={card.image} contentFit="cover" />
+      {property.cover_photo_url ? (
+        <Image source={{ uri: property.cover_photo_url }} style={card.image} contentFit="cover" />
       ) : (
         <View style={[card.image, card.imageFallback]}>
           <Ionicons name="home-outline" size={40} color="rgba(255,255,255,0.2)" />
@@ -167,19 +167,17 @@ function HomestayCard({ homestay }: { homestay: Homestay }) {
         <View style={card.badge}>
           <Text style={card.badgeText}>HOMESTAY</Text>
         </View>
-        <Text style={card.name} numberOfLines={1}>{homestay.name}</Text>
+        <Text style={card.name} numberOfLines={1}>{property.name}</Text>
         <View style={card.metaRow}>
           <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.6)" />
-          <Text style={card.location} numberOfLines={1}>{homestay.location}</Text>
+          <Text style={card.location} numberOfLines={1}>{property.city}, {property.state}</Text>
         </View>
         <View style={card.footer}>
-          <Text style={card.price}>₹{homestay.price_per_night?.toLocaleString()}<Text style={card.perUnit}>/night</Text></Text>
-          {homestay.rating ? (
-            <View style={card.rating}>
-              <Ionicons name="star" size={12} color="#FFD700" />
-              <Text style={card.ratingText}>{homestay.rating.toFixed(1)}</Text>
-            </View>
-          ) : null}
+          {minPrice != null ? (
+            <Text style={card.price}>from ₹{minPrice.toLocaleString('en-IN')}<Text style={card.perUnit}>/night</Text></Text>
+          ) : (
+            <Text style={card.price}>Price on request</Text>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -200,8 +198,6 @@ const card = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   price: { fontSize: 15, fontWeight: '800', color: '#8CC63F' },
   perUnit: { fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.55)' },
-  rating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  ratingText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
 });
 
 const styles = StyleSheet.create({

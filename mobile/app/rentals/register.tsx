@@ -55,6 +55,11 @@ export default function RegisterRentalScreen() {
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Terms
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeAccuracy, setAgreeAccuracy] = useState(false);
+  const [agreeResponse, setAgreeResponse] = useState(false);
+
   // Pricing
   const [localEnabled, setLocalEnabled] = useState(true);
   const [localBasePrice, setLocalBasePrice] = useState('');
@@ -121,6 +126,9 @@ export default function RegisterRentalScreen() {
     }
     if (isNaN(parseInt(pricePerDay)) || parseInt(pricePerDay) <= 0) {
       Alert.alert('Invalid Price', 'Enter a valid price per day.'); return;
+    }
+    if (!agreeTerms || !agreeAccuracy || !agreeResponse) {
+      Alert.alert('Required', 'Please accept all three agreements to continue.'); return;
     }
     setLoading(true);
     const imageUrls = await uploadPhotos();
@@ -458,7 +466,59 @@ export default function RegisterRentalScreen() {
             <Text style={styles.infoNoteText}>Your listing will be reviewed before going live. Usually approved within 24 hours.</Text>
           </View>
 
-          <TouchableOpacity style={[styles.submitBtn, (loading || uploading) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={loading || uploading}>
+          <Text style={styles.label}>Terms & Commission *</Text>
+          <ScrollView style={styles.termsBox} nestedScrollEnabled>
+            <Text style={styles.termsTitle}>TREKRIDERZ VEHICLE RENTAL AGREEMENT</Text>
+            <Text style={styles.termsHeading}>COMMISSION & PAYMENTS</Text>
+            <Text style={styles.termsBody}>
+              TrekRiderz charges a 15% service commission on each confirmed rental. This covers platform maintenance, customer support, marketing, and payment processing.{'\n\n'}
+              Payment will be transferred within 3-5 business days after the rental period ends, after deducting the 15% commission.
+            </Text>
+            <Text style={styles.termsHeading}>VEHICLE CONDITION & INSURANCE</Text>
+            <Text style={styles.termsBody}>
+              Your vehicle must be roadworthy, accurately described, and covered by valid insurance at all times it is listed. Misleading listings will result in immediate removal.
+            </Text>
+            <Text style={styles.termsHeading}>ACCIDENTS & LIABILITY</Text>
+            <Text style={styles.termsBody}>
+              You are responsible for ensuring your insurance covers rental use. In case of an accident, both parties must cooperate with insurance claims. TrekRiderz is not liable for damages, accidents, or disputes arising from vehicle use.
+            </Text>
+            <Text style={styles.termsHeading}>BOOKING MANAGEMENT</Text>
+            <Text style={styles.termsBody}>
+              All bookings are managed through TrekRiderz. You must respond to booking requests within 24 hours. Repeated non-responses may result in listing suspension.
+            </Text>
+            <Text style={styles.termsHeading}>TERMINATION POLICY</Text>
+            <Text style={styles.termsBody}>
+              Either party may terminate this agreement with 30 days written notice. TrekRiderz may immediately terminate listings for fraud, safety violations, repeated policy breaches, or legal violations.
+            </Text>
+            <Text style={[styles.termsBody, { marginTop: 8 }]}>
+              By accepting, you confirm that you have the legal right to list this vehicle, all information provided is accurate, and you accept the 15% commission structure.
+            </Text>
+          </ScrollView>
+
+          <TouchableOpacity style={styles.checkboxRow} onPress={() => setAgreeTerms(!agreeTerms)} activeOpacity={0.8}>
+            <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked]}>
+              {agreeTerms && <Ionicons name="checkmark" size={14} color={BG} />}
+            </View>
+            <Text style={styles.checkboxLabel}>I have read and agree to the TrekRiderz Vehicle Rental Agreement and Commission Terms</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.checkboxRow} onPress={() => setAgreeAccuracy(!agreeAccuracy)} activeOpacity={0.8}>
+            <View style={[styles.checkbox, agreeAccuracy && styles.checkboxChecked]}>
+              {agreeAccuracy && <Ionicons name="checkmark" size={14} color={BG} />}
+            </View>
+            <Text style={styles.checkboxLabel}>I confirm that all information provided is accurate and I have the legal right to list this vehicle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.checkboxRow} onPress={() => setAgreeResponse(!agreeResponse)} activeOpacity={0.8}>
+            <View style={[styles.checkbox, agreeResponse && styles.checkboxChecked]}>
+              {agreeResponse && <Ionicons name="checkmark" size={14} color={BG} />}
+            </View>
+            <Text style={styles.checkboxLabel}>I agree to respond to booking requests within 24 hours</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.submitBtn, (loading || uploading || !agreeTerms || !agreeAccuracy || !agreeResponse) && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={loading || uploading || !agreeTerms || !agreeAccuracy || !agreeResponse}
+          >
             {loading || uploading ? <ActivityIndicator color={BG} /> : (
               <>
                 <Ionicons name="car-outline" size={18} color={BG} />
@@ -560,6 +620,22 @@ const styles = StyleSheet.create({
 
   infoNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 14, marginTop: 20, marginBottom: 4 },
   infoNoteText: { flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.38)', lineHeight: 18 },
+
+  termsBox: {
+    maxHeight: 240, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginTop: 20, marginBottom: 16,
+  },
+  termsTitle: { color: GREEN, fontSize: 14, fontWeight: '800', letterSpacing: 1, marginBottom: 12, textAlign: 'center' },
+  termsHeading: { color: '#FFF', fontSize: 12, fontWeight: '800', marginTop: 12, marginBottom: 4, letterSpacing: 0.5 },
+  termsBody: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 18 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: GREEN, borderColor: GREEN },
+  checkboxLabel: { flex: 1, color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 19 },
+
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: GREEN, borderRadius: 16, paddingVertical: 16, marginTop: 20 },
   submitText: { fontSize: 15, fontWeight: '900', color: BG, letterSpacing: 1 },
 });

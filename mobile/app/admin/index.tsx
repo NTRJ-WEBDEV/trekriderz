@@ -46,6 +46,7 @@ export default function AdminDashboard() {
   const [rejectType, setRejectType] = useState<'homestays' | 'guides'>('homestays');
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [detailProperty, setDetailProperty] = useState<any | null>(null);
 
   // Community creation state
   const [showCreateCommunity, setShowCreateCommunity] = useState(false);
@@ -60,11 +61,11 @@ export default function AdminDashboard() {
         vehiclesRes, reportsRes,
       ] = await Promise.all([
         supabase.from('users').select('id', { count: 'exact', head: true }),
-        supabase.from('homestays').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('guides').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('trips').select('id', { count: 'exact', head: true }).in('status', ['planning', 'confirmed']),
-        supabase.from('homestays')
-          .select('*, owner:users!owner_id(full_name, avatar_url)')
+        supabase.from('properties')
+          .select('*, owner:users!owner_id(full_name, avatar_url), room_types(id, name, base_price, max_occupancy, total_units)')
           .eq('status', 'pending')
           .order('created_at', { ascending: true }),
         supabase.from('guides')
@@ -122,10 +123,14 @@ export default function AdminDashboard() {
   const handleApprove = async (id: string, type: 'homestays' | 'guides') => {
     setActionLoading(id);
     try {
-      const table = type === 'homestays' ? 'homestays' : 'guides';
+      const table = type === 'homestays' ? 'properties' : 'guides';
       const { error } = await supabase
         .from(table)
-        .update({ status: 'approved', verified_at: new Date().toISOString(), verified_by: user?.id })
+        .update(
+          type === 'homestays'
+            ? { status: 'approved', approved_at: new Date().toISOString(), approved_by: user?.id }
+            : { status: 'approved', verified_at: new Date().toISOString(), verified_by: user?.id }
+        )
         .eq('id', id);
       if (error) throw error;
 
@@ -134,9 +139,9 @@ export default function AdminDashboard() {
       if (recipientId) {
         await supabase.from('notifications').insert({
           user_id: recipientId,
-          type: type === 'homestays' ? 'homestay_approved' : 'guide_approved',
-          title: `${type === 'homestays' ? 'Homestay' : 'Guide profile'} Approved!`,
-          message: `Your ${type === 'homestays' ? 'homestay' : 'guide profile'} has been verified on TrekRiderz.`,
+          type: type === 'homestays' ? 'system' : 'guide_approved',
+          title: `${type === 'homestays' ? 'Property' : 'Guide profile'} Approved!`,
+          message: `Your ${type === 'homestays' ? 'property listing' : 'guide profile'} has been verified on TrekRiderz.`,
           related_id: id,
         });
       }
@@ -170,7 +175,7 @@ export default function AdminDashboard() {
     }
     setActionLoading(rejectModalId);
     try {
-      const table = rejectType === 'homestays' ? 'homestays' : 'guides';
+      const table = rejectType === 'homestays' ? 'properties' : 'guides';
       const { error } = await supabase
         .from(table)
         .update({ status: 'rejected', rejection_reason: rejectReason.trim() })
@@ -184,8 +189,8 @@ export default function AdminDashboard() {
       if (recipientId) {
         await supabase.from('notifications').insert({
           user_id: recipientId,
-          type: 'other',
-          title: `${rejectType === 'homestays' ? 'Homestay' : 'Guide profile'} Not Approved`,
+          type: 'system',
+          title: `${rejectType === 'homestays' ? 'Property' : 'Guide profile'} Not Approved`,
           message: rejectReason.trim(),
           related_id: rejectModalId,
         });
@@ -415,6 +420,7 @@ export default function AdminDashboard() {
                         loading={actionLoading === item.id}
                         onApprove={() => handleApprove(item.id, 'homestays')}
                         onReject={() => openRejectModal(item.id, 'homestays')}
+                        onViewDetail={() => setDetailProperty(item)}
                       />
                     : <GuidePendingCard
                         key={item.id}
@@ -578,6 +584,80 @@ export default function AdminDashboard() {
                 {actionLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.modalRejectText}>Send Rejection</Text>}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* Property Detail Modal */}
+      {detailProperty && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>{detailProperty.name}</Text>
+              <Text style={styles.modalSub}>{detailProperty.city}, {detailProperty.state} · {detailProperty.country}</Text>
+
+              {detailProperty.photos?.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 12 }}>
+                  {detailProperty.photos.map((p: string, i: number) => (
+                    <Image key={i} source={{ uri: p }} style={detailStyles.photo} contentFit="cover" />
+                  ))}
+                </ScrollView>
+              )}
+
+              <Text style={detailStyles.heading}>Description</Text>
+              <Text style={detailStyles.value}>{detailProperty.description}</Text>
+
+              <Text style={detailStyles.heading}>Property Types</Text>
+              <Text style={detailStyles.value}>{(detailProperty.property_type || []).join(', ') || '—'}</Text>
+
+              <Text style={detailStyles.heading}>Amenities</Text>
+              <Text style={detailStyles.value}>{(detailProperty.amenities || []).join(', ') || '—'}</Text>
+
+              <Text style={detailStyles.heading}>Address</Text>
+              <Text style={detailStyles.value}>{detailProperty.address}, {detailProperty.pincode}</Text>
+              <Text style={detailStyles.value}>📍 {detailProperty.lat}, {detailProperty.lng}</Text>
+
+              <Text style={detailStyles.heading}>Cancellation Policy</Text>
+              <Text style={detailStyles.value}>{detailProperty.cancellation_policy}</Text>
+
+              <Text style={detailStyles.heading}>Room Types ({(detailProperty.room_types || []).length})</Text>
+              {(detailProperty.room_types || []).map((rt: any) => (
+                <View key={rt.id} style={detailStyles.roomRow}>
+                  <Text style={detailStyles.roomName}>{rt.name}</Text>
+                  <Text style={detailStyles.roomMeta}>₹{rt.base_price?.toLocaleString('en-IN')}/night · up to {rt.max_occupancy} guests · {rt.total_units} unit(s)</Text>
+                </View>
+              ))}
+
+              <Text style={detailStyles.heading}>Owner</Text>
+              <Text style={detailStyles.value}>{detailProperty.owner?.full_name || 'Unknown'}</Text>
+
+              <Text style={detailStyles.heading}>Contact</Text>
+              <Text style={detailStyles.value}>{detailProperty.contact_phone} · {detailProperty.contact_email}</Text>
+
+              <Text style={detailStyles.heading}>Identity Document</Text>
+              <Text style={detailStyles.value}>{detailProperty.identity_doc_type || 'Not provided'}</Text>
+              <View style={detailStyles.docRow}>
+                {detailProperty.identity_doc_front_url && (
+                  <Image source={{ uri: detailProperty.identity_doc_front_url }} style={detailStyles.docThumb} contentFit="cover" />
+                )}
+                {detailProperty.identity_doc_back_url && (
+                  <Image source={{ uri: detailProperty.identity_doc_back_url }} style={detailStyles.docThumb} contentFit="cover" />
+                )}
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => setDetailProperty(null)}>
+                  <Text style={styles.modalCancelText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={cardStyles.approveBtn}
+                  onPress={() => { setDetailProperty(null); handleApprove(detailProperty.id, 'homestays'); }}
+                >
+                  <Ionicons name="checkmark" size={16} color="#FFF" />
+                  <Text style={cardStyles.approveText}>Approve</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       )}
@@ -766,14 +846,16 @@ const userStyles = StyleSheet.create({
   roleText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
 });
 
-function HomestayPendingCard({ item, loading, onApprove, onReject }: any) {
+function HomestayPendingCard({ item, loading, onApprove, onReject, onViewDetail }: any) {
   const daysAgo = Math.floor((Date.now() - new Date(item.created_at).getTime()) / 86400000);
   const photos: string[] = Array.isArray(item.photos) ? item.photos : [];
+  const roomTypes: any[] = Array.isArray(item.room_types) ? item.room_types : [];
+  const minPrice = roomTypes.length ? Math.min(...roomTypes.map(r => r.base_price).filter((p: any) => p != null)) : null;
 
   return (
-    <View style={cardStyles.card}>
-      {photos.length > 0 && (
-        <Image source={{ uri: photos[0] }} style={cardStyles.photo} contentFit="cover" />
+    <TouchableOpacity style={cardStyles.card} onPress={onViewDetail} activeOpacity={0.9}>
+      {(item.cover_photo_url || photos.length > 0) && (
+        <Image source={{ uri: item.cover_photo_url || photos[0] }} style={cardStyles.photo} contentFit="cover" />
       )}
       <View style={cardStyles.body}>
         <View style={cardStyles.row}>
@@ -781,12 +863,14 @@ function HomestayPendingCard({ item, loading, onApprove, onReject }: any) {
             <Text style={cardStyles.name} numberOfLines={1}>{item.name}</Text>
             <View style={cardStyles.metaRow}>
               <Ionicons name="location-outline" size={12} color={GREEN} />
-              <Text style={cardStyles.meta}>{item.location}</Text>
+              <Text style={cardStyles.meta}>{item.city}, {item.state}</Text>
             </View>
           </View>
-          <View style={cardStyles.pricePill}>
-            <Text style={cardStyles.priceText}>₹{item.price_per_night?.toLocaleString('en-IN')}/night</Text>
-          </View>
+          {minPrice != null && (
+            <View style={cardStyles.pricePill}>
+              <Text style={cardStyles.priceText}>from ₹{minPrice.toLocaleString('en-IN')}/night</Text>
+            </View>
+          )}
         </View>
 
         <View style={cardStyles.infoRow}>
@@ -801,9 +885,12 @@ function HomestayPendingCard({ item, loading, onApprove, onReject }: any) {
           <Text style={cardStyles.daysAgo}>· {daysAgo === 0 ? 'Today' : `${daysAgo}d ago`}</Text>
         </View>
 
-        {item.description && (
-          <Text style={cardStyles.desc} numberOfLines={2}>{item.description}</Text>
-        )}
+        <Text style={cardStyles.desc}>{roomTypes.length} room type{roomTypes.length !== 1 ? 's' : ''} submitted</Text>
+
+        <TouchableOpacity style={cardStyles.viewAppBtn} onPress={onViewDetail}>
+          <Ionicons name="document-text-outline" size={14} color={GREEN} />
+          <Text style={cardStyles.viewAppText}>View Full Application</Text>
+        </TouchableOpacity>
 
         <View style={cardStyles.actions}>
           <TouchableOpacity style={cardStyles.rejectBtn} onPress={onReject} disabled={loading}>
@@ -822,7 +909,7 @@ function HomestayPendingCard({ item, loading, onApprove, onReject }: any) {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -1089,6 +1176,17 @@ const cardStyles = StyleSheet.create({
   approveText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   viewAppBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: 'rgba(140,198,63,0.08)', borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)', marginBottom: 10 },
   viewAppText: { color: GREEN, fontSize: 13, fontWeight: '700' },
+});
+
+const detailStyles = StyleSheet.create({
+  photo: { width: 140, height: 100, borderRadius: 10, marginRight: 8 },
+  heading: { color: GREEN, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginTop: 14, marginBottom: 4 },
+  value: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 19 },
+  roomRow: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 10, marginBottom: 6 },
+  roomName: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  roomMeta: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
+  docRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  docThumb: { width: 100, height: 70, borderRadius: 8 },
 });
 
 // ── Screen styles ───────────────────────────────────────────────────────────

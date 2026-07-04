@@ -144,6 +144,9 @@ export default function RootLayout() {
         <Stack.Screen name="bookings/index" />
         <Stack.Screen name="host/index" />
         <Stack.Screen name="host/create" />
+        <Stack.Screen name="host/status" />
+        <Stack.Screen name="host/manage" />
+        <Stack.Screen name="host/my-properties" />
         <Stack.Screen name="guide/register" />
         <Stack.Screen name="guide/application-status" />
         <Stack.Screen name="profile/edit" />

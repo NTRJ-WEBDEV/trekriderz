@@ -133,6 +133,11 @@ export default function GuideRegisterScreen() {
   // Contact
   const [contactPhone, setContactPhone] = useState('');
 
+  // Terms
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeAccuracy, setAgreeAccuracy] = useState(false);
+  const [agreeResponse, setAgreeResponse] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   // ─── Profile Photo ────────────────────────────────────────────────────────
@@ -368,6 +373,7 @@ export default function GuideRegisterScreen() {
     if (!idBackUri) { Alert.alert('Required', 'Upload the back of your identity document.'); return; }
     if (idUploading) { Alert.alert('Please wait', 'Document is still uploading.'); return; }
     if (!contactPhone.trim()) { Alert.alert('Required', 'Enter a contact number.'); return; }
+    if (!agreeTerms || !agreeAccuracy || !agreeResponse) { Alert.alert('Required', 'Please accept all three agreements to continue.'); return; }
 
     setLoading(true);
     try {
@@ -727,11 +733,56 @@ export default function GuideRegisterScreen() {
             />
           </View>
 
+          {/* 11. Terms & Commission */}
+          <SectionLabel>Terms & Commission *</SectionLabel>
+          <ScrollView style={s.termsBox} nestedScrollEnabled>
+            <Text style={s.termsTitle}>TREKRIDERZ GUIDE AGREEMENT</Text>
+            <Text style={s.termsHeading}>COMMISSION & PAYMENTS</Text>
+            <Text style={s.termsBody}>
+              TrekRiderz charges a 20% service commission on each confirmed booking. Guides have a higher commission than hosts since TrekRiderz handles all marketing, insurance coordination, customer support, and payment processing.{'\n\n'}
+              Payment will be transferred within 3-5 business days after the trek concludes, after deducting the 20% commission.
+            </Text>
+            <Text style={s.termsHeading}>BOOKING MANAGEMENT</Text>
+            <Text style={s.termsBody}>
+              All bookings are managed through TrekRiderz. You must respond to booking requests within 24 hours. Repeated non-responses may result in profile suspension.
+            </Text>
+            <Text style={s.termsHeading}>QUALITY & SAFETY STANDARDS</Text>
+            <Text style={s.termsBody}>
+              TrekRiderz reserves the right to conduct quality and safety reviews and remove guide profiles that don't meet platform standards or receive consistently poor feedback.
+            </Text>
+            <Text style={s.termsHeading}>TERMINATION POLICY</Text>
+            <Text style={s.termsBody}>
+              Either party may terminate this agreement with 30 days written notice. TrekRiderz may immediately terminate profiles for fraud, safety violations, repeated policy breaches, or legal violations.
+            </Text>
+            <Text style={[s.termsBody, { marginTop: 8 }]}>
+              By accepting, you confirm that you have the right to offer these services, all information provided is accurate, and you accept the 20% commission structure.
+            </Text>
+          </ScrollView>
+
+          <TouchableOpacity style={s.checkboxRow} onPress={() => setAgreeTerms(!agreeTerms)} activeOpacity={0.8}>
+            <View style={[s.checkbox, agreeTerms && s.checkboxChecked]}>
+              {agreeTerms && <Ionicons name="checkmark" size={14} color="#000" />}
+            </View>
+            <Text style={s.checkboxLabel}>I have read and agree to the TrekRiderz Guide Agreement and Commission Terms</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.checkboxRow} onPress={() => setAgreeAccuracy(!agreeAccuracy)} activeOpacity={0.8}>
+            <View style={[s.checkbox, agreeAccuracy && s.checkboxChecked]}>
+              {agreeAccuracy && <Ionicons name="checkmark" size={14} color="#000" />}
+            </View>
+            <Text style={s.checkboxLabel}>I confirm that all information provided is accurate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.checkboxRow} onPress={() => setAgreeResponse(!agreeResponse)} activeOpacity={0.8}>
+            <View style={[s.checkbox, agreeResponse && s.checkboxChecked]}>
+              {agreeResponse && <Ionicons name="checkmark" size={14} color="#000" />}
+            </View>
+            <Text style={s.checkboxLabel}>I agree to respond to booking requests within 24 hours</Text>
+          </TouchableOpacity>
+
           {/* Submit */}
           <TouchableOpacity
-            style={[s.submitBtn, loading && { opacity: 0.6 }]}
+            style={[s.submitBtn, (loading || !agreeTerms || !agreeAccuracy || !agreeResponse) && { opacity: 0.6 }]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || !agreeTerms || !agreeAccuracy || !agreeResponse}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -1103,6 +1154,22 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   countryCodeText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
+
+  // Terms
+  termsBox: {
+    maxHeight: 240, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginBottom: 16,
+  },
+  termsTitle: { color: GREEN, fontSize: 14, fontWeight: '800', letterSpacing: 1, marginBottom: 12, textAlign: 'center' },
+  termsHeading: { color: '#FFF', fontSize: 12, fontWeight: '800', marginTop: 12, marginBottom: 4, letterSpacing: 0.5 },
+  termsBody: { color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 18 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: GREEN, borderColor: GREEN },
+  checkboxLabel: { flex: 1, color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 19 },
 
   // Submit
   submitBtn: {

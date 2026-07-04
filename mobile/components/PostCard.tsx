@@ -41,11 +41,21 @@ interface Post {
   comments_count: number;
   timestamp: string;
   liked?: boolean;
+  saved?: boolean;
   location?: string;
   trip_id?: string;
   trip?: TripMeta;
   youtube_url?: string;
 }
+
+const REPORT_REASONS = [
+  'Nudity or sexual content',
+  'Harassment or bullying',
+  'Hate speech',
+  'Spam or scam',
+  'Promotional content',
+  'Other',
+];
 
 interface PostCardProps {
   post: Post;
@@ -117,6 +127,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
   const { likesCount, setLikesCount, commentsCount } = usePostRealtime(post.id, post.likes_count, post.comments_count);
 
   const [liked, setLiked] = useState(post.liked ?? false);
+  const [saved, setSaved] = useState(post.saved ?? false);
   const [currentImage, setCurrentImage] = useState(0);
   const [commentVisible, setCommentVisible] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -125,7 +136,44 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
   const [caption, setCaption] = useState(post.content);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editCaption, setEditCaption] = useState('');
+  const [reportVisible, setReportVisible] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handleSave = async () => {
+    const newSaved = !saved;
+    setSaved(newSaved);
+    try {
+      if (newSaved) {
+        const { error } = await supabase.from('post_saves').insert({ post_id: post.id, user_id: user?.id });
+        if (error) throw error;
+      } else {
+        await supabase.from('post_saves').delete().eq('post_id', post.id).eq('user_id', user?.id);
+      }
+    } catch {
+      setSaved(!newSaved);
+    }
+  };
+
+  const submitReport = async (reason: string) => {
+    setReportVisible(false);
+    try {
+      const { error } = await supabase.from('post_reports').insert({
+        post_id: post.id,
+        reporter_id: user?.id,
+        reason,
+      });
+      if (error) {
+        if (error.code === '23505') {
+          Alert.alert('Already reported', "You've already reported this post. Our team will review it.");
+          return;
+        }
+        throw error;
+      }
+      Alert.alert('Thanks for reporting', "We'll review this soon.");
+    } catch {
+      Alert.alert('Error', 'Could not submit report. Please try again.');
+    }
+  };
 
   const handleLike = async () => {
     // Heart pop animation
@@ -194,7 +242,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
       ]);
     } else {
       Alert.alert('Post Options', undefined, [
-        { text: 'Report', onPress: () => Alert.alert('Reported', 'Thanks for your report. We will review it.') },
+        { text: 'Report', onPress: () => setReportVisible(true) },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
@@ -341,8 +389,8 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
             <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="bookmark-outline" size={24} color={colors.text} />
+        <TouchableOpacity onPress={handleSave}>
+          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={saved ? '#8CC63F' : colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -475,6 +523,35 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Report Reasons Modal */}
+      <Modal
+        visible={reportVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setReportVisible(false)}
+      >
+        <View style={styles.editOverlay}>
+          <View style={[styles.editSheet, { backgroundColor: colors.bg }]}>
+            <View style={styles.commentsHeader}>
+              <Text style={[styles.commentsTitle, { color: colors.text }]}>Report Post</Text>
+              <TouchableOpacity onPress={() => setReportVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            {REPORT_REASONS.map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={[styles.reportReasonRow, { borderBottomColor: colors.border }]}
+                onPress={() => submitReport(reason)}
+              >
+                <Text style={[styles.reportReasonText, { color: colors.text }]}>{reason}</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -665,5 +742,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 15,
+  },
+  reportReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  reportReasonText: {
+    fontSize: 14.5,
   },
 });

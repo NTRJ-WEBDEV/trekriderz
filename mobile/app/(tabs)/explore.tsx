@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, StatusBar, Image, ScrollView,
-  Modal, Dimensions, TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +12,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { fetchWeatherOpenMeteo } from '@/lib/weather';
 import { searchPlaces } from '@/lib/geocoding';
 import PostCard from '@/components/PostCard';
+
+type FeedTab = 'following' | 'explore';
+
+interface StoryCircle {
+  userId: string;
+  name: string;
+  avatar: string;
+  hasUnseen: boolean;
+}
 
 const TRIP_EMOJI: Record<string, string> = {
   trek: '⛰️', bike: '🏍️', temple: '🛕', backpacking: '🎒', weekend: '🌄',
@@ -157,8 +165,6 @@ const weatherStyles = StyleSheet.create({
   sublabel: { fontSize: 9, marginTop: 2, textAlign: 'center', fontStyle: 'italic' },
 });
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 export default function ExploreScreen() {
   const colors = {
     bg: '#000',
@@ -170,14 +176,28 @@ export default function ExploreScreen() {
   };
 
   const { user } = useAuthStore();
+  const [tab, setTab] = useState<FeedTab>('following');
   const [posts, setPosts] = useState<any[]>([]);
-  const [storyCircles, setStoryCircles] = useState<any[]>([]);
-  const [storyViewer, setStoryViewer] = useState<any | null>(null);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [storyCircles, setStoryCircles] = useState<StoryCircle[]>([]);
+  const [myHasStory, setMyHasStory] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchPosts = useCallback(async () => {
+  const fetchFollowing = useCallback(async () => {
+    if (!user?.id) return [] as string[];
+    const { data } = await supabase
+      .from('user_follows')
+      .select('following_id')
+      .eq('follower_id', user.id)
+      .eq('status', 'accepted');
+    const ids = (data || []).map((f: any) => f.following_id);
+    setFollowingIds(ids);
+    return ids;
+  }, [user?.id]);
+
+  const fetchPosts = useCallback(async (feedTab: FeedTab, following: string[]) => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, avatar_url, email)')
         .eq('visibility', 'public')
@@ -185,14 +205,22 @@ export default function ExploreScreen() {
         .order('created_at', { ascending: false })
         .limit(30);
 
-      if (error) throw error;
-      if (!data || data.length === 0) return;
+      if (feedTab === 'following') {
+        const authorIds = [...following, user?.id].filter(Boolean) as string[];
+        if (authorIds.length === 0) { setPosts([]); return; }
+        query = query.in('user_id', authorIds);
+      }
 
-      const { data: likes } = await supabase
-        .from('post_likes')
-        .select('post_id')
-        .eq('user_id', user?.id || '');
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) { setPosts([]); return; }
+
+      const [{ data: likes }, { data: saves }] = await Promise.all([
+        supabase.from('post_likes').select('post_id').eq('user_id', user?.id || ''),
+        supabase.from('post_saves').select('post_id').eq('user_id', user?.id || ''),
+      ]);
       const likedIds = new Set((likes || []).map((l: any) => l.post_id));
+      const savedIds = new Set((saves || []).map((s: any) => s.post_id));
 
       const tripIds = [...new Set(data.filter((p: any) => p.trip_id).map((p: any) => p.trip_id))];
       let tripsMap: Record<string, any> = {};
@@ -217,6 +245,7 @@ export default function ExploreScreen() {
         timestamp: new Date(p.created_at).toLocaleDateString(),
         location: p.location,
         liked: likedIds.has(p.id),
+        saved: savedIds.has(p.id),
         trip_id: p.trip_id,
         trip: p.trip_id ? tripsMap[p.trip_id] || undefined : undefined,
       })));
@@ -225,48 +254,67 @@ export default function ExploreScreen() {
     }
   }, [user?.id]);
 
-  // Fetch 24h story circles — separate from the main feed
-  const fetchStoryCircles = useCallback(async () => {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // Fetch real 24hr stories — one circle per author (self excluded, shown separately)
+  const fetchStoryCircles = useCallback(async (following: string[]) => {
+    if (!user?.id) return;
     try {
+      const authorIds = [...following, user.id];
       const { data } = await supabase
-        .from('posts')
-        .select('id, media, content, user_id, created_at, users:user_id(id, full_name, avatar_url, email)')
-        .eq('visibility', 'public')
-        .or('post_type.is.null,post_type.neq.trip_story')
-        .gt('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(30);
+        .from('stories_24h')
+        .select('id, user_id, created_at, users:user_id(id, full_name, avatar_url, email)')
+        .in('user_id', authorIds)
+        .eq('is_hidden', false)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
 
-      // One circle per user, only posts that have media or content
-      const seen = new Set<string>();
-      const circles: any[] = [];
-      for (const p of data || []) {
-        if (!seen.has(p.user_id)) {
-          seen.add(p.user_id);
-          const u = p.users as any;
-          const name = u?.full_name || u?.email?.split('@')[0] || 'User';
-          circles.push({
-            postId: p.id,
-            userId: p.user_id,
+      const { data: viewedRows } = await supabase
+        .from('story_views')
+        .select('story_id')
+        .eq('viewer_id', user.id);
+      const viewedIds = new Set((viewedRows || []).map((v: any) => v.story_id));
+
+      const byUser = new Map<string, { name: string; avatar: string; anyUnseen: boolean }>();
+      for (const s of data || []) {
+        const u = s.users as any;
+        const name = u?.full_name || u?.email?.split('@')[0] || 'User';
+        const existing = byUser.get(s.user_id);
+        const unseen = !viewedIds.has(s.id);
+        if (existing) {
+          existing.anyUnseen = existing.anyUnseen || unseen;
+        } else {
+          byUser.set(s.user_id, {
             name,
-            avatar: u?.avatar_url ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8CC63F&color=fff`,
-            image: Array.isArray(p.media) && p.media.length > 0 ? p.media[0] : null,
-            content: p.content,
+            avatar: u?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=8CC63F&color=fff`,
+            anyUnseen: unseen,
           });
         }
       }
+
+      setMyHasStory(byUser.has(user.id));
+      const circles: StoryCircle[] = [];
+      byUser.forEach((v, userId) => {
+        if (userId === user.id) return;
+        circles.push({ userId, name: v.name, avatar: v.avatar, hasUnseen: v.anyUnseen });
+      });
       setStoryCircles(circles);
     } catch (_) {}
-  }, []);
+  }, [user?.id]);
 
-  useEffect(() => { fetchPosts(); fetchStoryCircles(); }, [fetchPosts, fetchStoryCircles]);
+  const loadAll = useCallback(async (feedTab: FeedTab) => {
+    const following = await fetchFollowing();
+    await Promise.all([fetchPosts(feedTab, following), fetchStoryCircles(following)]);
+  }, [fetchFollowing, fetchPosts, fetchStoryCircles]);
+
+  useEffect(() => { loadAll(tab); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPosts(), fetchStoryCircles()]);
+    await loadAll(tab);
     setRefreshing(false);
+  };
+
+  const openStory = (userId: string, name: string, avatar: string) => {
+    router.push({ pathname: '/story/view', params: { userId, name, avatar } } as any);
   };
 
   const myName = (user as any)?.user_metadata?.full_name?.split(' ')[0] || 'You';
@@ -278,25 +326,31 @@ export default function ExploreScreen() {
       <WeatherStrip userId={user?.id} colors={colors} />
       <View style={[styles.storiesSection, { borderBottomColor: colors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesList}>
-          {/* "Your Story" add button */}
-          <TouchableOpacity style={styles.storyItem} onPress={() => router.push('/post/create' as any)}>
-            <View style={styles.storyRing}>
+          {/* "Your Story" — view own active story, or create a new one */}
+          <TouchableOpacity
+            style={styles.storyItem}
+            onPress={() => myHasStory ? openStory(user!.id, 'Your Story', myAvatar) : router.push('/story/create' as any)}
+          >
+            <View style={[styles.storyRing, myHasStory && styles.storyRingActive]}>
               <Image source={{ uri: myAvatar }} style={styles.storyAvatar} />
-              <View style={styles.addBadge}>
+              <TouchableOpacity
+                style={styles.addBadge}
+                onPress={(e) => { e.stopPropagation(); router.push('/story/create' as any); }}
+              >
                 <Ionicons name="add" size={12} color="#FFF" />
-              </View>
+              </TouchableOpacity>
             </View>
             <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>Your Story</Text>
           </TouchableOpacity>
 
-          {/* 24h story circles — other users */}
+          {/* 24hr story circles — followed users with an active story */}
           {storyCircles.map((item) => (
             <TouchableOpacity
-              key={item.postId}
+              key={item.userId}
               style={styles.storyItem}
-              onPress={() => setStoryViewer(item)}
+              onPress={() => openStory(item.userId, item.name, item.avatar)}
             >
-              <View style={[styles.storyRing, styles.storyRingActive]}>
+              <View style={[styles.storyRing, item.hasUnseen ? styles.storyRingActive : styles.storyRingSeen]}>
                 <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
               </View>
               <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>
@@ -306,41 +360,33 @@ export default function ExploreScreen() {
           ))}
         </ScrollView>
       </View>
+
+      <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab('following')}>
+          <Text style={[styles.tabLabel, { color: tab === 'following' ? colors.text : colors.subtext }]}>Following</Text>
+          {tab === 'following' && <View style={styles.tabUnderline} />}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab('explore')}>
+          <Text style={[styles.tabLabel, { color: tab === 'explore' ? colors.text : colors.subtext }]}>Explore</Text>
+          {tab === 'explore' && <View style={styles.tabUnderline} />}
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'following' && posts.length === 0 && (
+        <View style={styles.emptyFollowing}>
+          <Ionicons name="people-outline" size={40} color={colors.subtext} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Follow some trekkers to see their posts here!</Text>
+          <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(tabs)/discover' as any)}>
+            <Text style={styles.emptyBtnText}>Explore Discover</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </>
   );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
       <StatusBar barStyle="light-content" />
-
-      {/* ── Full-screen story viewer ── */}
-      <Modal visible={!!storyViewer} transparent animationType="fade" onRequestClose={() => setStoryViewer(null)}>
-        <TouchableWithoutFeedback onPress={() => setStoryViewer(null)}>
-          <View style={storyStyles.overlay}>
-            <TouchableWithoutFeedback>
-              <View style={storyStyles.card}>
-                {storyViewer?.image ? (
-                  <Image source={{ uri: storyViewer.image }} style={storyStyles.image} resizeMode="cover" />
-                ) : (
-                  <View style={storyStyles.textOnly}>
-                    <Text style={storyStyles.textContent}>{storyViewer?.content}</Text>
-                  </View>
-                )}
-                {/* User badge */}
-                <View style={storyStyles.userRow}>
-                  <Image source={{ uri: storyViewer?.avatar }} style={storyStyles.userAvatar} />
-                  <Text style={storyStyles.userName}>{storyViewer?.name}</Text>
-                  <Text style={storyStyles.timer}>• 24h</Text>
-                </View>
-                {/* Close */}
-                <TouchableOpacity style={storyStyles.closeBtn} onPress={() => setStoryViewer(null)}>
-                  <Ionicons name="close" size={22} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
 
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>TrekRiderz</Text>
@@ -400,6 +446,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)', padding: 2, marginBottom: 5, position: 'relative',
   },
   storyRingActive: { borderColor: '#C13584' },
+  storyRingSeen: { borderColor: 'rgba(255,255,255,0.15)' },
   storyAvatar: { width: 55, height: 55, borderRadius: 28 },
   addBadge: {
     position: 'absolute', bottom: -2, right: -2,
@@ -408,33 +455,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   storyName: { fontSize: 11, textAlign: 'center' },
-});
-
-const storyStyles = StyleSheet.create({
-  overlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.88)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  card: {
-    width: SCREEN_W - 32, maxHeight: SCREEN_H * 0.82,
-    borderRadius: 20, overflow: 'hidden', backgroundColor: '#111',
-  },
-  image: { width: '100%', aspectRatio: 9 / 16 },
-  textOnly: {
-    padding: 28, minHeight: 300, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#1C1C2E',
-  },
-  textContent: { color: '#FFF', fontSize: 18, lineHeight: 28, textAlign: 'center', fontWeight: '500' },
-  userRow: {
-    position: 'absolute', top: 16, left: 16, right: 48,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  userAvatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: '#FFF' },
-  userName: { color: '#FFF', fontWeight: '700', fontSize: 14, flex: 1 },
-  timer: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
-  closeBtn: {
-    position: 'absolute', top: 14, right: 14,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
-  },
+  tabRow: { flexDirection: 'row', borderBottomWidth: 0.5 },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tabLabel: { fontSize: 13.5, fontWeight: '700' },
+  tabUnderline: { marginTop: 8, height: 2, width: 28, borderRadius: 1, backgroundColor: '#8CC63F' },
+  emptyFollowing: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32, gap: 12 },
+  emptyTitle: { fontSize: 14, textAlign: 'center', fontWeight: '600' },
+  emptyBtn: { backgroundColor: '#8CC63F', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
+  emptyBtnText: { color: '#000', fontWeight: '800', fontSize: 13 },
 });

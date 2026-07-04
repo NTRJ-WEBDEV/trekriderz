@@ -25,7 +25,6 @@
     "newArchEnabled": true,
     "android": {
       "package": "com.trekriderz.app",
-
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -89,7 +88,8 @@
           }
         }
       ],
-      "./plugins/withGradleProperties"
+      "./plugins/withGradleProperties",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

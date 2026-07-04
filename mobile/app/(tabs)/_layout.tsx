@@ -1,15 +1,24 @@
+import { useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text, View, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../stores/authStore';
+
+const CREATE_ACTIONS = [
+  { label: 'Create Post', icon: 'image-outline' as const, route: '/post/create' },
+  { label: 'Write Travel Story', icon: 'book-outline' as const, route: '/stories/create' },
+  { label: 'Plan a Trip', icon: 'map-outline' as const, route: '/(tabs)/create' },
+  { label: 'Add Story (24hr)', icon: 'add-circle-outline' as const, route: '/story/create' },
+];
 
 export default function TabsLayout() {
   const { bottom } = useSafeAreaInsets();
   const { user } = useAuthStore();
   const router = useRouter();
   const isAdmin = (user as any)?.role === 'admin';
+  const [actionSheetVisible, setActionSheetVisible] = useState(false);
 
   return (
     <>
@@ -55,14 +64,18 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Create — floating green button */}
+        {/* Create — floating green button, opens an action sheet */}
         <Tabs.Screen
           name="create"
           options={{
             title: 'Create',
-            tabBarButton: (props) => (
+            tabBarButton: () => (
               <View style={styles.createButtonWrap}>
-                <TouchableOpacity {...(props as any)} style={styles.createButton}>
+                <TouchableOpacity
+                  style={styles.createButton}
+                  onPress={() => setActionSheetVisible(true)}
+                  activeOpacity={0.85}
+                >
                   <Ionicons name="add" size={28} color="#080C14" />
                 </TouchableOpacity>
               </View>
@@ -80,6 +93,17 @@ export default function TabsLayout() {
             title: 'Discover',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="compass-outline" size={size} color={color} />
+            ),
+          }}
+        />
+
+        {/* Community — groups + travel stories */}
+        <Tabs.Screen
+          name="community"
+          options={{
+            title: 'Community',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="people-outline" size={size} color={color} />
             ),
           }}
         />
@@ -127,6 +151,35 @@ export default function TabsLayout() {
         <Tabs.Screen name="notifications" options={{ href: null }} />
         <Tabs.Screen name="feed" options={{ href: null }} />
       </Tabs>
+
+      <Modal
+        visible={actionSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionSheetVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetOverlay}
+          activeOpacity={1}
+          onPress={() => setActionSheetVisible(false)}
+        >
+          <View style={[styles.actionSheet, { paddingBottom: 16 + bottom }]}>
+            {CREATE_ACTIONS.map((action) => (
+              <TouchableOpacity
+                key={action.route}
+                style={styles.actionRow}
+                onPress={() => {
+                  setActionSheetVisible(false);
+                  router.push(action.route as any);
+                }}
+              >
+                <Ionicons name={action.icon} size={20} color="#8CC63F" />
+                <Text style={styles.actionRowText}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
@@ -164,5 +217,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8CC63F',
     marginTop: 2,
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  actionSheet: {
+    backgroundColor: '#0F1420',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(140,198,63,0.15)',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 16,
+  },
+  actionRowText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

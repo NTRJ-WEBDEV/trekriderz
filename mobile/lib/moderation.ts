@@ -110,8 +110,47 @@ async function applyStrike(
   return { strikes: priorStrikes + 1 };
 }
 
-// ─── Image moderation via OpenAI GPT-4o-mini Vision ──────────────────────────
-async function checkImageWithAI(localUri: string): Promise<{ safe: boolean; reason?: string }> {
+// ─── Image moderation via Gemini Vision (free tier) with OpenAI fallback ─────
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+async function checkImageWithGemini(localUri: string): Promise<{ safe: boolean; reason?: string } | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) return null;  // Not configured — caller falls back to OpenAI
+
+  try {
+    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' as any });
+
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+            {
+              text: 'You are a content moderator for TrekRiderz, a travel and trekking app. ' +
+                'Respond with ONLY a JSON object: {"safe": true/false, "reason": "brief reason if unsafe"}. ' +
+                'Flag as unsafe only for: nudity/sexual content, graphic violence or gore, hate symbols, explicit drug use. ' +
+                'Nature, landscapes, people trekking, camping, and vehicles are all safe.',
+            },
+          ],
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 100 },
+      }),
+    });
+
+    const json = await res.json();
+    const text: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const parsed = JSON.parse(text.trim().replace(/^```json\s*|\s*```$/g, ''));
+    return { safe: !!parsed.safe, reason: parsed.reason };
+  } catch (err) {
+    console.error('Gemini image moderation error:', err);
+    return null;  // Treat as "couldn't check" — caller falls back to OpenAI or fails open
+  }
+}
+
+async function checkImageWithOpenAI(localUri: string): Promise<{ safe: boolean; reason?: string }> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) return { safe: true };  // Key not configured — skip check
 
@@ -159,6 +198,46 @@ async function checkImageWithAI(localUri: string): Promise<{ safe: boolean; reas
   } catch (err) {
     console.error('Image moderation error:', err);
     return { safe: true };  // On API failure, allow — admin can review reports
+  }
+}
+
+// Gemini is free tier — prefer it; fall back to OpenAI vision if no Gemini key configured
+async function checkImageWithAI(localUri: string): Promise<{ safe: boolean; reason?: string }> {
+  const geminiResult = await checkImageWithGemini(localUri);
+  if (geminiResult) return geminiResult;
+  return checkImageWithOpenAI(localUri);
+}
+
+// ─── Text moderation via Gemini (nuanced check layered on top of the blocklist) ──
+async function checkTextWithGemini(text: string): Promise<{ safe: boolean; reason?: string } | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: 'You are a content moderator for TrekRiderz, a travel and trekking app. ' +
+              'Analyze this text and respond with ONLY a JSON object: {"safe": true/false, "reason": "brief reason if unsafe"}. ' +
+              'Flag as unsafe if the text contains: harassment or bullying, hate speech or discrimination, threats or violence, ' +
+              'sexual solicitation, or scam content. Do not flag ordinary trekking/travel chatter. ' +
+              `Text to analyze: "${text.replace(/"/g, "'")}"`,
+          }],
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 100 },
+      }),
+    });
+
+    const json = await res.json();
+    const raw: string = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const parsed = JSON.parse(raw.trim().replace(/^```json\s*|\s*```$/g, ''));
+    return { safe: !!parsed.safe, reason: parsed.reason };
+  } catch (err) {
+    console.error('Gemini text moderation error:', err);
+    return null;  // Fail open — the blocklist check above already ran
   }
 }
 
@@ -212,6 +291,19 @@ export const moderationAgent = {
           };
         }
       }
+    }
+
+    // 3. Nuanced AI check (catches harassment/threats/hate speech the blocklist misses)
+    const aiResult = await checkTextWithGemini(text);
+    if (aiResult && !aiResult.safe) {
+      const { strikes } = await applyStrike(userId, type, 'ai_flagged_text');
+      return {
+        safe: false,
+        severity: strikes >= 3 ? 'flag' : 'warn',
+        message: strikes >= 3
+          ? 'Your account has been flagged for repeated violations and is under admin review. You will be notified once reviewed.'
+          : `⚠️ ${aiResult.reason || 'Your post may violate our community guidelines.'} Please edit and try again.`,
+      };
     }
 
     return { safe: true };

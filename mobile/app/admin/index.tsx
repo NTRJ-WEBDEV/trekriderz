@@ -38,6 +38,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [contentReports, setContentReports] = useState<any[]>([]);
+  const [flaggedUsers, setFlaggedUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -58,7 +60,7 @@ export default function AdminDashboard() {
       const [
         usersRes, pendingHsRes, pendingGRes, tripsRes,
         hsRes, gRes, expRes, commRes, usersListRes,
-        vehiclesRes, reportsRes,
+        vehiclesRes, reportsRes, contentReportsRes, flaggedRes,
       ] = await Promise.all([
         supabase.from('users').select('id', { count: 'exact', head: true }),
         supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -93,6 +95,15 @@ export default function AdminDashboard() {
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .limit(50),
+        supabase.from('content_reports')
+          .select('id, reason, status, content_type, content_id, created_at, reporter:users!reporter_id(full_name)')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(50),
+        supabase.from('users')
+          .select('id, full_name, email, flag_reason')
+          .eq('is_flagged', true)
+          .limit(50),
       ]);
 
       setStats({
@@ -108,6 +119,8 @@ export default function AdminDashboard() {
       setUsers(usersListRes.data || []);
       setVehicles(vehiclesRes.data || []);
       setReports(reportsRes.data || []);
+      setContentReports(contentReportsRes.data || []);
+      setFlaggedUsers(flaggedRes.data || []);
     } catch (e) {
       console.error('Admin load error:', e);
     } finally {
@@ -381,9 +394,9 @@ export default function AdminDashboard() {
               { key: 'guides', label: 'Guides', icon: 'ribbon-outline', badge: stats.pendingGuides },
               { key: 'expeditions', label: 'Expeditions', icon: 'map-outline', badge: 0 },
               { key: 'communities', label: 'Communities', icon: 'people-outline', badge: 0 },
-              { key: 'users', label: 'Users', icon: 'person-outline', badge: 0 },
+              { key: 'users', label: 'Users', icon: 'person-outline', badge: flaggedUsers.length },
               { key: 'vehicles', label: 'Vehicles', icon: 'car-outline', badge: 0 },
-              { key: 'reports', label: 'Reports', icon: 'flag-outline', badge: reports.length },
+              { key: 'reports', label: 'Reports', icon: 'flag-outline', badge: reports.length + contentReports.length },
             ] as const).map((t) => (
               <TouchableOpacity
                 key={t.key}
@@ -498,7 +511,31 @@ export default function AdminDashboard() {
           {/* ── Users ────────────────────────────────────────────────────── */}
           {tab === 'users' && (
             <>
-              <Text style={styles.sectionLabel}>{users.length} users (latest 60)</Text>
+              {flaggedUsers.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>{flaggedUsers.length} flagged for review</Text>
+                  {flaggedUsers.map(u => (
+                    <FlaggedUserRow
+                      key={u.id}
+                      item={u}
+                      onUnflag={async () => {
+                        await supabase.from('users').update({ is_flagged: false, flag_reason: null }).eq('id', u.id);
+                        setFlaggedUsers(prev => prev.filter(x => x.id !== u.id));
+                      }}
+                      onBan={async () => {
+                        Alert.alert('Ban User', `Ban ${u.full_name || u.email}? They will be blocked from posting.`, [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Ban', style: 'destructive', onPress: async () => {
+                            await supabase.from('users').update({ is_banned: true, is_flagged: false }).eq('id', u.id);
+                            setFlaggedUsers(prev => prev.filter(x => x.id !== u.id));
+                          }},
+                        ]);
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+              <Text style={[styles.sectionLabel, { marginTop: flaggedUsers.length > 0 ? 20 : 0 }]}>{users.length} users (latest 60)</Text>
               {users.map(u => (
                 <UserRow
                   key={u.id}
@@ -551,6 +588,31 @@ export default function AdminDashboard() {
                       if (postId) await supabase.from('posts').delete().eq('id', postId);
                       await supabase.from('post_reports').update({ status: 'actioned' }).eq('id', r.id);
                       setReports(prev => prev.filter(x => x.id !== r.id));
+                    }},
+                  ]);
+                }} />
+              ))}
+
+              <Text style={[styles.sectionLabel, { marginTop: 20 }]}>
+                {contentReports.length} reported stories & community posts
+              </Text>
+              {contentReports.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="flag-outline" size={40} color={GREEN} />
+                  <Text style={styles.emptyText}>No reports</Text>
+                </View>
+              ) : contentReports.map(r => (
+                <ContentReportRow key={r.id} item={r} onDismiss={async () => {
+                  await supabase.from('content_reports').update({ status: 'dismissed' }).eq('id', r.id);
+                  setContentReports(prev => prev.filter(x => x.id !== r.id));
+                }} onRemove={async () => {
+                  const table = r.content_type === 'story' ? 'stories_24h' : 'community_posts';
+                  Alert.alert('Remove Content', 'Hide this content permanently?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove', style: 'destructive', onPress: async () => {
+                      await supabase.from(table).update({ is_hidden: true }).eq('id', r.content_id);
+                      await supabase.from('content_reports').update({ status: 'actioned' }).eq('id', r.id);
+                      setContentReports(prev => prev.filter(x => x.id !== r.id));
                     }},
                   ]);
                 }} />
@@ -1335,6 +1397,58 @@ function ReportRow({ item, onDismiss, onRemove }: { item: any; onDismiss: () => 
         <TouchableOpacity style={rStyles.removeBtn} onPress={onRemove}>
           <Ionicons name="trash-outline" size={14} color="#EF4444" />
           <Text style={rStyles.removeText}>Remove Post</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function ContentReportRow({ item, onDismiss, onRemove }: { item: any; onDismiss: () => void; onRemove: () => void }) {
+  const reporter = Array.isArray(item.reporter) ? item.reporter[0] : item.reporter;
+  const typeLabel = item.content_type === 'story' ? '24hr Story' : 'Community Post';
+  return (
+    <View style={rStyles.card}>
+      <View style={rStyles.row}>
+        <View style={rStyles.flagIcon}>
+          <Ionicons name="flag" size={16} color="#EF4444" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={rStyles.reason} numberOfLines={1}>{item.reason || 'No reason given'}</Text>
+          <Text style={rStyles.meta}>{typeLabel}{reporter?.full_name ? ` · Reported by ${reporter.full_name}` : ''}</Text>
+        </View>
+      </View>
+      <View style={rStyles.actions}>
+        <TouchableOpacity style={rStyles.dismissBtn} onPress={onDismiss}>
+          <Text style={rStyles.dismissText}>Dismiss</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={rStyles.removeBtn} onPress={onRemove}>
+          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+          <Text style={rStyles.removeText}>Remove</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function FlaggedUserRow({ item, onUnflag, onBan }: { item: any; onUnflag: () => void; onBan: () => void }) {
+  return (
+    <View style={rStyles.card}>
+      <View style={rStyles.row}>
+        <View style={rStyles.flagIcon}>
+          <Ionicons name="warning" size={16} color="#EF4444" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={rStyles.reason} numberOfLines={1}>{item.full_name || item.email}</Text>
+          {item.flag_reason && <Text style={rStyles.postContent} numberOfLines={2}>{item.flag_reason}</Text>}
+        </View>
+      </View>
+      <View style={rStyles.actions}>
+        <TouchableOpacity style={rStyles.dismissBtn} onPress={onUnflag}>
+          <Text style={rStyles.dismissText}>Unflag</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={rStyles.removeBtn} onPress={onBan}>
+          <Ionicons name="ban-outline" size={14} color="#EF4444" />
+          <Text style={rStyles.removeText}>Ban User</Text>
         </TouchableOpacity>
       </View>
     </View>

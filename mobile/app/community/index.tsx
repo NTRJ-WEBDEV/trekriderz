@@ -36,7 +36,7 @@ interface CommunityItem {
   memberStatus: MemberStatus;
 }
 
-export default function CommunityListScreen() {
+export default function CommunityListScreen({ embedded }: { embedded?: boolean } = {}) {
   const { user } = useAuthStore();
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,7 +181,7 @@ export default function CommunityListScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={embedded ? ['left', 'right', 'bottom'] : undefined}>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Communities</Text>

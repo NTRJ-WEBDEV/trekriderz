@@ -115,7 +115,7 @@ function StoryCard({ item, index }: { item: Story; index: number }) {
   );
 }
 
-export default function StoriesScreen() {
+export default function StoriesScreen({ embedded }: { embedded?: boolean } = {}) {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,26 +147,34 @@ export default function StoriesScreen() {
     );
   }
 
+  const HeaderInner = (
+    <View style={styles.header}>
+      {!embedded && (
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#FFF" />
+        </TouchableOpacity>
+      )}
+      <View>
+        <Text style={styles.headerTitle}>Stories</Text>
+        <Text style={styles.headerSub}>Trek & travel journeys</Text>
+      </View>
+      <TouchableOpacity
+        style={styles.writeBtn}
+        onPress={() => { haptic.medium(); router.push('/stories/create' as any); }}
+      >
+        <Ionicons name="pencil" size={15} color="#FFF" />
+        <Text style={styles.writeBtnText}>Write</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#FFF" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>Stories</Text>
-            <Text style={styles.headerSub}>Trek & travel journeys</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.writeBtn}
-            onPress={() => { haptic.medium(); router.push('/stories/create' as any); }}
-          >
-            <Ionicons name="pencil" size={15} color="#FFF" />
-            <Text style={styles.writeBtnText}>Write</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      {embedded ? HeaderInner : (
+        <SafeAreaView edges={['top']} style={styles.safeTop}>
+          {HeaderInner}
+        </SafeAreaView>
+      )}
 
       <FlatList
         data={stories}

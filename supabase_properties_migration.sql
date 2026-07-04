@@ -174,26 +174,31 @@ ALTER TABLE public.property_inquiries
   ENABLE ROW LEVEL SECURITY;
 
 -- Anyone can view approved properties
+DROP POLICY IF EXISTS "Public view approved properties" ON public.properties;
 CREATE POLICY "Public view approved properties"
   ON public.properties FOR SELECT
   USING (status = 'approved');
 
 -- Owners can view own properties
+DROP POLICY IF EXISTS "Owners view own properties" ON public.properties;
 CREATE POLICY "Owners view own properties"
   ON public.properties FOR SELECT
   USING (auth.uid() = owner_id);
 
 -- Owners can insert
+DROP POLICY IF EXISTS "Owners can list property" ON public.properties;
 CREATE POLICY "Owners can list property"
   ON public.properties FOR INSERT
   WITH CHECK (auth.uid() = owner_id);
 
 -- Owners can update own pending/approved properties
+DROP POLICY IF EXISTS "Owners can update own properties" ON public.properties;
 CREATE POLICY "Owners can update own properties"
   ON public.properties FOR UPDATE
   USING (auth.uid() = owner_id);
 
 -- Admin full access
+DROP POLICY IF EXISTS "Admin full access properties" ON public.properties;
 CREATE POLICY "Admin full access properties"
   ON public.properties FOR ALL
   USING (auth.uid() IN (
@@ -202,6 +207,7 @@ CREATE POLICY "Admin full access properties"
   ));
 
 -- Room types follow property access
+DROP POLICY IF EXISTS "Public view room types of approved properties" ON public.room_types;
 CREATE POLICY "Public view room types of approved properties"
   ON public.room_types FOR SELECT
   USING (
@@ -211,6 +217,7 @@ CREATE POLICY "Public view room types of approved properties"
     )
   );
 
+DROP POLICY IF EXISTS "Owners manage own room types" ON public.room_types;
 CREATE POLICY "Owners manage own room types"
   ON public.room_types FOR ALL
   USING (
@@ -220,6 +227,7 @@ CREATE POLICY "Owners manage own room types"
     )
   );
 
+DROP POLICY IF EXISTS "Admin full access room types" ON public.room_types;
 CREATE POLICY "Admin full access room types"
   ON public.room_types FOR ALL
   USING (auth.uid() IN (
@@ -228,14 +236,17 @@ CREATE POLICY "Admin full access room types"
   ));
 
 -- Property inquiries policies
+DROP POLICY IF EXISTS "Users create own inquiries" ON public.property_inquiries;
 CREATE POLICY "Users create own inquiries"
   ON public.property_inquiries FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users view own inquiries" ON public.property_inquiries;
 CREATE POLICY "Users view own inquiries"
   ON public.property_inquiries FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Owners view inquiries on own properties" ON public.property_inquiries;
 CREATE POLICY "Owners view inquiries on own properties"
   ON public.property_inquiries FOR SELECT
   USING (
@@ -245,6 +256,7 @@ CREATE POLICY "Owners view inquiries on own properties"
     )
   );
 
+DROP POLICY IF EXISTS "Owners update inquiries on own properties" ON public.property_inquiries;
 CREATE POLICY "Owners update inquiries on own properties"
   ON public.property_inquiries FOR UPDATE
   USING (
@@ -254,6 +266,7 @@ CREATE POLICY "Owners update inquiries on own properties"
     )
   );
 
+DROP POLICY IF EXISTS "Admin full access property inquiries" ON public.property_inquiries;
 CREATE POLICY "Admin full access property inquiries"
   ON public.property_inquiries FOR ALL
   USING (auth.uid() IN (
@@ -261,7 +274,9 @@ CREATE POLICY "Admin full access property inquiries"
     WHERE email = 'ntrjwebdev@gmail.com'
   ));
 
--- Storage policy for homestays bucket (property + room photos)
+-- Storage policies for homestays bucket (property + room photos)
+-- Guarded with DROP IF EXISTS since these may already exist from an earlier migration.
+DROP POLICY IF EXISTS "Auth users upload homestay photos" ON storage.objects;
 CREATE POLICY "Auth users upload homestay photos"
 ON storage.objects FOR INSERT
 WITH CHECK (
@@ -269,6 +284,7 @@ WITH CHECK (
   AND auth.role() = 'authenticated'
 );
 
+DROP POLICY IF EXISTS "Anyone view homestay photos" ON storage.objects;
 CREATE POLICY "Anyone view homestay photos"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'homestays');

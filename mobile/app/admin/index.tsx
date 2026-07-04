@@ -83,12 +83,13 @@ export default function AdminDashboard() {
           .select('id, full_name, email, role, created_at')
           .order('created_at', { ascending: false })
           .limit(60),
-        supabase.from('rentals')
-          .select('id, vehicle_type, vehicle_name, location, price_per_day, status, created_at, owner:users!owner_id(full_name, email)')
+        supabase.from('rental_vehicles')
+          .select('id, vehicle_type, make, model, location, price_per_day, status, created_at, owner:users!owner_id(full_name, email)')
           .order('created_at', { ascending: false })
           .limit(60),
         supabase.from('post_reports')
           .select('id, reason, status, created_at, reporter:users!reporter_id(full_name), post:posts!post_id(content, user_id)')
+          .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
@@ -513,10 +514,10 @@ export default function AdminDashboard() {
                 </View>
               ) : vehicles.map(v => (
                 <VehicleAdminRow key={v.id} item={v} onApprove={async () => {
-                  await supabase.from('rentals').update({ status: 'approved' }).eq('id', v.id);
+                  await supabase.from('rental_vehicles').update({ status: 'approved' }).eq('id', v.id);
                   setVehicles(prev => prev.map(x => x.id === v.id ? { ...x, status: 'approved' } : x));
                 }} onReject={async () => {
-                  await supabase.from('rentals').update({ status: 'rejected' }).eq('id', v.id);
+                  await supabase.from('rental_vehicles').update({ status: 'rejected' }).eq('id', v.id);
                   setVehicles(prev => prev.filter(x => x.id !== v.id));
                 }} />
               ))}
@@ -827,40 +828,65 @@ function HomestayPendingCard({ item, loading, onApprove, onReject }: any) {
 
 function GuidePendingCard({ item, loading, onApprove, onReject }: any) {
   const daysAgo = Math.floor((Date.now() - new Date(item.created_at).getTime()) / 86400000);
+  const displayName = item.full_name || item.name || 'Guide';
+  const photoUrl = item.profile_photo_url || item.photo_url;
   const langs: string[] = Array.isArray(item.languages) ? item.languages : [];
-  const certs: string[] = Array.isArray(item.certifications) ? item.certifications : [];
+  const specs: string[] = Array.isArray(item.specializations) ? item.specializations : [];
+  const certs: any[] = Array.isArray(item.certificates) ? item.certificates
+    : Array.isArray(item.certifications) ? item.certifications.map((c: string) => ({ name: c })) : [];
+  const locations: any[] = Array.isArray(item.locations) && item.locations.length > 0
+    ? item.locations : item.location ? [{ name: item.location, rate_per_day: item.rate_per_day }] : [];
+  const hasIdDocs = !!(item.identity_doc_front_url || item.identity_doc_back_url);
 
   return (
     <View style={cardStyles.card}>
       <View style={cardStyles.body}>
+        {/* Header row */}
         <View style={cardStyles.row}>
-          {item.photo_url ? (
-            <Image source={{ uri: item.photo_url }} style={cardStyles.guideAvatar} contentFit="cover" />
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={cardStyles.guideAvatar} contentFit="cover" />
           ) : (
             <View style={[cardStyles.guideAvatar, cardStyles.avatarFallback]}>
-              <Text style={[cardStyles.avatarInitial, { fontSize: 20 }]}>{item.name?.charAt(0) || 'G'}</Text>
+              <Text style={[cardStyles.avatarInitial, { fontSize: 20 }]}>{displayName.charAt(0)}</Text>
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={cardStyles.name} numberOfLines={1}>{item.name}</Text>
-            <View style={cardStyles.metaRow}>
-              <Ionicons name="location-outline" size={12} color={GREEN} />
-              <Text style={cardStyles.meta}>{item.location || 'Location not set'}</Text>
-            </View>
+            <Text style={cardStyles.name} numberOfLines={1}>{displayName}</Text>
             <Text style={cardStyles.daysAgo}>Applied {daysAgo === 0 ? 'today' : `${daysAgo}d ago`}</Text>
-          </View>
-          <View style={cardStyles.pricePill}>
-            <Text style={cardStyles.priceText}>₹{item.rate_per_day?.toLocaleString('en-IN')}/day</Text>
+            <Text style={cardStyles.meta}>{item.experience || (item.experience_years ? `${item.experience_years}yr exp` : 'Experience not set')}</Text>
           </View>
         </View>
 
-        <View style={cardStyles.chipRow}>
-          <View style={cardStyles.chip}>
-            <Ionicons name="time-outline" size={11} color={GREEN} />
-            <Text style={cardStyles.chipText}>{item.experience_years}yr exp</Text>
+        {/* Locations */}
+        {locations.slice(0, 2).map((loc: any, i: number) => (
+          <View key={i} style={[cardStyles.metaRow, { marginTop: i === 0 ? 8 : 4 }]}>
+            <Ionicons name="location-outline" size={12} color={GREEN} />
+            <Text style={cardStyles.meta} numberOfLines={1}>
+              {loc.name}{loc.rate_per_day ? ` · ₹${Number(loc.rate_per_day).toLocaleString('en-IN')}/day` : ''}{loc.radius_km ? ` · ${loc.radius_km}km` : ''}
+            </Text>
           </View>
-          {langs.slice(0, 2).map((l, i) => (
-            <View key={i} style={cardStyles.chip}>
+        ))}
+
+        {/* Specializations chips */}
+        {specs.length > 0 && (
+          <View style={[cardStyles.chipRow, { marginTop: 10 }]}>
+            {specs.slice(0, 4).map((sp, i) => (
+              <View key={i} style={cardStyles.chip}>
+                <Text style={cardStyles.chipText}>{sp.replace(/_/g, ' ')}</Text>
+              </View>
+            ))}
+            {specs.length > 4 && (
+              <View style={cardStyles.chip}>
+                <Text style={cardStyles.chipText}>+{specs.length - 4}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Languages + certs row */}
+        <View style={[cardStyles.chipRow, { marginTop: 6 }]}>
+          {langs.slice(0, 3).map((l, i) => (
+            <View key={i} style={[cardStyles.chip, { borderColor: 'rgba(255,255,255,0.15)' }]}>
               <Text style={cardStyles.chipText}>{l}</Text>
             </View>
           ))}
@@ -870,12 +896,29 @@ function GuidePendingCard({ item, loading, onApprove, onReject }: any) {
               <Text style={[cardStyles.chipText, { color: '#8B5CF6' }]}>{certs.length} cert{certs.length > 1 ? 's' : ''}</Text>
             </View>
           )}
+          {hasIdDocs && (
+            <View style={[cardStyles.chip, { borderColor: 'rgba(56,151,240,0.4)', backgroundColor: 'rgba(56,151,240,0.08)' }]}>
+              <Ionicons name="card-outline" size={11} color="#3897F0" />
+              <Text style={[cardStyles.chipText, { color: '#3897F0' }]}>ID docs</Text>
+            </View>
+          )}
         </View>
 
-        {item.bio && (
-          <Text style={cardStyles.desc} numberOfLines={2}>{item.bio}</Text>
+        {/* Bio / About */}
+        {(item.about || item.bio) && (
+          <Text style={cardStyles.desc} numberOfLines={2}>{item.about || item.bio}</Text>
         )}
 
+        {/* View Full Application */}
+        <TouchableOpacity
+          style={cardStyles.viewAppBtn}
+          onPress={() => router.push(`/guide/${item.id}` as any)}
+        >
+          <Ionicons name="document-text-outline" size={14} color={GREEN} />
+          <Text style={cardStyles.viewAppText}>View Full Application</Text>
+        </TouchableOpacity>
+
+        {/* Approve / Reject */}
         <View style={cardStyles.actions}>
           <TouchableOpacity style={cardStyles.rejectBtn} onPress={onReject} disabled={loading}>
             <Ionicons name="close" size={16} color="#EF4444" />
@@ -1044,6 +1087,8 @@ const cardStyles = StyleSheet.create({
   rejectText: { color: '#EF4444', fontWeight: '700', fontSize: 14 },
   approveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: GREEN },
   approveText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  viewAppBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: 'rgba(140,198,63,0.08)', borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)', marginBottom: 10 },
+  viewAppText: { color: GREEN, fontSize: 13, fontWeight: '700' },
 });
 
 // ── Screen styles ───────────────────────────────────────────────────────────
@@ -1122,10 +1167,14 @@ function VehicleAdminRow({ item, onApprove, onReject }: { item: any; onApprove: 
   const statusColor: Record<string, string> = { pending: '#F59E0B', approved: '#22C55E', rejected: '#EF4444' };
   const color = statusColor[item.status] || '#9CA3AF';
   return (
-    <View style={vStyles.card}>
+    <TouchableOpacity
+      style={vStyles.card}
+      onPress={() => router.push(`/admin/vehicle-detail?id=${item.id}` as any)}
+      activeOpacity={0.85}
+    >
       <View style={vStyles.row}>
         <View style={{ flex: 1 }}>
-          <Text style={vStyles.name} numberOfLines={1}>{item.vehicle_name || item.vehicle_type}</Text>
+          <Text style={vStyles.name} numberOfLines={1}>{[item.make, item.model].filter(Boolean).join(' ') || item.vehicle_type}</Text>
           <Text style={vStyles.meta}>{item.location} · ₹{(item.price_per_day || 0).toLocaleString('en-IN')}/day</Text>
           {owner?.full_name && <Text style={vStyles.owner}>by {owner.full_name}</Text>}
         </View>
@@ -1135,17 +1184,17 @@ function VehicleAdminRow({ item, onApprove, onReject }: { item: any; onApprove: 
       </View>
       {item.status === 'pending' && (
         <View style={vStyles.actions}>
-          <TouchableOpacity style={vStyles.rejectBtn} onPress={onReject}>
+          <TouchableOpacity style={vStyles.rejectBtn} onPress={(e) => { e.stopPropagation?.(); onReject(); }}>
             <Ionicons name="close" size={14} color="#EF4444" />
             <Text style={vStyles.rejectText}>Reject</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={vStyles.approveBtn} onPress={onApprove}>
+          <TouchableOpacity style={vStyles.approveBtn} onPress={(e) => { e.stopPropagation?.(); onApprove(); }}>
             <Ionicons name="checkmark" size={14} color="#FFF" />
             <Text style={vStyles.approveText}>Approve</Text>
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 

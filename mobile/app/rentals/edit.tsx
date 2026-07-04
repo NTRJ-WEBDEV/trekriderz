@@ -1,17 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
-const GREEN = '#8CC63F';
+const GREEN = '#ADFF2F';
+const RED = '#EF4444';
 const BG = '#080C14';
 const CARD = 'rgba(255,255,255,0.05)';
 const { width } = Dimensions.get('window');
@@ -32,15 +33,47 @@ const COMMON_FEATURES = [
   'Tool kit', 'Rain cover', 'AC',
 ];
 
-export default function RegisterRentalScreen() {
+type Vehicle = {
+  id: string;
+  owner_id: string;
+  vehicle_type: string;
+  make: string;
+  model: string;
+  year: number | null;
+  description: string | null;
+  price_per_day: number;
+  location: string;
+  contact_phone: string;
+  contact_whatsapp: string | null;
+  seats: number | null;
+  fuel_included: boolean;
+  features: string[];
+  images: string[] | null;
+  photos: any;
+  status: 'pending' | 'approved' | 'rejected';
+  is_available: boolean;
+};
+
+function allPhotos(v: Vehicle): string[] {
+  if (v.images && v.images.length > 0) return v.images;
+  if (Array.isArray(v.photos) && v.photos.length > 0) return v.photos;
+  return [];
+}
+
+export default function EditVehicleScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
 
-  // Photos
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [fetching, setFetching] = useState(true);
 
-  // Core details
+  // Existing photos (URLs from Supabase Storage)
+  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
+  // New photos picked locally (file URIs)
+  const [newPhotos, setNewPhotos] = useState<string[]>([]);
+  // Index of the cover photo among existingPhotos
+  const [coverIndex, setCoverIndex] = useState(0);
+
   const [vehicleType, setVehicleType] = useState('bike');
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
@@ -53,7 +86,7 @@ export default function RegisterRentalScreen() {
   const [seats, setSeats] = useState('');
   const [fuelIncluded, setFuelIncluded] = useState(false);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(true);
 
   // Pricing
   const [localEnabled, setLocalEnabled] = useState(true);
@@ -70,64 +103,156 @@ export default function RegisterRentalScreen() {
   const [localUnlimitedKm, setLocalUnlimitedKm] = useState(false);
   const [outstationUnlimitedKm, setOutstationUnlimitedKm] = useState(false);
 
+  const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [deleting, setDeleting] = useState(false);
+
   const needsSeats = ['car', 'jeep', 'tempo', 'bus'].includes(vehicleType);
 
-  const pickPhotos = async () => {
-    if (photos.length >= 5) { Alert.alert('Limit Reached', 'You can add up to 5 photos.'); return; }
+  useEffect(() => {
+    if (!id) return;
+    fetchVehicle();
+  }, [id]);
+
+  const fetchVehicle = async () => {
+    const { data, error } = await supabase
+      .from('rental_vehicles')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error || !data) {
+      Alert.alert('Error', 'Vehicle not found.');
+      router.back();
+      return;
+    }
+    const v = data as Vehicle;
+    setVehicle(v);
+    setExistingPhotos(allPhotos(v));
+    setVehicleType(v.vehicle_type ?? 'bike');
+    setMake(v.make ?? '');
+    setModel(v.model ?? '');
+    setYear(v.year ? String(v.year) : '');
+    setDescription(v.description ?? '');
+    setPricePerDay(String(v.price_per_day ?? ''));
+    setLocation(v.location ?? '');
+    setContactPhone(v.contact_phone ?? '');
+    setContactWhatsApp(v.contact_whatsapp ?? '');
+    setSeats(v.seats ? String(v.seats) : '');
+    setFuelIncluded(v.fuel_included ?? false);
+    setSelectedFeatures(v.features ?? []);
+    setIsAvailable(v.is_available ?? true);
+    // Pricing pre-fill
+    const d = data as any;
+    setLocalEnabled(d.local_enabled ?? true);
+    setLocalBasePrice(d.local_base_price ? String(d.local_base_price) : '');
+    setLocalIncludedKm(d.local_included_km ? String(d.local_included_km) : '80');
+    setLocalExtraKmCharge(d.local_extra_km_charge ? String(d.local_extra_km_charge) : '');
+    setOutstationEnabled(d.outstation_enabled ?? false);
+    setOutstationBasePrice(d.outstation_base_price ? String(d.outstation_base_price) : '');
+    setOutstationIncludedKm(d.outstation_included_km ? String(d.outstation_included_km) : '250');
+    setOutstationExtraKmCharge(d.outstation_extra_km_charge ? String(d.outstation_extra_km_charge) : '');
+    setOutstationMinDays(d.outstation_min_days ? String(d.outstation_min_days) : '2');
+    setDriverOption(d.driver_option ?? 'self');
+    setDriverPricePerDay(d.driver_price_per_day ? String(d.driver_price_per_day) : '');
+    setLocalUnlimitedKm(d.local_unlimited_km ?? false);
+    setOutstationUnlimitedKm(d.outstation_unlimited_km ?? false);
+    setFetching(false);
+  };
+
+  const totalPhotoCount = existingPhotos.length + newPhotos.length;
+
+  const pickMorePhotos = async () => {
+    if (totalPhotoCount >= 5) {
+      Alert.alert('Limit Reached', 'You can have up to 5 photos total.');
+      return;
+    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission Required', 'Please allow access to your photo library.'); return; }
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5 - photos.length,
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      selectionLimit: 5 - totalPhotoCount,
     });
     if (!result.canceled && result.assets.length > 0) {
-      setPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, 5));
+      setNewPhotos((prev) => [...prev, ...result.assets.map((a) => a.uri)].slice(0, 5 - existingPhotos.length));
     }
   };
 
-  const uploadPhotos = async (): Promise<string[]> => {
-    if (photos.length === 0) return [];
-    setUploading(true);
+  const removeExistingPhoto = (index: number) => {
+    setExistingPhotos((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (coverIndex >= next.length) setCoverIndex(Math.max(0, next.length - 1));
+      return next;
+    });
+  };
+
+  const removeNewPhoto = (index: number) => {
+    setNewPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadNewPhotos = async (): Promise<string[]> => {
+    if (newPhotos.length === 0) return [];
     const ts = Date.now();
     const urls: string[] = [];
-    for (let i = 0; i < photos.length; i++) {
-      setUploadProgress(Math.round((i / photos.length) * 100));
-      const uri = photos[i];
+
+    for (let i = 0; i < newPhotos.length; i++) {
+      setUploadProgress(Math.round(((i) / newPhotos.length) * 100));
+      const uri = newPhotos[i];
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `vehicles/${user?.id}/${ts}/photo_${i + 1}.${ext}`;
+      const path = `vehicles/${user?.id}/${ts}/photo_${existingPhotos.length + i + 1}.${ext}`;
+
       const response = await fetch(uri);
       const blob = await response.blob();
       const arrayBuffer = await blob.arrayBuffer();
+
       const { error } = await supabase.storage
         .from('vehicle-photos')
         .upload(path, arrayBuffer, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false });
+
       if (!error) {
         const { data: urlData } = supabase.storage.from('vehicle-photos').getPublicUrl(path);
         if (urlData?.publicUrl) urls.push(urlData.publicUrl);
       }
     }
     setUploadProgress(100);
-    setUploading(false);
     return urls;
   };
 
   const toggleFeature = (f: string) => {
-    setSelectedFeatures((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]);
+    setSelectedFeatures((prev) =>
+      prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]
+    );
   };
 
-  const handleSubmit = async () => {
-    if (photos.length === 0) { Alert.alert('Photos Required', 'Please add at least 1 photo of your vehicle.'); return; }
+  const handleSave = async () => {
+    if (existingPhotos.length === 0 && newPhotos.length === 0) {
+      Alert.alert('Photos Required', 'At least 1 photo is required.');
+      return;
+    }
     if (!make.trim() || !model.trim() || !pricePerDay || !location.trim() || !contactPhone.trim()) {
-      Alert.alert('Missing Fields', 'Please fill in make, model, price, location and contact number.'); return;
+      Alert.alert('Missing Fields', 'Fill in make, model, price, location and contact number.');
+      return;
     }
-    if (isNaN(parseInt(pricePerDay)) || parseInt(pricePerDay) <= 0) {
-      Alert.alert('Invalid Price', 'Enter a valid price per day.'); return;
+
+    setSaving(true);
+
+    const uploadedUrls = await uploadNewPhotos();
+
+    // Re-order: cover first, rest follow
+    let finalPhotos = [...existingPhotos, ...uploadedUrls];
+    if (coverIndex > 0 && coverIndex < finalPhotos.length) {
+      const cover = finalPhotos.splice(coverIndex, 1)[0];
+      finalPhotos = [cover, ...finalPhotos];
     }
-    setLoading(true);
-    const imageUrls = await uploadPhotos();
-    const { error } = await supabase.from('rental_vehicles').insert({
-      owner_id: user?.id,
+
+    const { error } = await supabase.from('rental_vehicles').update({
       vehicle_type: vehicleType,
-      make: make.trim(), model: model.trim(),
+      make: make.trim(),
+      model: model.trim(),
       year: year ? parseInt(year) : null,
       description: description.trim() || null,
       price_per_day: parseInt(pricePerDay),
@@ -137,9 +262,8 @@ export default function RegisterRentalScreen() {
       seats: needsSeats && seats ? parseInt(seats) : null,
       fuel_included: fuelIncluded,
       features: selectedFeatures,
-      images: imageUrls,
-      status: 'pending',
-      // Pricing
+      images: finalPhotos,
+      is_available: isAvailable,
       local_enabled: localEnabled,
       local_base_price: localEnabled && localBasePrice ? parseFloat(localBasePrice) : 0,
       local_included_km: localEnabled && localIncludedKm ? parseInt(localIncludedKm) : 80,
@@ -153,63 +277,198 @@ export default function RegisterRentalScreen() {
       driver_price_per_day: driverOption !== 'self' && driverPricePerDay ? parseFloat(driverPricePerDay) : 0,
       local_unlimited_km: localUnlimitedKm,
       outstation_unlimited_km: outstationUnlimitedKm,
-    });
-    setLoading(false);
-    if (error) { Alert.alert('Error', error.message); return; }
+    }).eq('id', id);
+
+    setSaving(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    Alert.alert('Saved!', 'Your vehicle listing has been updated.', [
+      { text: 'OK', onPress: () => router.back() }
+    ]);
+  };
+
+  const handleResubmit = async () => {
+    const { error } = await supabase
+      .from('rental_vehicles')
+      .update({ status: 'pending' })
+      .eq('id', id);
+    if (!error) {
+      Alert.alert('Resubmitted', 'Your listing has been resubmitted for review.');
+      fetchVehicle();
+    }
+  };
+
+  const handleDelete = () => {
     Alert.alert(
-      'Listing Submitted!',
-      'Your vehicle has been submitted for review. It will appear on the app once approved (usually within 24 hours).',
-      [{ text: 'OK', onPress: () => router.back() }]
+      'Delete Listing',
+      'Are you sure? This cannot be undone. The vehicle listing and all photos will be permanently deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive',
+          onPress: confirmDelete,
+        },
+      ]
     );
   };
 
+  const confirmDelete = async () => {
+    setDeleting(true);
+
+    // Delete storage objects
+    const photosToDelete = allPhotos(vehicle!);
+    for (const url of photosToDelete) {
+      const match = url.match(/vehicle-photos\/(.+)$/);
+      if (match?.[1]) {
+        await supabase.storage.from('vehicle-photos').remove([match[1]]);
+      }
+    }
+
+    const { error } = await supabase.from('rental_vehicles').delete().eq('id', id);
+    setDeleting(false);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    router.replace('/rentals/my-vehicles' as any);
+  };
+
+  if (fetching) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={GREEN} />
+      </View>
+    );
+  }
+
+  const statusBanner =
+    vehicle?.status === 'pending' ? {
+      color: '#F59E0B',
+      bg: 'rgba(245,158,11,0.12)',
+      border: 'rgba(245,158,11,0.3)',
+      text: 'Your listing is under review. Edits will require another review.',
+      showResubmit: false,
+    } : vehicle?.status === 'rejected' ? {
+      color: RED,
+      bg: 'rgba(239,68,68,0.1)',
+      border: 'rgba(239,68,68,0.3)',
+      text: 'Your listing was rejected. Edit the details and resubmit for review.',
+      showResubmit: true,
+    } : null;
+
   return (
     <View style={styles.container}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>List Your Vehicle</Text>
-            <Text style={styles.headerSub}>Earn by renting out your vehicle</Text>
-          </View>
+          <Text style={styles.headerTitle}>Edit Vehicle</Text>
         </View>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Status Banner */}
+          {statusBanner && (
+            <View style={[styles.banner, { backgroundColor: statusBanner.bg, borderColor: statusBanner.border }]}>
+              <Ionicons
+                name={vehicle?.status === 'rejected' ? 'close-circle-outline' : 'time-outline'}
+                size={18}
+                color={statusBanner.color}
+              />
+              <Text style={[styles.bannerText, { color: statusBanner.color }]}>{statusBanner.text}</Text>
+              {statusBanner.showResubmit && (
+                <TouchableOpacity style={[styles.resubmitBtn, { borderColor: RED }]} onPress={handleResubmit}>
+                  <Text style={[styles.resubmitText, { color: RED }]}>Resubmit</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
-          {/* Photos */}
-          <Text style={styles.label}>Vehicle Photos * <Text style={styles.labelHint}>(min 1, max 5)</Text></Text>
+          {/* ── Photo Management ─────────────────────────── */}
+          <Text style={styles.label}>
+            Vehicle Photos <Text style={styles.labelHint}>({totalPhotoCount}/5 — tap to set cover)</Text>
+          </Text>
+
           <View style={styles.photoGrid}>
-            {photos.map((uri, i) => (
-              <View key={i} style={styles.thumb}>
+            {existingPhotos.map((uri, i) => (
+              <TouchableOpacity
+                key={`ex-${i}`}
+                style={[styles.thumb, i === coverIndex && styles.thumbCover]}
+                onPress={() => setCoverIndex(i)}
+                activeOpacity={0.85}
+              >
                 <Image source={{ uri }} style={styles.thumbImg} contentFit="cover" />
-                <TouchableOpacity style={styles.thumbRemove} onPress={() => setPhotos((p) => p.filter((_, j) => j !== i))}>
+                {i === coverIndex && (
+                  <View style={styles.coverBadge}>
+                    <Text style={styles.coverBadgeText}>Cover</Text>
+                  </View>
+                )}
+                <TouchableOpacity style={styles.thumbRemove} onPress={() => removeExistingPhoto(i)}>
+                  <Ionicons name="close-circle" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+
+            {newPhotos.map((uri, i) => (
+              <View key={`new-${i}`} style={styles.thumb}>
+                <Image source={{ uri }} style={styles.thumbImg} contentFit="cover" />
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>New</Text>
+                </View>
+                <TouchableOpacity style={styles.thumbRemove} onPress={() => removeNewPhoto(i)}>
                   <Ionicons name="close-circle" size={20} color="#FFF" />
                 </TouchableOpacity>
               </View>
             ))}
-            {photos.length < 5 && (
-              <TouchableOpacity style={styles.addPhotoBtn} onPress={pickPhotos} activeOpacity={0.8}>
+
+            {totalPhotoCount < 5 && (
+              <TouchableOpacity style={styles.addPhotoBtn} onPress={pickMorePhotos} activeOpacity={0.8}>
                 <Ionicons name="camera-outline" size={26} color={GREEN} />
-                <Text style={styles.addPhotoText}>{photos.length === 0 ? 'Add Photos' : 'Add More'}</Text>
+                <Text style={styles.addPhotoText}>Add More</Text>
               </TouchableOpacity>
             )}
           </View>
-          {uploading && (
+
+          {saving && newPhotos.length > 0 && (
             <View style={styles.progressWrap}>
-              <View style={styles.progressBar}><View style={[styles.progressFill, { width: `${uploadProgress}%` as any }]} /></View>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${uploadProgress}%` as any }]} />
+              </View>
               <Text style={styles.progressText}>Uploading… {uploadProgress}%</Text>
             </View>
           )}
 
-          {/* Vehicle Type */}
-          <Text style={styles.label}>Vehicle Type *</Text>
+          {/* ── Availability Toggle ───────────────────────── */}
+          <TouchableOpacity
+            style={[styles.availToggle, isAvailable ? styles.availOn : styles.availOff]}
+            onPress={() => setIsAvailable(!isAvailable)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.availDot, { backgroundColor: isAvailable ? GREEN : 'rgba(255,255,255,0.3)' }]} />
+            <Text style={[styles.availText, { color: isAvailable ? GREEN : 'rgba(255,255,255,0.45)' }]}>
+              {isAvailable ? 'Listing Active — Visible to renters' : 'Listing Inactive — Hidden from renters'}
+            </Text>
+            <Ionicons name={isAvailable ? 'eye-outline' : 'eye-off-outline'} size={18} color={isAvailable ? GREEN : 'rgba(255,255,255,0.3)'} />
+          </TouchableOpacity>
+
+          {/* ── Vehicle Type ───────────────────────────────── */}
+          <Text style={styles.label}>Vehicle Type</Text>
           <View style={styles.typeGrid}>
             {VEHICLE_TYPES.map((t) => (
-              <TouchableOpacity key={t.id}
+              <TouchableOpacity
+                key={t.id}
                 style={[styles.typeChip, vehicleType === t.id && styles.typeChipActive]}
-                onPress={() => setVehicleType(t.id)} activeOpacity={0.8}
+                onPress={() => setVehicleType(t.id)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.typeEmoji}>{t.emoji}</Text>
                 <Text style={[styles.typeLabel, vehicleType === t.id && styles.typeLabelActive]}>{t.label}</Text>
@@ -220,51 +479,45 @@ export default function RegisterRentalScreen() {
           {/* Make & Model */}
           <View style={styles.row}>
             <View style={styles.half}>
-              <Text style={styles.label}>Make *</Text>
-              <TextInput style={styles.input} placeholder="e.g. Royal Enfield" placeholderTextColor="rgba(255,255,255,0.25)" value={make} onChangeText={setMake} />
+              <Text style={styles.label}>Make</Text>
+              <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="e.g. Royal Enfield" value={make} onChangeText={setMake} />
             </View>
             <View style={styles.half}>
-              <Text style={styles.label}>Model *</Text>
-              <TextInput style={styles.input} placeholder="e.g. Himalayan" placeholderTextColor="rgba(255,255,255,0.25)" value={model} onChangeText={setModel} />
+              <Text style={styles.label}>Model</Text>
+              <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="e.g. Himalayan" value={model} onChangeText={setModel} />
             </View>
           </View>
 
-          {/* Year & Base Price */}
+          {/* Year & Price */}
           <View style={styles.row}>
             <View style={styles.half}>
               <Text style={styles.label}>Year</Text>
-              <TextInput style={styles.input} placeholder="e.g. 2022" placeholderTextColor="rgba(255,255,255,0.25)" value={year} onChangeText={setYear} keyboardType="numeric" />
+              <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="e.g. 2022" value={year} onChangeText={setYear} keyboardType="numeric" />
             </View>
             <View style={styles.half}>
-              <Text style={styles.label}>Display Price / Day (₹) *</Text>
-              <TextInput style={styles.input} placeholder="e.g. 1200" placeholderTextColor="rgba(255,255,255,0.25)" value={pricePerDay} onChangeText={setPricePerDay} keyboardType="numeric" />
+              <Text style={styles.label}>Price / Day (₹)</Text>
+              <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="e.g. 1200" value={pricePerDay} onChangeText={setPricePerDay} keyboardType="numeric" />
             </View>
           </View>
 
-          {/* ── PRICING DETAILS ─────────────────────────────── */}
+          {/* ── PRICING DETAILS ─────────────────────────── */}
           <View style={styles.pricingCard}>
             <Text style={styles.pricingTitle}>PRICING DETAILS</Text>
             <Text style={styles.pricingSubtitle}>Set km-based rates for different rental types</Text>
-
-            {/* Type toggles */}
             <View style={styles.pricingToggles}>
-              <TouchableOpacity
-                style={[styles.pricingToggleBtn, localEnabled && styles.pricingToggleBtnOn]}
-                onPress={() => setLocalEnabled(!localEnabled)} activeOpacity={0.8}
-              >
+              <TouchableOpacity style={[styles.pricingToggleBtn, localEnabled && styles.pricingToggleBtnOn]} onPress={() => setLocalEnabled(!localEnabled)} activeOpacity={0.8}>
                 <Ionicons name={localEnabled ? 'checkbox' : 'square-outline'} size={18} color={localEnabled ? GREEN : 'rgba(255,255,255,0.3)'} />
                 <Text style={[styles.pricingToggleText, localEnabled && styles.pricingToggleTextOn]}>Local Rental</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.pricingToggleBtn, outstationEnabled && styles.pricingToggleBtnOn]}
-                onPress={() => setOutstationEnabled(!outstationEnabled)} activeOpacity={0.8}
-              >
+              <TouchableOpacity style={[styles.pricingToggleBtn, outstationEnabled && styles.pricingToggleBtnOn]} onPress={() => setOutstationEnabled(!outstationEnabled)} activeOpacity={0.8}>
                 <Ionicons name={outstationEnabled ? 'checkbox' : 'square-outline'} size={18} color={outstationEnabled ? GREEN : 'rgba(255,255,255,0.3)'} />
                 <Text style={[styles.pricingToggleText, outstationEnabled && styles.pricingToggleTextOn]}>Outstation</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Local block */}
             {localEnabled && (
               <View style={styles.pricingBlock}>
                 <Text style={styles.pricingBlockTitle}>── LOCAL RENTAL ──</Text>
@@ -310,8 +563,6 @@ export default function RegisterRentalScreen() {
                 )}
               </View>
             )}
-
-            {/* Outstation block */}
             {outstationEnabled && (
               <View style={styles.pricingBlock}>
                 <Text style={styles.pricingBlockTitle}>── OUTSTATION ──</Text>
@@ -366,8 +617,6 @@ export default function RegisterRentalScreen() {
                 </View>
               </View>
             )}
-
-            {/* Driver block */}
             <View style={styles.pricingBlock}>
               <Text style={styles.pricingBlockTitle}>── DRIVER ──</Text>
               {(['self', 'driver', 'both'] as const).map((opt) => (
@@ -408,32 +657,40 @@ export default function RegisterRentalScreen() {
           {needsSeats && (
             <>
               <Text style={styles.label}>Seating Capacity</Text>
-              <TextInput style={styles.input} placeholder="Number of seats" placeholderTextColor="rgba(255,255,255,0.25)" value={seats} onChangeText={setSeats} keyboardType="numeric" />
+              <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+                placeholder="Number of seats" value={seats} onChangeText={setSeats} keyboardType="numeric" />
             </>
           )}
 
-          <Text style={styles.label}>Location *</Text>
-          <TextInput style={styles.input} placeholder="Where is the vehicle available? (city/area)" placeholderTextColor="rgba(255,255,255,0.25)" value={location} onChangeText={setLocation} />
+          <Text style={styles.label}>Location</Text>
+          <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholder="Where is the vehicle available?" value={location} onChangeText={setLocation} />
 
           <Text style={styles.label}>Description</Text>
-          <TextInput style={[styles.input, styles.textarea]} placeholder="Condition, usage tips, any special notes..." placeholderTextColor="rgba(255,255,255,0.25)" value={description} onChangeText={setDescription} multiline numberOfLines={3} textAlignVertical="top" />
+          <TextInput style={[styles.input, styles.textarea]} placeholderTextColor="rgba(255,255,255,0.25)"
+            placeholder="Condition, usage tips, notes..." value={description} onChangeText={setDescription}
+            multiline numberOfLines={3} textAlignVertical="top" />
 
+          {/* Fuel Toggle */}
           <TouchableOpacity style={styles.toggleRow} onPress={() => setFuelIncluded(!fuelIncluded)} activeOpacity={0.8}>
             <View style={{ flex: 1 }}>
               <Text style={styles.toggleLabel}>Fuel Included</Text>
-              <Text style={styles.toggleSub}>Fuel cost is included in the daily price</Text>
+              <Text style={styles.toggleSub}>Fuel cost is included in daily price</Text>
             </View>
             <View style={[styles.toggleTrack, fuelIncluded && styles.toggleTrackOn]}>
               <View style={[styles.toggleThumb, fuelIncluded && styles.toggleThumbOn]} />
             </View>
           </TouchableOpacity>
 
+          {/* Features */}
           <Text style={styles.label}>What's Included</Text>
           <View style={styles.featuresGrid}>
             {COMMON_FEATURES.map((f) => (
-              <TouchableOpacity key={f}
+              <TouchableOpacity
+                key={f}
                 style={[styles.featureChip, selectedFeatures.includes(f) && styles.featureChipOn]}
-                onPress={() => toggleFeature(f)} activeOpacity={0.8}
+                onPress={() => toggleFeature(f)}
+                activeOpacity={0.8}
               >
                 {selectedFeatures.includes(f) && <Ionicons name="checkmark-circle" size={14} color={GREEN} />}
                 <Text style={[styles.featureText, selectedFeatures.includes(f) && styles.featureTextOn]}>{f}</Text>
@@ -441,31 +698,55 @@ export default function RegisterRentalScreen() {
             ))}
           </View>
 
-          <Text style={styles.label}>Contact Phone *</Text>
+          {/* Contact */}
+          <Text style={styles.label}>Contact Phone</Text>
           <View style={styles.inputRow}>
             <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholder="+91 XXXXXXXXXX" placeholderTextColor="rgba(255,255,255,0.25)" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
+            <TextInput style={styles.inputFlex} placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholder="+91 XXXXXXXXXX" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
           </View>
 
           <Text style={styles.label}>WhatsApp Number</Text>
           <View style={styles.inputRow}>
             <Ionicons name="logo-whatsapp" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholder="If different from above" placeholderTextColor="rgba(255,255,255,0.25)" value={contactWhatsApp} onChangeText={setContactWhatsApp} keyboardType="phone-pad" />
+            <TextInput style={styles.inputFlex} placeholderTextColor="rgba(255,255,255,0.25)"
+              placeholder="If different from above" value={contactWhatsApp} onChangeText={setContactWhatsApp} keyboardType="phone-pad" />
           </View>
 
-          <View style={styles.infoNote}>
-            <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.4)" />
-            <Text style={styles.infoNoteText}>Your listing will be reviewed before going live. Usually approved within 24 hours.</Text>
-          </View>
-
-          <TouchableOpacity style={[styles.submitBtn, (loading || uploading) && { opacity: 0.6 }]} onPress={handleSubmit} disabled={loading || uploading}>
-            {loading || uploading ? <ActivityIndicator color={BG} /> : (
+          {/* Save */}
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+            onPress={handleSave}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator color={BG} />
+            ) : (
               <>
-                <Ionicons name="car-outline" size={18} color={BG} />
-                <Text style={styles.submitText}>SUBMIT FOR REVIEW</Text>
+                <Ionicons name="checkmark-circle-outline" size={18} color={BG} />
+                <Text style={styles.saveBtnText}>SAVE CHANGES</Text>
               </>
             )}
           </TouchableOpacity>
+
+          {/* Delete */}
+          <TouchableOpacity
+            style={[styles.deleteBtn, deleting && { opacity: 0.6 }]}
+            onPress={handleDelete}
+            disabled={deleting}
+            activeOpacity={0.85}
+          >
+            {deleting ? (
+              <ActivityIndicator color={RED} />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={16} color={RED} />
+                <Text style={styles.deleteBtnText}>Delete Listing</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
@@ -475,51 +756,159 @@ export default function RegisterRentalScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
+  center: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 20, fontWeight: '900', color: '#FFF' },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
 
-  label: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
-  labelHint: { fontSize: 11, color: 'rgba(255,255,255,0.3)', textTransform: 'none', letterSpacing: 0 },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12, gap: 12,
+  },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', color: '#FFF' },
 
+  banner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1,
+    padding: 14, marginBottom: 4, marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  bannerText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  resubmitBtn: {
+    borderWidth: 1.5, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  resubmitText: { fontSize: 12, fontWeight: '700' },
+
+  label: {
+    fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, marginTop: 18,
+  },
+  labelHint: { fontSize: 10, color: 'rgba(255,255,255,0.25)', textTransform: 'none', letterSpacing: 0 },
+
+  // Photos
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  thumb: { width: THUMB, height: THUMB, borderRadius: 10, overflow: 'hidden', position: 'relative' },
+  thumb: {
+    width: THUMB, height: THUMB, borderRadius: 10, overflow: 'hidden',
+    position: 'relative', borderWidth: 2, borderColor: 'transparent',
+  },
+  thumbCover: { borderColor: GREEN },
   thumbImg: { width: '100%', height: '100%' },
-  thumbRemove: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10 },
+  thumbRemove: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10,
+  },
+  coverBadge: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(173,255,47,0.85)', paddingVertical: 3, alignItems: 'center',
+  },
+  coverBadgeText: { fontSize: 9, fontWeight: '800', color: BG },
+  newBadge: {
+    position: 'absolute', top: 4, left: 4,
+    backgroundColor: 'rgba(34,197,94,0.85)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2,
+  },
+  newBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF' },
   addPhotoBtn: {
     width: THUMB, height: THUMB, borderRadius: 10,
-    backgroundColor: 'rgba(140,198,63,0.07)', borderWidth: 1.5, borderColor: 'rgba(140,198,63,0.3)', borderStyle: 'dashed',
+    backgroundColor: 'rgba(173,255,47,0.06)',
+    borderWidth: 1.5, borderColor: 'rgba(173,255,47,0.3)', borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center', gap: 4,
   },
   addPhotoText: { fontSize: 10, fontWeight: '700', color: GREEN, textAlign: 'center' },
+
   progressWrap: { marginTop: 10, gap: 6 },
   progressBar: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: GREEN, borderRadius: 2 },
   progressText: { fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'right' },
 
+  // Availability
+  availToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1, padding: 14, marginTop: 18,
+  },
+  availOn: { backgroundColor: 'rgba(173,255,47,0.07)', borderColor: 'rgba(173,255,47,0.25)' },
+  availOff: { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.1)' },
+  availDot: { width: 8, height: 8, borderRadius: 4 },
+  availText: { flex: 1, fontSize: 13, fontWeight: '600' },
+
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  typeChipActive: { backgroundColor: 'rgba(140,198,63,0.15)', borderColor: GREEN },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  typeChipActive: { backgroundColor: 'rgba(173,255,47,0.12)', borderColor: GREEN },
   typeEmoji: { fontSize: 18 },
   typeLabel: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.5)' },
   typeLabelActive: { color: GREEN },
 
   row: { flexDirection: 'row', gap: 12 },
   half: { flex: 1 },
-  input: { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, paddingVertical: 13, color: '#FFF', fontSize: 14, marginBottom: 2 },
+
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 14, paddingVertical: 13, color: '#FFF', fontSize: 14,
+  },
   textarea: { height: 90, paddingTop: 12 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, paddingVertical: 13, marginBottom: 2 },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
   inputFlex: { flex: 1, color: '#FFF', fontSize: 14 },
 
-  // Pricing card
-  pricingCard: { backgroundColor: 'rgba(140,198,63,0.04)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(140,198,63,0.15)', padding: 16, marginTop: 20 },
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: CARD, borderRadius: 14, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)', padding: 16, marginTop: 18,
+  },
+  toggleLabel: { fontSize: 15, fontWeight: '700', color: '#FFF', marginBottom: 2 },
+  toggleSub: { fontSize: 12, color: 'rgba(255,255,255,0.38)' },
+  toggleTrack: {
+    width: 44, height: 26, borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', padding: 3,
+  },
+  toggleTrackOn: { backgroundColor: GREEN },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.5)' },
+  toggleThumbOn: { backgroundColor: BG, alignSelf: 'flex-end' },
+
+  featuresGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  featureChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  featureChipOn: { backgroundColor: 'rgba(173,255,47,0.08)', borderColor: 'rgba(173,255,47,0.3)' },
+  featureText: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: '600' },
+  featureTextOn: { color: GREEN },
+
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: GREEN, borderRadius: 16, paddingVertical: 16, marginTop: 28,
+  },
+  saveBtnText: { fontSize: 15, fontWeight: '900', color: BG, letterSpacing: 1 },
+
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
+    borderRadius: 16, paddingVertical: 14, marginTop: 12,
+  },
+  deleteBtnText: { fontSize: 14, fontWeight: '700', color: RED },
+
+  // Pricing
+  pricingCard: { backgroundColor: 'rgba(173,255,47,0.04)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(173,255,47,0.15)', padding: 16, marginTop: 20 },
   pricingTitle: { fontSize: 12, fontWeight: '800', color: GREEN, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 },
   pricingSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 16 },
   pricingToggles: { flexDirection: 'row', gap: 10, marginBottom: 4 },
   pricingToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  pricingToggleBtnOn: { backgroundColor: 'rgba(140,198,63,0.1)', borderColor: 'rgba(140,198,63,0.35)' },
+  pricingToggleBtnOn: { backgroundColor: 'rgba(173,255,47,0.1)', borderColor: 'rgba(173,255,47,0.35)' },
   pricingToggleText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
   pricingToggleTextOn: { color: GREEN },
   pricingBlock: { marginTop: 16, gap: 8 },
@@ -534,7 +923,7 @@ const styles = StyleSheet.create({
   unlimitedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   unlimitedLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '600' },
   unlimitedLabelOn: { color: GREEN },
-  unlimitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(140,198,63,0.12)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(140,198,63,0.3)' },
+  unlimitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(173,255,47,0.12)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(173,255,47,0.3)' },
   unlimitedBadgeText: { fontSize: 10, fontWeight: '700', color: GREEN },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' },
@@ -543,23 +932,4 @@ const styles = StyleSheet.create({
   driverLabel: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
   driverWithPrice: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 },
   driverPriceInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 6, minWidth: 100 },
-
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', padding: 16, marginTop: 16, marginBottom: 4 },
-  toggleLabel: { fontSize: 15, fontWeight: '700', color: '#FFF', marginBottom: 2 },
-  toggleSub: { fontSize: 12, color: 'rgba(255,255,255,0.38)' },
-  toggleTrack: { width: 44, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', padding: 3 },
-  toggleTrackOn: { backgroundColor: GREEN },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.5)' },
-  toggleThumbOn: { backgroundColor: '#FFF', alignSelf: 'flex-end' },
-
-  featuresGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  featureChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  featureChipOn: { backgroundColor: 'rgba(140,198,63,0.1)', borderColor: 'rgba(140,198,63,0.35)' },
-  featureText: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: '600' },
-  featureTextOn: { color: GREEN },
-
-  infoNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 14, marginTop: 20, marginBottom: 4 },
-  infoNoteText: { flex: 1, fontSize: 12, color: 'rgba(255,255,255,0.38)', lineHeight: 18 },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: GREEN, borderRadius: 16, paddingVertical: 16, marginTop: 20 },
-  submitText: { fontSize: 15, fontWeight: '900', color: BG, letterSpacing: 1 },
 });

@@ -176,17 +176,23 @@ export default function ProfileScreen() {
               onPress={() => router.push('/guide/register' as any)}
               accent
             />
-          ) : guideProfile.status === 'pending' ? (
+          ) : guideProfile.status === 'pending' || guideProfile.status === 'under_review' || guideProfile.status === 'rejected' ? (
             <MenuItem
               icon="time-outline"
-              title="Guide Application Pending"
-              subtitle="Our team is reviewing your application"
-              onPress={() => {}}
+              title={guideProfile.status === 'rejected' ? 'Guide Application — Not Approved' : 'Guide Application Pending'}
+              subtitle={guideProfile.status === 'rejected' ? 'Tap to view details and resubmit' : 'Our team is reviewing your application'}
+              onPress={() => router.push('/guide/application-status' as any)}
             />
           ) : guideProfile.is_premium ? (
             <>
+              <MenuItem icon="person-outline" title="My Guide Profile" subtitle="View how trekkers see you" onPress={() => router.push(`/guide/${guideProfile.id}` as any)} />
               <MenuItem icon="map-outline" title="My Expeditions" onPress={() => router.push('/expeditions/my-list' as any)} />
               <MenuItem icon="add-circle-outline" title="Create New Expedition" onPress={() => router.push('/expeditions/create' as any)} />
+            </>
+          ) : guideProfile.status === 'approved' ? (
+            <>
+              <MenuItem icon="person-outline" title="My Guide Profile" subtitle="View how trekkers see you" onPress={() => router.push(`/guide/${guideProfile.id}` as any)} />
+              <MenuItem icon="ribbon-outline" title="Upgrade to Premium Guide" subtitle="Unlock expedition hosting" onPress={() => router.push('/expeditions/create' as any)} accent />
             </>
           ) : (
             <MenuItem icon="ribbon-outline" title="Upgrade to Premium Guide" subtitle="Unlock expedition hosting" onPress={() => router.push('/expeditions/create' as any)} accent />
@@ -199,6 +205,20 @@ export default function ProfileScreen() {
             title="List a New Homestay"
             subtitle="Apply to host trekkers & travelers"
             onPress={() => router.push('/host/create' as any)}
+          />
+
+          <Text style={styles.sectionLabel}>Vehicles</Text>
+          <MenuItem
+            icon="car-outline"
+            title="My Vehicle Listings"
+            subtitle="Manage vehicles you've listed for rent"
+            onPress={() => router.push('/rentals/my-vehicles' as any)}
+          />
+          <MenuItem
+            icon="add-circle-outline"
+            title="List a New Vehicle"
+            subtitle="Rent out your bike, car or jeep"
+            onPress={() => router.push('/rentals/register' as any)}
           />
 
           <Text style={styles.sectionLabel}>Legal</Text>

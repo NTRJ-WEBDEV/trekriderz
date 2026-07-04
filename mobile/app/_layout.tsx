@@ -145,6 +145,7 @@ export default function RootLayout() {
         <Stack.Screen name="host/index" />
         <Stack.Screen name="host/create" />
         <Stack.Screen name="guide/register" />
+        <Stack.Screen name="guide/application-status" />
         <Stack.Screen name="profile/edit" />
         <Stack.Screen name="post/create" />
         <Stack.Screen name="create-post" />
@@ -169,6 +170,8 @@ export default function RootLayout() {
         <Stack.Screen name="rentals/index" />
         <Stack.Screen name="rentals/[id]" />
         <Stack.Screen name="rentals/register" />
+        <Stack.Screen name="rentals/my-vehicles" />
+        <Stack.Screen name="rentals/edit" />
         <Stack.Screen name="stories/index" />
         <Stack.Screen name="stories/[id]" />
         <Stack.Screen name="stories/create" />

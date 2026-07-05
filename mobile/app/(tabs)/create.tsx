@@ -164,6 +164,14 @@ export default function CreateTripScreen() {
       Alert.alert('Missing Fields', 'Please fill in title, destination, dates, group size and budget.');
       return;
     }
+    if (!Number.isInteger(Number(groupSize)) || Number(groupSize) < 1 || Number(groupSize) > 9999) {
+      Alert.alert('Invalid Group Size', 'Enter a group size between 1 and 9999.');
+      return;
+    }
+    if (!Number.isInteger(Number(budget)) || Number(budget) < 1 || Number(budget) > 9999999) {
+      Alert.alert('Invalid Budget', 'Enter a budget per person up to ₹99,99,999.');
+      return;
+    }
     haptic.medium();
     setLoading(true);
 
@@ -176,7 +184,6 @@ export default function CreateTripScreen() {
     }
 
     const newTrip: Record<string, any> = {
-      id: Math.random().toString(36).substr(2, 9),
       created_by: user?.id,
       title: title.trim(),
       destination: destination.trim(),
@@ -439,6 +446,7 @@ export default function CreateTripScreen() {
                   placeholder="No. of people"
                   placeholderTextColor="rgba(255,255,255,0.2)"
                   keyboardType="numeric"
+                  maxLength={4}
                   value={groupSize}
                   onChangeText={setGroupSize}
                 />
@@ -453,6 +461,7 @@ export default function CreateTripScreen() {
                   placeholder="Amount"
                   placeholderTextColor="rgba(255,255,255,0.2)"
                   keyboardType="numeric"
+                  maxLength={7}
                   value={budget}
                   onChangeText={setBudget}
                 />

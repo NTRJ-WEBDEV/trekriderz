@@ -85,7 +85,6 @@ export default function CreatePostScreen() {
         user_id: user?.id,
         content: content.trim(),
         media: imageUrl ? [imageUrl] : [],
-        post_type: 'trip_story',
         visibility: 'public',
       };
       if (ytId) postPayload.youtube_url = youtubeUrl.trim();
@@ -96,7 +95,7 @@ export default function CreatePostScreen() {
       router.replace('/(tabs)');
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to share your story.');
+      Alert.alert('Error', 'Failed to create your post.');
     } finally {
       setPosting(false);
     }
@@ -106,7 +105,7 @@ export default function CreatePostScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="close" size={28} color="#FFF" /></TouchableOpacity>
-        <Text style={styles.headerTitle}>Share Story</Text>
+        <Text style={styles.headerTitle}>Create Post</Text>
         <TouchableOpacity onPress={handlePost} disabled={posting || uploading} style={[styles.postBtn, (posting || uploading) && { opacity: 0.5 }]}>
           {posting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.postBtnText}>Post</Text>}
         </TouchableOpacity>

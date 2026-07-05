@@ -86,16 +86,8 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Discover — browse guides, homestays, trips, vehicles */}
-        <Tabs.Screen
-          name="discover"
-          options={{
-            title: 'Discover',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="compass-outline" size={size} color={color} />
-            ),
-          }}
-        />
+        {/* Discover — now embedded directly in Home; route stays reachable via deep link */}
+        <Tabs.Screen name="discover" options={{ href: null }} />
 
         {/* Community — groups + travel stories */}
         <Tabs.Screen
@@ -122,21 +114,29 @@ export default function TabsLayout() {
         {/* Profile — reachable via the avatar in the Home header, not a bottom tab */}
         <Tabs.Screen name="profile" options={{ href: null }} />
 
-        {/* Admin — visible only to admins */}
+        {/* Admin — visible only to admins. href: null removes its flex slot entirely
+            for everyone else instead of just hiding its content (which was leaving an
+            invisible gap in the tab bar and throwing off even spacing). Expo Router
+            doesn't allow href and tabBarButton in the same options object, so the two
+            cases are fully separate rather than spread together. */}
         <Tabs.Screen
           name="admin"
-          options={{
-            tabBarButton: isAdmin ? () => (
-              <TouchableOpacity
-                onPress={() => router.push('/admin')}
-                style={styles.adminTabBtn}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="settings-outline" size={22} color="#8CC63F" />
-                <Text style={styles.adminTabLabel}>Admin</Text>
-              </TouchableOpacity>
-            ) : () => null,
-          }}
+          options={
+            isAdmin
+              ? {
+                  tabBarButton: () => (
+                    <TouchableOpacity
+                      onPress={() => router.push('/admin')}
+                      style={styles.adminTabBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="settings-outline" size={22} color="#8CC63F" />
+                      <Text style={styles.adminTabLabel}>Admin</Text>
+                    </TouchableOpacity>
+                  ),
+                }
+              : { href: null }
+          }
         />
 
         {/* Hidden tabs — accessible via deep link / router.push only */}

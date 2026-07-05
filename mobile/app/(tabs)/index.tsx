@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { haptic } from '@/lib/haptics';
+import DiscoverSection from '@/components/DiscoverSection';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -24,15 +25,6 @@ const SECTIONS = [
     route: '/discover?type=trek',
     color: '#8CC63F',
     iconName: 'walk-outline',
-  },
-  {
-    id: 'stories',
-    label: 'Stories',
-    emoji: '📖',
-    description: 'Trek & travel journeys',
-    route: '/stories',
-    color: '#EC4899',
-    iconName: 'book-outline',
   },
   {
     id: 'guides',
@@ -51,15 +43,6 @@ const SECTIONS = [
     route: '/homestays',
     color: '#F59E0B',
     iconName: 'home-outline',
-  },
-  {
-    id: 'community',
-    label: 'Community',
-    emoji: '👥',
-    description: 'Find your tribe',
-    route: '/community',
-    color: '#8B5CF6',
-    iconName: 'people-outline',
   },
   {
     id: 'expeditions',
@@ -218,6 +201,9 @@ export default function HomeScreen() {
               <Ionicons name="arrow-forward" size={20} color={GREEN} />
             </View>
           </TouchableOpacity>
+
+          {/* ── DISCOVER (trips, guides, homestays, vehicles) ── */}
+          <DiscoverSection />
 
           {/* ── YOUR UPCOMING TRIPS ── */}
           {trips.length > 0 && (

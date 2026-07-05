@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -49,7 +50,9 @@ export default function RegisterRentalScreen() {
   const [pricePerDay, setPricePerDay] = useState('');
   const [location, setLocation] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactPhoneCode, setContactPhoneCode] = useState('+91');
   const [contactWhatsApp, setContactWhatsApp] = useState('');
+  const [contactWhatsAppCode, setContactWhatsAppCode] = useState('+91');
   const [seats, setSeats] = useState('');
   const [fuelIncluded, setFuelIncluded] = useState(false);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
@@ -140,8 +143,8 @@ export default function RegisterRentalScreen() {
       description: description.trim() || null,
       price_per_day: parseInt(pricePerDay),
       location: location.trim(),
-      contact_phone: contactPhone.trim(),
-      contact_whatsapp: contactWhatsApp.trim() || null,
+      contact_phone: `${contactPhoneCode}${contactPhone.trim()}`,
+      contact_whatsapp: contactWhatsApp.trim() ? `${contactWhatsAppCode}${contactWhatsApp.trim()}` : null,
       seats: needsSeats && seats ? parseInt(seats) : null,
       fuel_included: fuelIncluded,
       features: selectedFeatures,
@@ -450,16 +453,17 @@ export default function RegisterRentalScreen() {
           </View>
 
           <Text style={styles.label}>Contact Phone *</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholder="+91 XXXXXXXXXX" placeholderTextColor="rgba(255,255,255,0.25)" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
-          </View>
+          <PhoneInput
+            countryCode={contactPhoneCode} onChangeCountryCode={setContactPhoneCode}
+            number={contactPhone} onChangeNumber={setContactPhone}
+          />
 
           <Text style={styles.label}>WhatsApp Number</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="logo-whatsapp" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholder="If different from above" placeholderTextColor="rgba(255,255,255,0.25)" value={contactWhatsApp} onChangeText={setContactWhatsApp} keyboardType="phone-pad" />
-          </View>
+          <PhoneInput
+            countryCode={contactWhatsAppCode} onChangeCountryCode={setContactWhatsAppCode}
+            number={contactWhatsApp} onChangeNumber={setContactWhatsApp}
+            placeholder="If different from above"
+          />
 
           <View style={styles.infoNote}>
             <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.4)" />

@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
+import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -132,6 +133,7 @@ export default function GuideRegisterScreen() {
 
   // Contact
   const [contactPhone, setContactPhone] = useState('');
+  const [contactCountryCode, setContactCountryCode] = useState('+91');
 
   // Terms
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -409,7 +411,7 @@ export default function GuideRegisterScreen() {
         identity_doc_front_url: idFrontUrl,
         identity_doc_back_url: idBackUrl,
         certificates: certPayload,
-        contact_phone: contactPhone.trim(),
+        contact_phone: `${contactCountryCode}${contactPhone.trim()}`,
         // Legacy fields for backward compatibility
         name: fullName.trim(),
         photo_url: profilePhotoUrl,
@@ -718,20 +720,13 @@ export default function GuideRegisterScreen() {
           {/* 10. Contact Number */}
           <SectionLabel>Contact Number *</SectionLabel>
           <Text style={s.contactNote}>For TrekRiderz team use only — not shown publicly</Text>
-          <View style={s.phoneRow}>
-            <View style={s.countryCode}>
-              <Text style={s.countryCodeText}>+91</Text>
-            </View>
-            <TextInput
-              style={[s.input, { flex: 1, marginBottom: 0 }]}
-              placeholder="10-digit mobile number"
-              placeholderTextColor="#555"
-              value={contactPhone}
-              onChangeText={setContactPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
-          </View>
+          <PhoneInput
+            countryCode={contactCountryCode}
+            onChangeCountryCode={setContactCountryCode}
+            number={contactPhone}
+            onChangeNumber={setContactPhone}
+            placeholder="Mobile number"
+          />
 
           {/* 11. Terms & Commission */}
           <SectionLabel>Terms & Commission *</SectionLabel>
@@ -1146,14 +1141,6 @@ const s = StyleSheet.create({
 
   // Contact
   contactNote: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: -6, marginBottom: 10 },
-  phoneRow: { flexDirection: 'row', gap: 8, marginBottom: 24 },
-  countryCode: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-  },
-  countryCodeText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
 
   // Terms
   termsBox: {

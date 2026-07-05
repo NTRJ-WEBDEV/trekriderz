@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
+import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -227,7 +228,9 @@ export default function CreatePropertyScreen() {
   // ── Step 3: Contact & verification ──
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactPhoneCode, setContactPhoneCode] = useState('+91');
   const [contactWhatsapp, setContactWhatsapp] = useState('');
+  const [contactWhatsappCode, setContactWhatsappCode] = useState('+91');
   const [contactEmail, setContactEmail] = useState('');
 
   const [idDocType, setIdDocType] = useState('');
@@ -593,8 +596,8 @@ export default function CreatePropertyScreen() {
         parties_allowed: partiesAllowed,
         children_allowed: childrenAllowed,
         cancellation_policy: cancellationPolicy,
-        contact_phone: contactPhone.trim(),
-        contact_whatsapp: contactWhatsapp.trim() || contactPhone.trim(),
+        contact_phone: `${contactPhoneCode}${contactPhone.trim()}`,
+        contact_whatsapp: contactWhatsapp.trim() ? `${contactWhatsappCode}${contactWhatsapp.trim()}` : `${contactPhoneCode}${contactPhone.trim()}`,
         contact_email: contactEmail.trim(),
         identity_doc_type: idDocType,
         identity_doc_front_url: idFrontUrl,
@@ -730,7 +733,9 @@ export default function CreatePropertyScreen() {
             <Step3
               contactName={contactName} setContactName={setContactName}
               contactPhone={contactPhone} setContactPhone={setContactPhone}
+              contactPhoneCode={contactPhoneCode} setContactPhoneCode={setContactPhoneCode}
               contactWhatsapp={contactWhatsapp} setContactWhatsapp={setContactWhatsapp}
+              contactWhatsappCode={contactWhatsappCode} setContactWhatsappCode={setContactWhatsappCode}
               contactEmail={contactEmail} setContactEmail={setContactEmail}
               idDocType={idDocType} setIdDocType={setIdDocType}
               idFrontUri={idFrontUri} idFrontUrl={idFrontUrl}
@@ -1303,7 +1308,9 @@ function Step2({ roomTypes, onAdd, onEdit, onRemove }: { roomTypes: RoomType[]; 
 function Step3(props: any) {
   const {
     contactName, setContactName, contactPhone, setContactPhone,
-    contactWhatsapp, setContactWhatsapp, contactEmail, setContactEmail,
+    contactPhoneCode, setContactPhoneCode,
+    contactWhatsapp, setContactWhatsapp, contactWhatsappCode, setContactWhatsappCode,
+    contactEmail, setContactEmail,
     idDocType, setIdDocType, idFrontUri, idFrontUrl, idBackUri, idBackUrl,
     idUploading, onPickDoc, onRemoveFront, onRemoveBack,
     ownershipProofType, setOwnershipProofType, ownershipProofUri, ownershipUploading,
@@ -1318,18 +1325,18 @@ function Step3(props: any) {
       <TextInput style={s.input} placeholder="Full name" placeholderTextColor="#555" value={contactName} onChangeText={setContactName} />
 
       <Text style={s.label}>Phone *</Text>
-      <View style={s.phoneRow}>
-        <View style={s.countryCode}><Text style={s.countryCodeText}>+91</Text></View>
-        <TextInput style={[s.input, { flex: 1, marginBottom: 0 }]} placeholder="10-digit mobile number" placeholderTextColor="#555"
-          value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" maxLength={10} />
-      </View>
+      <PhoneInput
+        countryCode={contactPhoneCode} onChangeCountryCode={setContactPhoneCode}
+        number={contactPhone} onChangeNumber={setContactPhone}
+        placeholder="Mobile number"
+      />
 
       <Text style={s.label}>WhatsApp</Text>
-      <View style={s.phoneRow}>
-        <View style={s.countryCode}><Text style={s.countryCodeText}>+91</Text></View>
-        <TextInput style={[s.input, { flex: 1, marginBottom: 0 }]} placeholder="Same as phone if blank" placeholderTextColor="#555"
-          value={contactWhatsapp} onChangeText={setContactWhatsapp} keyboardType="phone-pad" maxLength={10} />
-      </View>
+      <PhoneInput
+        countryCode={contactWhatsappCode} onChangeCountryCode={setContactWhatsappCode}
+        number={contactWhatsapp} onChangeNumber={setContactWhatsapp}
+        placeholder="Same as phone if blank"
+      />
 
       <Text style={s.label}>Email *</Text>
       <TextInput style={s.input} placeholder="you@example.com" placeholderTextColor="#555" value={contactEmail} onChangeText={setContactEmail}
@@ -1704,12 +1711,6 @@ const s = StyleSheet.create({
   saveRoomBtnText: { color: '#000', fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
 
   // Contact / doc
-  phoneRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  countryCode: {
-    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center',
-  },
-  countryCodeText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
   infoBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     backgroundColor: 'rgba(140,198,63,0.08)', borderRadius: 14, padding: 14,

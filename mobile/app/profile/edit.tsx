@@ -9,8 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  Modal,
-  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,38 +17,16 @@ import { useAuthStore } from '@/stores/authStore';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
+import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
-
-const COUNTRY_CODES = [
-  { code: '+91', flag: '🇮🇳', name: 'India' },
-  { code: '+977', flag: '🇳🇵', name: 'Nepal' },
-  { code: '+975', flag: '🇧🇹', name: 'Bhutan' },
-  { code: '+63', flag: '🇵🇭', name: 'Philippines' },
-  { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
-  { code: '+855', flag: '🇰🇭', name: 'Cambodia' },
-  { code: '+66', flag: '🇹🇭', name: 'Thailand' },
-  { code: '+94', flag: '🇱🇰', name: 'Sri Lanka' },
-  { code: '+1', flag: '🇺🇸', name: 'USA / Canada' },
-  { code: '+44', flag: '🇬🇧', name: 'UK' },
-];
-
-function splitPhone(full: string): { code: string; number: string } {
-  for (const c of COUNTRY_CODES) {
-    if (full.startsWith(c.code)) {
-      return { code: c.code, number: full.slice(c.code.length).trim() };
-    }
-  }
-  return { code: '+91', number: full.replace(/^\+\d{1,4}\s?/, '') };
-}
 
 export default function EditProfileScreen() {
   const { user, setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [countryCode, setCountryCode] = useState('+91');
-  const [showPicker, setShowPicker] = useState(false);
 
   const [form, setForm] = useState({
     full_name: '',
@@ -74,7 +50,7 @@ export default function EditProfileScreen() {
         .single();
 
       if (data) {
-        const { code, number } = splitPhone(data.phone || '');
+        const { countryCode: code, number } = splitPhone(data.phone || '');
         setCountryCode(code);
         setForm({
           full_name: data.full_name || '',
@@ -181,8 +157,6 @@ export default function EditProfileScreen() {
     );
   }
 
-  const selectedCountry = COUNTRY_CODES.find(c => c.code === countryCode) || COUNTRY_CODES[0];
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -244,21 +218,12 @@ export default function EditProfileScreen() {
           {/* Phone with Country Code */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Phone Number</Text>
-            <View style={styles.phoneRow}>
-              <TouchableOpacity style={styles.countryCodeBtn} onPress={() => setShowPicker(true)}>
-                <Text style={styles.countryFlag}>{selectedCountry.flag}</Text>
-                <Text style={styles.countryCodeText}>{countryCode}</Text>
-                <Ionicons name="chevron-down" size={14} color="#6B7280" />
-              </TouchableOpacity>
-              <TextInput
-                style={[styles.input, styles.phoneInput]}
-                placeholder="98765 43210"
-                placeholderTextColor="#6B7280"
-                value={form.phone}
-                onChangeText={v => setForm(prev => ({ ...prev, phone: v }))}
-                keyboardType="phone-pad"
-              />
-            </View>
+            <PhoneInput
+              countryCode={countryCode}
+              onChangeCountryCode={setCountryCode}
+              number={form.phone}
+              onChangeNumber={v => setForm(prev => ({ ...prev, phone: v }))}
+            />
           </View>
 
           {/* Bio */}
@@ -301,39 +266,6 @@ export default function EditProfileScreen() {
         </TouchableOpacity>
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Country Code Picker Modal */}
-      <Modal visible={showPicker} transparent animationType="slide" onRequestClose={() => setShowPicker(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
-          <View style={styles.pickerSheet}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Select Country Code</Text>
-              <TouchableOpacity onPress={() => setShowPicker(false)}>
-                <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={COUNTRY_CODES}
-              keyExtractor={item => item.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.codeItem, item.code === countryCode && styles.codeItemActive]}
-                  onPress={() => { setCountryCode(item.code); setShowPicker(false); }}
-                >
-                  <Text style={styles.codeFlag}>{item.flag}</Text>
-                  <Text style={styles.codeName}>{item.name}</Text>
-                  <Text style={[styles.codeValue, item.code === countryCode && { color: GREEN }]}>
-                    {item.code}
-                  </Text>
-                  {item.code === countryCode && (
-                    <Ionicons name="checkmark" size={16} color={GREEN} />
-                  )}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -387,44 +319,10 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: '#FFF', fontSize: 15 },
   bioInput: { minHeight: 90, lineHeight: 22 },
   charCount: { color: 'rgba(255,255,255,0.3)', fontSize: 12, textAlign: 'right', marginTop: 4 },
-  phoneRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  countryCodeBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 12, height: 52,
-  },
-  countryFlag: { fontSize: 20 },
-  countryCodeText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
-  phoneInput: { flex: 1 },
   cancelBtn: {
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 14, height: 52,
     justifyContent: 'center', alignItems: 'center', marginTop: 8,
   },
   cancelBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '600' },
-  // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end',
-  },
-  pickerSheet: {
-    backgroundColor: '#111827',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '70%',
-  },
-  pickerHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  pickerTitle: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  codeItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
-  },
-  codeItemActive: { backgroundColor: GREEN + '10' },
-  codeFlag: { fontSize: 24 },
-  codeName: { flex: 1, color: '#FFF', fontSize: 15 },
-  codeValue: { color: 'rgba(255,255,255,0.45)', fontSize: 14, fontWeight: '600' },
 });

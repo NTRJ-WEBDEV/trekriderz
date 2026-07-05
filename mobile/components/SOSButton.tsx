@@ -71,7 +71,10 @@ export default function SOSButton({ tripName, location }: Props) {
             Linking.openURL(`tel:${num}`);
             contacts.slice(1).forEach((c) => {
               setTimeout(() => {
-                Linking.openURL(`whatsapp://send?phone=91${c.phone}&text=${encodeURIComponent(msg)}`);
+                // Contact numbers are stored with their own country code (e.g. "+977...");
+                // strip non-digits rather than hardcoding India's "91" prefix.
+                const digits = c.phone.replace(/[^\d]/g, '');
+                Linking.openURL(`whatsapp://send?phone=${digits}&text=${encodeURIComponent(msg)}`);
               }, 1500);
             });
           },
@@ -177,7 +180,7 @@ export default function SOSButton({ tripName, location }: Props) {
                   />
                   <TextInput
                     style={styles.addInput}
-                    placeholder="Phone"
+                    placeholder="+91 98765 43210"
                     placeholderTextColor="rgba(255,255,255,0.3)"
                     keyboardType="phone-pad"
                     value={newPhone}

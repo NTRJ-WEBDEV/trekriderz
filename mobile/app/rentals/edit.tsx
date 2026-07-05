@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 
 const GREEN = '#ADFF2F';
 const RED = '#EF4444';
@@ -82,7 +83,9 @@ export default function EditVehicleScreen() {
   const [pricePerDay, setPricePerDay] = useState('');
   const [location, setLocation] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactPhoneCode, setContactPhoneCode] = useState('+91');
   const [contactWhatsApp, setContactWhatsApp] = useState('');
+  const [contactWhatsAppCode, setContactWhatsAppCode] = useState('+91');
   const [seats, setSeats] = useState('');
   const [fuelIncluded, setFuelIncluded] = useState(false);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
@@ -135,8 +138,14 @@ export default function EditVehicleScreen() {
     setDescription(v.description ?? '');
     setPricePerDay(String(v.price_per_day ?? ''));
     setLocation(v.location ?? '');
-    setContactPhone(v.contact_phone ?? '');
-    setContactWhatsApp(v.contact_whatsapp ?? '');
+    const phoneSplit = splitPhone(v.contact_phone ?? '');
+    setContactPhoneCode(phoneSplit.countryCode);
+    setContactPhone(phoneSplit.number);
+    if (v.contact_whatsapp) {
+      const waSplit = splitPhone(v.contact_whatsapp);
+      setContactWhatsAppCode(waSplit.countryCode);
+      setContactWhatsApp(waSplit.number);
+    }
     setSeats(v.seats ? String(v.seats) : '');
     setFuelIncluded(v.fuel_included ?? false);
     setSelectedFeatures(v.features ?? []);
@@ -257,8 +266,8 @@ export default function EditVehicleScreen() {
       description: description.trim() || null,
       price_per_day: parseInt(pricePerDay),
       location: location.trim(),
-      contact_phone: contactPhone.trim(),
-      contact_whatsapp: contactWhatsApp.trim() || null,
+      contact_phone: `${contactPhoneCode}${contactPhone.trim()}`,
+      contact_whatsapp: contactWhatsApp.trim() ? `${contactWhatsAppCode}${contactWhatsApp.trim()}` : null,
       seats: needsSeats && seats ? parseInt(seats) : null,
       fuel_included: fuelIncluded,
       features: selectedFeatures,
@@ -700,18 +709,17 @@ export default function EditVehicleScreen() {
 
           {/* Contact */}
           <Text style={styles.label}>Contact Phone</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="call-outline" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholderTextColor="rgba(255,255,255,0.25)"
-              placeholder="+91 XXXXXXXXXX" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
-          </View>
+          <PhoneInput
+            countryCode={contactPhoneCode} onChangeCountryCode={setContactPhoneCode}
+            number={contactPhone} onChangeNumber={setContactPhone}
+          />
 
           <Text style={styles.label}>WhatsApp Number</Text>
-          <View style={styles.inputRow}>
-            <Ionicons name="logo-whatsapp" size={16} color="rgba(255,255,255,0.35)" />
-            <TextInput style={styles.inputFlex} placeholderTextColor="rgba(255,255,255,0.25)"
-              placeholder="If different from above" value={contactWhatsApp} onChangeText={setContactWhatsApp} keyboardType="phone-pad" />
-          </View>
+          <PhoneInput
+            countryCode={contactWhatsAppCode} onChangeCountryCode={setContactWhatsAppCode}
+            number={contactWhatsApp} onChangeNumber={setContactWhatsApp}
+            placeholder="If different from above"
+          />
 
           {/* Save */}
           <TouchableOpacity

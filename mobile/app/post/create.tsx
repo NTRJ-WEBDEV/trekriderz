@@ -56,20 +56,9 @@ export default function CreatePostScreen() {
         }
       }
 
-      // 2. Image safety check (before upload — don't waste storage)
+      // Image moderation disabled for now (Gemini quota exhausted, no OpenAI fallback configured)
       if (image) {
         setUploading(true);
-        const imgResult = await moderationAgent.inspectImage(image, user?.id!);
-        if (!imgResult.safe) {
-          setUploading(false);
-          Alert.alert(
-            imgResult.severity === 'flag' ? 'Account Flagged' : 'Image Not Allowed',
-            imgResult.message,
-          );
-          if (imgResult.severity !== 'flag') return;
-          router.replace('/(tabs)');
-          return;
-        }
       }
 
       // 3. Upload image

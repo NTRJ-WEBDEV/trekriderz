@@ -69,15 +69,7 @@ export default function StoryCreateScreen() {
         }
       }
 
-      // Image moderation (video frames aren't sent to the vision API — caption + reports cover video)
-      if (media.type === 'image') {
-        const imgResult = await moderationAgent.inspectImage(media.uri, user.id);
-        if (!imgResult.safe) {
-          Alert.alert(imgResult.severity === 'flag' ? 'Account Flagged' : 'Image Not Allowed', imgResult.message);
-          setPosting(false);
-          return;
-        }
-      }
+      // Image moderation disabled for now (Gemini quota exhausted, no OpenAI fallback configured)
 
       const ext = media.type === 'video' ? 'mp4' : 'jpg';
       const path = `${user.id}/${Date.now()}.${ext}`;

@@ -35,8 +35,8 @@ export default function CreatePostScreen() {
   };
 
   const handlePost = async () => {
-    if (!content.trim() && !image) {
-      Alert.alert('Empty post', 'Please add some text or an image to share your story.');
+    if (!content.trim() && !image && !extractYouTubeId(youtubeUrl)) {
+      Alert.alert('Empty post', 'Please add some text, an image, or a YouTube link to share your story.');
       return;
     }
 

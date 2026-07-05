@@ -70,8 +70,8 @@ export default function CreatePostScreen() {
   };
 
   const handlePost = async () => {
-    if (!content.trim() && images.length === 0) {
-      Alert.alert('Empty Post', 'Please write something or add a photo.');
+    if (!content.trim() && images.length === 0 && !extractYouTubeId(youtubeUrl)) {
+      Alert.alert('Empty Post', 'Please write something, add a photo, or add a YouTube link.');
       return;
     }
 
@@ -213,7 +213,7 @@ export default function CreatePostScreen() {
         {extractYouTubeId(youtubeUrl) && (
           <TouchableOpacity
             style={styles.ytPreview}
-            onPress={() => Linking.openURL(youtubeUrl)}
+            onPress={() => router.push({ pathname: '/watch-video', params: { url: youtubeUrl } })}
             activeOpacity={0.85}
           >
             <Image

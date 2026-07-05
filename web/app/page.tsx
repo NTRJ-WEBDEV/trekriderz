@@ -99,8 +99,8 @@ async function getYoutubeVideos() {
     const { data } = await db()
       .from("youtube_videos")
       .select("*")
-      .order("display_order", { ascending: true })
-      .limit(4);
+      .order("order_index", { ascending: true })
+      .limit(8);
     return data && data.length > 0 ? data : YOUTUBE_SHORTS;
   } catch {
     return YOUTUBE_SHORTS;
@@ -324,23 +324,51 @@ export default async function Home() {
             </a>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {videos.map((v: { id: string; title: string; embedUrl?: string; embed_url?: string }) => (
-              <div key={v.id} className="glass-card rounded-2xl overflow-hidden">
-                <div className="relative aspect-[9/16]">
-                  <iframe
-                    src={v.embedUrl || v.embed_url}
-                    title={v.title}
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
+            {videos.map((v: { id: string; title: string; embedUrl?: string; embed_url?: string; youtube_url?: string }) => {
+              // YouTube Shorts reject the standard /embed/ iframe with "Error 153"
+              // (a YouTube-side restriction, confirmed even navigating directly to
+              // the embed URL). Link out to the real Short instead of showing a
+              // broken player.
+              const isShort = /youtube\.com\/shorts\//.test(v.youtube_url || "");
+              const idMatch = (v.youtube_url || v.embedUrl || v.embed_url || "").match(/(?:shorts\/|embed\/|v=)([a-zA-Z0-9_-]{11})/);
+              const videoId = idMatch?.[1];
+
+              return (
+                <div key={v.id} className="glass-card rounded-2xl overflow-hidden">
+                  <div className="relative aspect-[9/16]">
+                    {isShort && videoId ? (
+                      <a
+                        href={v.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute inset-0 w-full h-full block"
+                      >
+                        <img
+                          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+                          alt={v.title}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <span className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white text-2xl">▶</span>
+                        </span>
+                      </a>
+                    ) : (
+                      <iframe
+                        src={v.embedUrl || v.embed_url}
+                        title={v.title}
+                        className="absolute inset-0 w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        loading="lazy"
+                      />
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <p className="text-white/70 text-xs font-medium line-clamp-1">{v.title}</p>
+                  </div>
                 </div>
-                <div className="p-3">
-                  <p className="text-white/70 text-xs font-medium line-clamp-1">{v.title}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="text-center mt-8">
             <a

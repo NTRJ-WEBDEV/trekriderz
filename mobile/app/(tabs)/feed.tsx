@@ -295,6 +295,7 @@ export default function FeedScreen() {
         },
         images: Array.isArray(p.media) ? p.media : [],
         content: p.content || '',
+        youtube_url: p.youtube_url,
         likes_count: p.likes_count || 0,
         comments_count: p.comments_count || 0,
         timestamp: new Date(p.created_at).toLocaleDateString(),

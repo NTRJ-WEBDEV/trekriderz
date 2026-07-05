@@ -152,6 +152,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile/edit" />
         <Stack.Screen name="post/create" />
         <Stack.Screen name="create-post" />
+        <Stack.Screen name="watch-video" />
         <Stack.Screen name="discover" />
         <Stack.Screen name="community/index" />
         <Stack.Screen name="community/[id]" />

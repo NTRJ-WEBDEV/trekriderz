@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, ActivityIndicator, Modal, Pressable,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -28,6 +28,8 @@ const VISIBILITY_OPTIONS = [
 ];
 
 export default function CreateStoryScreen() {
+  const { id: editId } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = !!editId;
   const user = useAuthStore((s) => s.user);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -37,9 +39,31 @@ export default function CreateStoryScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(isEditing);
   const [uploadingText, setUploadingText] = useState('');
 
   const MAX_PHOTOS = 5;
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const { data } = await supabase
+        .from('posts')
+        .select('title, content, location, tags, media, visibility')
+        .eq('id', editId)
+        .single();
+
+      if (data) {
+        setTitle(data.title || '');
+        setContent(data.content || '');
+        setLocation(data.location || '');
+        setSelectedTags(data.tags || []);
+        setVisibility(data.visibility || 'public');
+        setPhotos(Array.isArray(data.media) ? data.media : []);
+      }
+      setLoadingExisting(false);
+    })();
+  }, [editId]);
 
   const toggleTag = (tag: string) => {
     haptic.light();
@@ -93,9 +117,13 @@ export default function CreateStoryScreen() {
     setLoading(true);
 
     try {
-      // Upload photos
+      // Upload only newly-picked local photos; already-hosted URLs (editing) pass through untouched
       const uploadedUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
+        if (/^https?:\/\//.test(photos[i])) {
+          uploadedUrls.push(photos[i]);
+          continue;
+        }
         setUploadingText(`Uploading photo ${i + 1} of ${photos.length}…`);
         const ext = photos[i].split('.').pop()?.toLowerCase() || 'jpg';
         const path = `${user.id}/${Date.now()}_story_${i}.${ext}`;
@@ -103,27 +131,33 @@ export default function CreateStoryScreen() {
         if (url) uploadedUrls.push(url);
       }
 
-      setUploadingText('Publishing story…');
+      setUploadingText(isEditing ? 'Saving changes…' : 'Publishing story…');
 
-      const { error } = await supabase.from('posts').insert({
-        user_id: user.id,
-        post_type: 'trip_story',
+      const payload = {
         title: title.trim(),
         content: content.trim(),
         media: uploadedUrls,
         location: location.trim() || null,
         tags: selectedTags.length > 0 ? selectedTags : null,
         visibility,
-      });
+      };
+
+      const { error } = isEditing
+        ? await supabase.from('posts').update(payload).eq('id', editId)
+        : await supabase.from('posts').insert({ ...payload, user_id: user.id, post_type: 'trip_story' });
 
       if (error) throw error;
 
       haptic.success();
-      Alert.alert(
-        'Story Published! 🎉',
-        'Your journey is now live for the TrekRiderz community.',
-        [{ text: 'View Stories', onPress: () => router.replace('/stories' as any) }],
-      );
+      if (isEditing) {
+        router.back();
+      } else {
+        Alert.alert(
+          'Story Published! 🎉',
+          'Your journey is now live for the TrekRiderz community.',
+          [{ text: 'View Stories', onPress: () => router.replace('/stories' as any) }],
+        );
+      }
     } catch (err: any) {
       Alert.alert('Failed to publish', err.message || 'Something went wrong. Try again.');
     } finally {
@@ -135,6 +169,14 @@ export default function CreateStoryScreen() {
   const coverPhoto = photos[0];
   const canAddMore = photos.length < MAX_PHOTOS;
 
+  if (loadingExisting) {
+    return (
+      <View style={[styles.container, styles.loadingCenter]}>
+        <ActivityIndicator size="large" color={ACCENT} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <SafeAreaView edges={['top']}>
@@ -142,7 +184,7 @@ export default function CreateStoryScreen() {
           <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} disabled={loading}>
             <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Write a Story</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Story' : 'Write a Story'}</Text>
           <TouchableOpacity
             style={[styles.publishBtn, (!title.trim() || !content.trim() || loading) && styles.publishBtnDisabled]}
             onPress={handlePublish}
@@ -151,7 +193,7 @@ export default function CreateStoryScreen() {
             {loading ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.publishBtnText}>Publish</Text>
+              <Text style={styles.publishBtnText}>{isEditing ? 'Save' : 'Publish'}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -326,6 +368,7 @@ export default function CreateStoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
+  loadingCenter: { alignItems: 'center', justifyContent: 'center' },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

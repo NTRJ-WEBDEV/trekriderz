@@ -167,6 +167,10 @@ export default function ProfileScreen() {
           <MenuItem icon="notifications-outline" title="Push Notifications" onPress={() => router.push('/notification-preferences' as any)} />
           <MenuItem icon="cloud-offline-outline" title="Offline Cache Management" onPress={() => {}} />
 
+          <Text style={styles.sectionLabel}>Content</Text>
+          <MenuItem icon="images-outline" title="Manage Posts" subtitle="Edit or delete your feed posts" onPress={() => router.push('/profile/manage-posts' as any)} />
+          <MenuItem icon="book-outline" title="Manage Travel Stories" subtitle="Edit or delete your travel stories" onPress={() => router.push('/profile/manage-stories' as any)} />
+
           <Text style={styles.sectionLabel}>Guide</Text>
           {!guideProfile ? (
             <MenuItem

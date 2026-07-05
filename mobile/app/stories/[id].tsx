@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Dimensions, Share,
+  ActivityIndicator, Dimensions, Share, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,14 @@ import { translateText } from '@/lib/translate';
 const { width } = Dimensions.get('window');
 const ACCENT = '#EC4899';
 const BG = '#080C14';
+
+const REPORT_REASONS = [
+  'Nudity or sexual content',
+  'Harassment or bullying',
+  'Hate speech',
+  'Spam or scam',
+  'Other',
+];
 
 type Story = {
   id: string;
@@ -77,6 +85,7 @@ export default function StoryDetailScreen() {
   const [translatedTitle, setTranslatedTitle] = useState<string | null>(null);
   const [translatedContent, setTranslatedContent] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -147,6 +156,61 @@ export default function StoryDetailScreen() {
     setTranslating(false);
   };
 
+  const submitReport = async (reason: string) => {
+    setReportVisible(false);
+    if (!user?.id) return;
+    try {
+      const { error } = await supabase.from('post_reports').insert({
+        post_id: id,
+        reporter_id: user.id,
+        reason,
+      });
+      if (error) {
+        if (error.code === '23505') {
+          Alert.alert('Already reported', "You've already reported this story. Our team will review it.");
+          return;
+        }
+        throw error;
+      }
+      Alert.alert('Thanks for reporting', "We'll review this soon.");
+    } catch {
+      Alert.alert('Error', 'Could not submit report. Please try again.');
+    }
+  };
+
+  const handleDelete = () => {
+    Alert.alert('Delete Story', 'Are you sure? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            const { error } = await supabase.from('posts').delete().eq('id', id);
+            if (error) throw error;
+            router.back();
+          } catch {
+            Alert.alert('Error', 'Could not delete story.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleOptions = () => {
+    const isOwn = story?.user_id === user?.id;
+    if (isOwn) {
+      Alert.alert('Story Options', undefined, [
+        { text: 'Edit Story', onPress: () => router.push(`/stories/create?id=${id}` as any) },
+        { text: 'Delete Story', style: 'destructive', onPress: handleDelete },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    } else {
+      Alert.alert('Story Options', undefined, [
+        { text: 'Report', onPress: () => setReportVisible(true) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -203,6 +267,9 @@ export default function StoryDetailScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.circleBtn} onPress={handleShare}>
                   <Ionicons name="share-outline" size={20} color="#FFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.circleBtn} onPress={handleOptions}>
+                  <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -297,6 +364,20 @@ export default function StoryDetailScreen() {
           <View style={{ height: 32 }} />
         </View>
       </ScrollView>
+
+      {reportVisible && (
+        <View style={styles.reportSheet}>
+          <Text style={styles.reportTitle}>Report Story</Text>
+          {REPORT_REASONS.map((reason) => (
+            <TouchableOpacity key={reason} style={styles.reportRow} onPress={() => submitReport(reason)}>
+              <Text style={styles.reportRowText}>{reason}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.reportCancel} onPress={() => setReportVisible(false)}>
+            <Text style={styles.reportCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -388,4 +469,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.07)',
     alignItems: 'center', justifyContent: 'center',
   },
+
+  reportSheet: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: '#111', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 20, paddingBottom: 32,
+  },
+  reportTitle: { color: '#FFF', fontWeight: '800', fontSize: 16, marginBottom: 12 },
+  reportRow: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  reportRowText: { color: '#FFF', fontSize: 14.5 },
+  reportCancel: { paddingVertical: 14, alignItems: 'center' },
+  reportCancelText: { color: ACCENT, fontWeight: '700', fontSize: 14.5 },
 });

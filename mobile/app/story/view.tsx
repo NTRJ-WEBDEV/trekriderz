@@ -159,6 +159,28 @@ export default function StoryViewScreen() {
     }
   };
 
+  const deleteStory = () => {
+    if (!current) return;
+    Alert.alert('Delete Story', 'This story will be removed immediately. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            const { error } = await supabase.from('stories_24h').delete().eq('id', current.id);
+            if (error) throw error;
+            setStories((prev) => {
+              const next = prev.filter((s) => s.id !== current.id);
+              if (next.length === 0) router.back();
+              return next;
+            });
+          } catch {
+            Alert.alert('Error', 'Could not delete story.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return <View style={styles.overlay} />;
   }
@@ -204,10 +226,17 @@ export default function StoryViewScreen() {
           <Text style={styles.timer}>· {timeAgo(current.created_at)}</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            onPress={() => Alert.alert('Story Options', undefined, [
-              { text: 'Report', onPress: () => setReportVisible(true) },
-              { text: 'Cancel', style: 'cancel' },
-            ])}
+            onPress={() => Alert.alert('Story Options', undefined,
+              current.user_id === user?.id
+                ? [
+                    { text: 'Delete', style: 'destructive', onPress: deleteStory },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]
+                : [
+                    { text: 'Report', onPress: () => setReportVisible(true) },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]
+            )}
             style={styles.iconBtn}
           >
             <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />

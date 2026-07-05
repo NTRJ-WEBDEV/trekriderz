@@ -218,11 +218,16 @@ export default function StoryViewScreen() {
 
         {/* Header */}
         <View style={styles.headerRow}>
-          <Image
-            source={{ uri: params.avatar || `https://ui-avatars.com/api/?name=${params.name || 'U'}` }}
-            style={styles.avatar}
-          />
-          <Text style={styles.userName} numberOfLines={1}>{params.name || 'Traveler'}</Text>
+          <TouchableOpacity
+            style={styles.headerUserTouch}
+            onPress={() => router.push(`/user/${current.user_id}` as any)}
+          >
+            <Image
+              source={{ uri: params.avatar || `https://ui-avatars.com/api/?name=${params.name || 'U'}` }}
+              style={styles.avatar}
+            />
+            <Text style={styles.userName} numberOfLines={1}>{params.name || 'Traveler'}</Text>
+          </TouchableOpacity>
           <Text style={styles.timer}>· {timeAgo(current.created_at)}</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
@@ -308,6 +313,7 @@ const styles = StyleSheet.create({
   progressTrack: { flex: 1, height: 2.5, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#FFF' },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  headerUserTouch: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#FFF' },
   userName: { color: '#FFF', fontWeight: '700', fontSize: 13.5, maxWidth: 140 },
   timer: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },

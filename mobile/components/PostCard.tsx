@@ -18,6 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { usePostRealtime } from '@/hooks/usePostRealtime';
@@ -310,16 +311,22 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
     <View style={[styles.card, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Image
-          source={{ uri: post.user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user.name}` }}
-          style={styles.avatar}
-        />
-        <View style={styles.userInfo}>
-          <Text style={[styles.userName, { color: colors.text }]}>{post.user.name}</Text>
-          {post.location && (
-            <Text style={[styles.location, { color: colors.subtext }]}>{post.location}</Text>
-          )}
-        </View>
+        <TouchableOpacity
+          style={styles.headerUserRow}
+          onPress={() => router.push(`/user/${post.user.id}` as any)}
+          activeOpacity={0.7}
+        >
+          <Image
+            source={{ uri: post.user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.user.name}` }}
+            style={styles.avatar}
+          />
+          <View style={styles.userInfo}>
+            <Text style={[styles.userName, { color: colors.text }]}>{post.user.name}</Text>
+            {post.location && (
+              <Text style={[styles.location, { color: colors.subtext }]}>{post.location}</Text>
+            )}
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity onPress={handleOptions}>
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.subtext} />
         </TouchableOpacity>
@@ -403,7 +410,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
         {/* Caption */}
         {caption ? (
           <Text style={[styles.caption, { color: colors.text }]}>
-            <Text style={styles.captionUser}>{post.user.name} </Text>
+            <Text style={styles.captionUser} onPress={() => router.push(`/user/${post.user.id}` as any)}>{post.user.name} </Text>
             {caption}
           </Text>
         ) : null}
@@ -452,14 +459,18 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
                 }
                 renderItem={({ item }) => (
                   <View style={styles.commentRow}>
-                    <Image
-                      source={{ uri: item.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.user_id}` }}
-                      style={styles.commentAvatar}
-                    />
+                    <TouchableOpacity onPress={() => router.push(`/user/${item.user_id}` as any)}>
+                      <Image
+                        source={{ uri: item.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.user_id}` }}
+                        style={styles.commentAvatar}
+                      />
+                    </TouchableOpacity>
                     <View style={styles.commentContent}>
-                      <Text style={[styles.commentUser, { color: colors.text }]}>
-                        {item.users?.full_name ?? 'User'}
-                      </Text>
+                      <TouchableOpacity onPress={() => router.push(`/user/${item.user_id}` as any)}>
+                        <Text style={[styles.commentUser, { color: colors.text }]}>
+                          {item.users?.full_name ?? 'User'}
+                        </Text>
+                      </TouchableOpacity>
                       <Text style={[styles.commentText, { color: colors.text }]}>{item.content}</Text>
                     </View>
                   </View>
@@ -567,6 +578,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
+    gap: 10,
+  },
+  headerUserRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   avatar: {

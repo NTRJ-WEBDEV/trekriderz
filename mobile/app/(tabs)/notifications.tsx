@@ -147,6 +147,41 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handleFollowRespond = async (notif: Notification, action: 'accepted' | 'declined') => {
+    if (!user || actionLoading) return;
+    const followerId = notif.sender_id;
+    if (!followerId) {
+      Alert.alert('Error', 'Missing follower information');
+      return;
+    }
+
+    setActionLoading(notif.id);
+    try {
+      if (action === 'accepted') {
+        const { error } = await supabase
+          .from('user_follows')
+          .update({ status: 'accepted' })
+          .eq('follower_id', followerId)
+          .eq('following_id', user.id);
+        if (error) throw error;
+      } else {
+        await supabase
+          .from('user_follows')
+          .delete()
+          .eq('follower_id', followerId)
+          .eq('following_id', user.id);
+      }
+
+      await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
+      fetchNotifications();
+    } catch (error) {
+      console.error('Error responding to follow request:', error);
+      Alert.alert('Error', 'Failed to respond to follow request');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
@@ -176,13 +211,17 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }: { item: Notification }) => {
     const isInvite = item.type === 'trip_invite';
+    const isFollowRequest = item.type === 'follow' && !!item.sender_id;
     const msg = item.message || item.content;
     const iconColor = getIconColor(item.type);
 
     return (
       <TouchableOpacity
         activeOpacity={0.75}
-        onPress={() => !item.is_read && markRead(item.id)}
+        onPress={() => {
+          if (!item.is_read) markRead(item.id);
+          if (item.type === 'follow' && item.sender_id) router.push(`/user/${item.sender_id}` as any);
+        }}
         style={[styles.notificationItem, !item.is_read && styles.unread]}
       >
         {!item.is_read && <View style={styles.unreadDot} />}
@@ -214,6 +253,29 @@ export default function NotificationsScreen() {
               <TouchableOpacity
                 style={[styles.btn, styles.declineBtn]}
                 onPress={() => handleRespond(item, 'declined')}
+                disabled={!!actionLoading}
+              >
+                <Text style={[styles.btnText, { color: '#EF4444' }]}>Decline</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isFollowRequest && !item.is_read && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.btn, styles.acceptBtn]}
+                onPress={() => handleFollowRespond(item, 'accepted')}
+                disabled={!!actionLoading}
+              >
+                {actionLoading === item.id ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.btnText}>Accept</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.declineBtn]}
+                onPress={() => handleFollowRespond(item, 'declined')}
                 disabled={!!actionLoading}
               >
                 <Text style={[styles.btnText, { color: '#EF4444' }]}>Decline</Text>

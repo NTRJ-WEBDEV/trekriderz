@@ -128,7 +128,12 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.name}>{profile?.full_name || 'Adventurer'}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{profile?.full_name || 'Adventurer'}</Text>
+            {profile?.is_verified && (
+              <Ionicons name="checkmark-circle" size={19} color="#3897F0" style={styles.verifiedIcon} />
+            )}
+          </View>
           <Text style={styles.email}>{user?.email}</Text>
           {profile?.bio ? (
             <Text style={styles.bio}>{profile.bio}</Text>
@@ -387,13 +392,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: BG,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 2,
+  },
   name: {
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: '700',
     letterSpacing: 0.2,
-    marginBottom: 2,
   },
+  verifiedIcon: { marginTop: 1 },
   email: {
     color: 'rgba(255,255,255,0.4)',
     fontSize: 13,

@@ -92,8 +92,13 @@ function StoryCard({ item, index }: { item: Story; index: number }) {
         )}
 
         <View style={styles.cardMeta}>
-          <Image source={{ uri: avatarUri }} style={styles.authorAvatar} contentFit="cover" />
-          <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
+          <TouchableOpacity
+            style={styles.authorTouch}
+            onPress={(e) => { e.stopPropagation(); haptic.light(); router.push(`/user/${item.user_id}` as any); }}
+          >
+            <Image source={{ uri: avatarUri }} style={styles.authorAvatar} contentFit="cover" />
+            <Text style={styles.authorName} numberOfLines={1}>{authorName}</Text>
+          </TouchableOpacity>
           <Text style={styles.metaDot}>·</Text>
           <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.35)" />
           <Text style={styles.metaText}>{mins} min read</Text>
@@ -273,6 +278,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 5,
     flexWrap: 'nowrap',
   },
+  authorTouch: { flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 },
   authorAvatar: { width: 20, height: 20, borderRadius: 10 },
   authorName: {
     fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '600',

@@ -298,13 +298,18 @@ export default function StoryDetailScreen() {
 
           {/* Author row */}
           <View style={styles.authorRow}>
-            <Image source={{ uri: avatarUri }} style={styles.authorAvatar} contentFit="cover" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.authorName}>{authorName}</Text>
-              <Text style={styles.authorMeta}>
-                {timeAgo(story.created_at)}  ·  {readTime(story.content)} min read
-              </Text>
-            </View>
+            <TouchableOpacity
+              style={styles.authorTouch}
+              onPress={() => router.push(`/user/${story.user_id}` as any)}
+            >
+              <Image source={{ uri: avatarUri }} style={styles.authorAvatar} contentFit="cover" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.authorName}>{authorName}</Text>
+                <Text style={styles.authorMeta}>
+                  {timeAgo(story.created_at)}  ·  {readTime(story.content)} min read
+                </Text>
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.likeBtn, liked && styles.likeBtnActive]}
               onPress={toggleLike}
@@ -425,6 +430,7 @@ const styles = StyleSheet.create({
   authorRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16,
   },
+  authorTouch: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   authorAvatar: { width: 42, height: 42, borderRadius: 21 },
   authorName: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   authorMeta: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 },

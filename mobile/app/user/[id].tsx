@@ -33,7 +33,7 @@ export default function UserProfileScreen() {
     setLoading(true);
     try {
       const [profileRes, tripsRes, followersRes, followingRes, myFollowRes] = await Promise.all([
-        supabase.from('users').select('id, full_name, avatar_url, bio, location, role, created_at').eq('id', targetId).single(),
+        supabase.from('users').select('id, full_name, avatar_url, bio, location, role, is_verified, created_at').eq('id', targetId).single(),
         supabase.from('trips').select('id', { count: 'exact', head: true }).eq('created_by', targetId),
         supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', targetId).eq('status', 'accepted'),
         supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('follower_id', targetId).eq('status', 'accepted'),
@@ -59,18 +59,28 @@ export default function UserProfileScreen() {
     setFollowing(true);
     try {
       if (followStatus !== 'none') {
+        // Cancel a pending request, or unfollow if already accepted
         await supabase.from('user_follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
         setFollowStatus('none');
-        setStats(prev => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+        if (followStatus === 'accepted') {
+          setStats(prev => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
+        }
       } else {
         const { error } = await supabase.from('user_follows').insert({
           follower_id: user.id,
           following_id: targetId,
-          status: 'accepted',
+          status: 'pending',
         });
         if (error) throw error;
-        setFollowStatus('accepted');
-        setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
+        await supabase.from('notifications').insert({
+          user_id: targetId,
+          sender_id: user.id,
+          type: 'follow',
+          title: 'New Follow Request',
+          message: 'wants to follow you',
+          related_id: user.id,
+        });
+        setFollowStatus('pending');
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not update follow status');
@@ -126,7 +136,12 @@ export default function UserProfileScreen() {
             size={88}
             style={styles.avatar}
           />
-          <Text style={styles.name}>{profile.full_name || 'Traveler'}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{profile.full_name || 'Traveler'}</Text>
+            {profile.is_verified && (
+              <Ionicons name="checkmark-circle" size={19} color="#3897F0" style={styles.verifiedIcon} />
+            )}
+          </View>
           {profile.location && (
             <View style={styles.locationRow}>
               <Ionicons name="location-outline" size={13} color={GREEN} />
@@ -234,7 +249,9 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 60 },
   profileHeader: { alignItems: 'center', paddingTop: 28, paddingBottom: 20, paddingHorizontal: 24 },
   avatar: { borderWidth: 3, borderColor: GREEN, marginBottom: 16 },
-  name: { color: '#FFF', fontSize: 22, fontWeight: '800', marginBottom: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  name: { color: '#FFF', fontSize: 22, fontWeight: '800' },
+  verifiedIcon: { marginTop: 1 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
   locationText: { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
   bio: { color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', lineHeight: 20 },

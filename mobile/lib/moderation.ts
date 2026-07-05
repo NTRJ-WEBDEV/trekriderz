@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ─── Offensive / Harmful Words ────────────────────────────────────────────────
 // Covers: English profanity, common Hindi/Hinglish abuse, slurs, threats, sexual terms.

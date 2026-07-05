@@ -19,7 +19,7 @@ import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchWeatherOpenMeteo } from '@/lib/weather';
-import { searchPlaces } from '@/lib/geocoding';
+import { searchPlaces, reverseGeocode } from '@/lib/geocoding';
 import PostCard from '@/components/PostCard';
 
 // ── Weather Strip ────────────────────────────────────────────────────────────
@@ -84,11 +84,14 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          const w = await fetchWeatherOpenMeteo(loc.coords.latitude, loc.coords.longitude);
+          const [w, placeName] = await Promise.all([
+            fetchWeatherOpenMeteo(loc.coords.latitude, loc.coords.longitude),
+            reverseGeocode(loc.coords.longitude, loc.coords.latitude),
+          ]);
           if (w && active) {
             result.push({
               id: 'current',
-              label: 'My Location',
+              label: placeName?.split(',')[0] || 'My Location',
               temp: w.currentTemp,
               condition: w.condition,
               icon: w.icon,

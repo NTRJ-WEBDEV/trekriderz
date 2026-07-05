@@ -119,16 +119,8 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Profile */}
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person-outline" size={size} color={color} />
-            ),
-          }}
-        />
+        {/* Profile — reachable via the avatar in the Home header, not a bottom tab */}
+        <Tabs.Screen name="profile" options={{ href: null }} />
 
         {/* Admin — visible only to admins */}
         <Tabs.Screen

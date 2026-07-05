@@ -76,7 +76,7 @@ export default function CreatePostScreen() {
       let imageUrl = null;
       if (image) {
         const path = `${user?.id}/${Date.now()}.jpg`;
-        imageUrl = await uploadImage('posts', path, image);
+        imageUrl = await uploadImage('feed-posts', path, image);
         setUploading(false);
       }
 

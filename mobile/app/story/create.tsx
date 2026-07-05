@@ -80,9 +80,9 @@ export default function StoryCreateScreen() {
       }
 
       const ext = media.type === 'video' ? 'mp4' : 'jpg';
-      const path = `stories/${user.id}/${Date.now()}.${ext}`;
+      const path = `${user.id}/${Date.now()}.${ext}`;
       const contentType = media.type === 'video' ? 'video/mp4' : 'image/jpeg';
-      const mediaUrl = await uploadMedia('posts', path, media.uri, contentType);
+      const mediaUrl = await uploadMedia('feed-stories', path, media.uri, contentType);
 
       if (!mediaUrl) throw new Error('Upload failed');
 

@@ -99,7 +99,7 @@ export default function CreateStoryScreen() {
         setUploadingText(`Uploading photo ${i + 1} of ${photos.length}…`);
         const ext = photos[i].split('.').pop()?.toLowerCase() || 'jpg';
         const path = `${user.id}/${Date.now()}_story_${i}.${ext}`;
-        const url = await uploadImage('posts', path, photos[i]);
+        const url = await uploadImage('travel-stories', path, photos[i]);
         if (url) uploadedUrls.push(url);
       }
 

@@ -2,7 +2,15 @@ import { useRef, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export type MarkerKind = 'homestay' | 'guide' | 'expedition' | 'member' | 'destination';
+export type MarkerKind = 'homestay' | 'guide' | 'expedition' | 'member' | 'destination' | 'poi';
+
+// Points-of-interest (waterfalls, viewpoints, peaks, etc.) all share the
+// single 'poi' MarkerKind above — the specific category (and its emoji/color)
+// is carried in `extra.category` instead of growing MarkerKind by one value
+// per category. Keep this list in sync with the `pois.category` CHECK
+// constraint in the DB migration.
+export const POI_CATEGORIES = ['waterfall', 'viewpoint', 'peak', 'campsite', 'temple', 'other'] as const;
+export type PoiCategory = typeof POI_CATEGORIES[number];
 
 export interface MapMarker {
   id: string;
@@ -66,6 +74,15 @@ function buildMapHtml(
     animation:pulse 2s infinite;
   }
 
+  /* POI categories — distinct background per category so peaks, viewpoints,
+     campsites etc. are visually distinguishable on the map at a glance. */
+  .poi-waterfall { background:#0EA5E9; }
+  .poi-viewpoint { background:#F59E0B; }
+  .poi-peak      { background:#78716C; }
+  .poi-campsite  { background:#16A34A; }
+  .poi-temple    { background:#DC2626; }
+  .poi-other     { background:#6B7280; }
+
   @keyframes pulse {
     0%  { box-shadow:0 0 0 0   rgba(59,130,246,0.4); }
     70% { box-shadow:0 0 0 10px rgba(59,130,246,0); }
@@ -97,6 +114,14 @@ function buildMapHtml(
   .kind-expedition{ color:#8CC63F; }
   .kind-destination{ color:#8CC63F; }
   .kind-member    { color:#3B82F6; }
+
+  /* POI popup accent colors, mirroring the .poi-<category> pin backgrounds. */
+  .kind-poi-waterfall { color:#0EA5E9; }
+  .kind-poi-viewpoint { color:#F59E0B; }
+  .kind-poi-peak      { color:#78716C; }
+  .kind-poi-campsite  { color:#16A34A; }
+  .kind-poi-temple    { color:#DC2626; }
+  .kind-poi-other     { color:#6B7280; }
 </style>
 </head>
 <body>
@@ -125,11 +150,27 @@ function buildMapHtml(
   var EMOJI = { homestay:'🏠', guide:'👤', expedition:'⛰️', destination:'📍', member:'🧑' };
   var KIND_LABEL = { homestay:'Homestay', guide:'Guide', expedition:'Expedition', destination:'Destination', member:'Member' };
 
-  MARKERS.forEach(function(m) {
+  // POI category -> emoji/label, keyed off m.extra.category rather than m.kind
+  // (m.kind is just 'poi' for all of these).
+  var POI_EMOJI = { waterfall:'💧', viewpoint:'🌄', peak:'⛰️', campsite:'⛺', temple:'🛕', other:'📍' };
+  var POI_LABEL = { waterfall:'Waterfall', viewpoint:'Viewpoint', peak:'Peak', campsite:'Campsite', temple:'Temple', other:'Place' };
+
+  MARKERS.forEach(function(m, idx) {
     if (!m.lat || !m.lng) return;
 
-    var emoji = EMOJI[m.kind] || '📍';
-    var mkClass = 'mk-' + m.kind;
+    var emoji, mkClass, popupKindClass, kindLabelText;
+    if (m.kind === 'poi') {
+      var cat = (m.extra && m.extra.category) || 'other';
+      emoji = POI_EMOJI[cat] || '📍';
+      mkClass = 'poi-' + cat;
+      popupKindClass = 'kind-poi-' + cat;
+      kindLabelText = POI_LABEL[cat] || 'Place';
+    } else {
+      emoji = EMOJI[m.kind] || '📍';
+      mkClass = 'mk-' + m.kind;
+      popupKindClass = 'kind-' + m.kind;
+      kindLabelText = KIND_LABEL[m.kind] || m.kind;
+    }
 
     var icon = L.divIcon({
       html: '<div class="marker-wrap ' + mkClass + '">' + emoji + '</div>',
@@ -143,12 +184,12 @@ function buildMapHtml(
 
     var popupHtml =
       '<div class="pop">' +
-        '<div class="pop-kind kind-' + m.kind + '">' + (KIND_LABEL[m.kind] || m.kind) + '</div>' +
+        '<div class="pop-kind ' + popupKindClass + '">' + kindLabelText + '</div>' +
         '<div class="pop-name">' + m.name + '</div>' +
         (m.sublabel ? '<div class="pop-sub">' + m.sublabel + '</div>' : '') +
         (m.price    ? '<div class="pop-price">' + m.price + '</div>' : '') +
         starsHtml +
-        '<button class="pop-btn" onclick="tapMarker(' + JSON.stringify(JSON.stringify(m)) + ')">View Details →</button>' +
+        '<button class="pop-btn" onclick="tapMarker(' + idx + ')">View Details →</button>' +
       '</div>';
 
     var marker = L.marker([m.lat, m.lng], { icon:icon }).addTo(map);
@@ -156,8 +197,14 @@ function buildMapHtml(
     marker.on('click', function() { marker.openPopup(); });
   });
 
-  window.tapMarker = function(jsonStr) {
-    var m = JSON.parse(jsonStr);
+  // Look the marker up by index in MARKERS rather than round-tripping it
+  // through the onclick HTML attribute as embedded JSON — a JSON string
+  // wrapped in double quotes contains literal " characters that HTML (which
+  // doesn't understand JS backslash-escaping) treats as the end of the
+  // attribute, silently truncating onclick to "tapMarker(" and breaking the
+  // button for every marker kind.
+  window.tapMarker = function(idx) {
+    var m = MARKERS[idx];
     window.ReactNativeWebView.postMessage(JSON.stringify({ type:'markerTap', marker:m }));
   };
 

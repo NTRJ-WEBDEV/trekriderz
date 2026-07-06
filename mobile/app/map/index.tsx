@@ -10,7 +10,7 @@ import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { searchPlaces } from '@/lib/geocoding';
 import { fetchWeatherOpenMeteo, WeatherData } from '@/lib/weather';
-import ExploreMapView, { MapMarker, MarkerKind } from '@/components/ExploreMapView';
+import ExploreMapView, { MapMarker, MarkerKind, PoiCategory } from '@/components/ExploreMapView';
 
 const WEATHER_EMOJI: Record<string, string> = {
   sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
@@ -24,6 +24,7 @@ const FILTERS: { kind: FilterKind; label: string; emoji: string }[] = [
   { kind: 'homestay',  label: 'Homestays',  emoji: '🏠' },
   { kind: 'guide',     label: 'Guides',     emoji: '👤' },
   { kind: 'expedition',label: 'Expeditions',emoji: '⛰️' },
+  { kind: 'poi',       label: 'Places',     emoji: '📍' },
 ];
 
 interface SelectedMarker extends MapMarker {
@@ -154,6 +155,28 @@ export default function ExploreMapScreen() {
       }
     } catch (_) {}
 
+    // Points of interest — waterfalls, viewpoints, peaks, campsites (curated + OSM-seeded)
+    try {
+      const { data: pois } = await supabase
+        .from('pois')
+        .select('id, name, category, lat, lng, description')
+        .eq('status', 'approved')
+        .limit(200);
+
+      for (const p of pois || []) {
+        if (!p.lat || !p.lng) continue;
+        markers.push({
+          id: p.id,
+          kind: 'poi',
+          name: p.name,
+          lat: p.lat,
+          lng: p.lng,
+          sublabel: p.description,
+          extra: { category: p.category },
+        });
+      }
+    } catch (_) {}
+
     setAllMarkers(markers);
     setLoading(false);
   }, []);
@@ -193,7 +216,10 @@ export default function ExploreMapScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <TouchableOpacity
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          style={styles.headerBtn}
+        >
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -276,9 +302,9 @@ export default function ExploreMapScreen() {
             <View style={styles.sheetHandle} />
 
             <View style={styles.sheetKindRow}>
-              <View style={[styles.sheetKindBadge, { backgroundColor: kindColor(selected.kind) + '22' }]}>
-                <Text style={[styles.sheetKindText, { color: kindColor(selected.kind) }]}>
-                  {kindEmoji(selected.kind)} {kindLabel(selected.kind)}
+              <View style={[styles.sheetKindBadge, { backgroundColor: kindColor(selected.kind, selected.extra?.category as PoiCategory) + '22' }]}>
+                <Text style={[styles.sheetKindText, { color: kindColor(selected.kind, selected.extra?.category as PoiCategory) }]}>
+                  {kindEmoji(selected.kind, selected.extra?.category as PoiCategory)} {kindLabel(selected.kind, selected.extra?.category as PoiCategory)}
                 </Text>
               </View>
             </View>
@@ -302,11 +328,13 @@ export default function ExploreMapScreen() {
             )}
 
             <View style={styles.sheetActions}>
-              <TouchableOpacity style={styles.sheetBtnPrimary} onPress={handleViewDetails}>
-                <Text style={styles.sheetBtnPrimaryText}>
-                  {selected.kind === 'guide' ? 'Book Guide' : selected.kind === 'homestay' ? 'Book Stay' : 'View Expedition'}
-                </Text>
-              </TouchableOpacity>
+              {selected.kind !== 'poi' && (
+                <TouchableOpacity style={styles.sheetBtnPrimary} onPress={handleViewDetails}>
+                  <Text style={styles.sheetBtnPrimaryText}>
+                    {selected.kind === 'guide' ? 'Book Guide' : selected.kind === 'homestay' ? 'Book Stay' : 'View Expedition'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.sheetBtnSecondary}
                 onPress={() => {
@@ -340,20 +368,37 @@ function WeatherInline({ lat, lng }: { lat: number; lng: number }) {
   );
 }
 
-function kindColor(kind: MarkerKind): string {
-  const map: Record<MarkerKind, string> = {
+// POI category -> emoji/color/label, mirroring the lookups inside
+// ExploreMapView.tsx's injected Leaflet template (kept in sync manually since
+// one lives in TS and the other in an HTML template string).
+const POI_COLOR: Record<PoiCategory, string> = {
+  waterfall: '#0EA5E9', viewpoint: '#F59E0B', peak: '#78716C',
+  campsite: '#16A34A', temple: '#DC2626', other: '#6B7280',
+};
+const POI_EMOJI: Record<PoiCategory, string> = {
+  waterfall: '💧', viewpoint: '🌄', peak: '⛰️', campsite: '⛺', temple: '🛕', other: '📍',
+};
+const POI_LABEL: Record<PoiCategory, string> = {
+  waterfall: 'Waterfall', viewpoint: 'Viewpoint', peak: 'Peak', campsite: 'Campsite', temple: 'Temple', other: 'Place',
+};
+
+function kindColor(kind: MarkerKind, category?: PoiCategory): string {
+  if (kind === 'poi') return POI_COLOR[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
     homestay: '#F97316', guide: '#8B5CF6', expedition: '#8CC63F', member: '#3B82F6', destination: '#8CC63F',
   };
   return map[kind] || '#8CC63F';
 }
-function kindEmoji(kind: MarkerKind): string {
-  const map: Record<MarkerKind, string> = {
+function kindEmoji(kind: MarkerKind, category?: PoiCategory): string {
+  if (kind === 'poi') return POI_EMOJI[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
     homestay: '🏠', guide: '👤', expedition: '⛰️', member: '🧑', destination: '📍',
   };
   return map[kind] || '📍';
 }
-function kindLabel(kind: MarkerKind): string {
-  const map: Record<MarkerKind, string> = {
+function kindLabel(kind: MarkerKind, category?: PoiCategory): string {
+  if (kind === 'poi') return POI_LABEL[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
     homestay: 'Homestay', guide: 'Guide', expedition: 'Expedition', member: 'Member', destination: 'Destination',
   };
   return map[kind] || kind;

@@ -231,6 +231,13 @@ export default function ExploreMapScreen() {
             </Text>
           )}
         </View>
+        <TouchableOpacity
+          onPress={() => router.push('/poi/submit' as any)}
+          style={styles.headerBtn}
+          accessibilityLabel="Add a Place"
+        >
+          <Ionicons name="add-circle-outline" size={24} color="#8CC63F" />
+        </TouchableOpacity>
         <TouchableOpacity onPress={loadData} style={styles.headerBtn}>
           <Ionicons name="refresh-outline" size={22} color="#8CC63F" />
         </TouchableOpacity>

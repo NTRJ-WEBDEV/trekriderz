@@ -136,6 +136,7 @@ export default function RootLayout() {
         <Stack.Screen name="budget/[tripId]" />
         <Stack.Screen name="safety/[tripId]" />
         <Stack.Screen name="map/[tripId]" />
+        <Stack.Screen name="poi/submit" />
         <Stack.Screen name="homestay/[id]" />
         <Stack.Screen name="guide/[id]" />
         <Stack.Screen name="hire/[id]" />

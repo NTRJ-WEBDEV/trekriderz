@@ -32,7 +32,7 @@ export default function ProfileScreen() {
       const [profileRes, tripsRes, followersRes, guideRes] = await Promise.all([
         supabase.from('users').select('*').eq('id', user.id).single(),
         supabase.from('trips').select('id', { count: 'exact', head: true }).eq('created_by', user.id),
-        supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
+        supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id).eq('status', 'accepted'),
         supabase.from('guides').select('id, is_premium, status').eq('user_id', user.id).maybeSingle(),
       ]);
       if (profileRes.data) setProfile(profileRes.data);

@@ -161,6 +161,7 @@ export default function ExploreMapScreen() {
         .from('pois')
         .select('id, name, category, lat, lng, description')
         .eq('status', 'approved')
+        .order('created_at', { ascending: false })
         .limit(200);
 
       for (const p of pois || []) {

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -12,6 +12,10 @@ const NAV = [
   { href: "/admin/videos", label: "Videos", icon: "🎬", always: true },
   { href: "/admin/vehicles", label: "Vehicles", icon: "🏍️", superOnly: false },
   { href: "/admin/places", label: "Places Guide", icon: "📍", always: true },
+  // "POI Submissions" (user-submitted waterfalls/viewpoints/peaks/etc. pending
+  // approval) is deliberately distinct from "Places Guide" above, which is
+  // unrelated admin-curated editorial content (places_guide/place-photos).
+  { href: "/admin/pois", label: "POI Submissions", icon: "🥾", always: true, badgeKey: "pois" },
   { href: "/admin/settings", label: "Settings", icon: "⚙️", superOnly: true },
   { href: "/admin/team", label: "Team", icon: "👥", superOnly: true },
 ];
@@ -20,7 +24,16 @@ export default function AdminShell({ children, profile }: { children: React.Reac
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingPoiCount, setPendingPoiCount] = useState(0);
   const isSuperAdmin = profile?.role === "super_admin";
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from("pois").select("id", { count: "exact", head: true }).eq("status", "pending")
+      .then(({ count }) => setPendingPoiCount(count || 0));
+  }, []);
+
+  const badgeCounts: Record<string, number> = { pois: pendingPoiCount };
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -74,7 +87,12 @@ export default function AdminShell({ children, profile }: { children: React.Reac
               }}
             >
               <span>{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.badgeKey && badgeCounts[item.badgeKey] > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: "#F97316", color: "#0A0E27" }}>
+                  {badgeCounts[item.badgeKey]}
+                </span>
+              )}
             </Link>
           );
         })}

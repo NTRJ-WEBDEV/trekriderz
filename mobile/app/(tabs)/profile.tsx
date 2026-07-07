@@ -154,9 +154,19 @@ export default function ProfileScreen() {
 
         {/* Stats */}
         <View style={styles.statsRow}>
-          <StatBox label="Trips" value={String(stats.trips)} icon="airplane-outline" />
+          <StatBox
+            label="Trips"
+            value={String(stats.trips)}
+            icon="airplane-outline"
+            onPress={() => user && router.push(`/trips/${user.id}` as any)}
+          />
           <View style={styles.statDivider} />
-          <StatBox label="Followers" value={String(stats.followers)} icon="people-outline" />
+          <StatBox
+            label="Followers"
+            value={String(stats.followers)}
+            icon="people-outline"
+            onPress={() => user && router.push(`/followers/${user.id}` as any)}
+          />
           <View style={styles.statDivider} />
           <StatBox
             label="Member Since"
@@ -299,14 +309,24 @@ function ProfileCompleteness({
   );
 }
 
-function StatBox({ label, value, icon }: { label: string; value: string; icon: string }) {
-  return (
-    <View style={styles.statBox}>
+function StatBox({
+  label, value, icon, onPress,
+}: { label: string; value: string; icon: string; onPress?: () => void }) {
+  const content = (
+    <>
       <Ionicons name={icon as any} size={18} color={GREEN} style={{ marginBottom: 4 }} />
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.statBox} onPress={onPress} activeOpacity={0.7}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={styles.statBox}>{content}</View>;
 }
 
 function MenuItem({

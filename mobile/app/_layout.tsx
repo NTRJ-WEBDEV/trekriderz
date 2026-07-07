@@ -183,6 +183,8 @@ export default function RootLayout() {
         <Stack.Screen name="story/create" options={{ presentation: 'modal' }} />
         <Stack.Screen name="story/view" options={{ presentation: 'modal', animation: 'fade' }} />
         <Stack.Screen name="user/[id]" />
+        <Stack.Screen name="trips/[id]" />
+        <Stack.Screen name="followers/[id]" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

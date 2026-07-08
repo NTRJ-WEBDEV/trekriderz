@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
+import { uploadMedia } from '@/lib/storage';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import { Ionicons } from '@expo/vector-icons';
 import { queueTask } from '@/lib/db';
@@ -147,19 +148,9 @@ export default function CreateTripScreen() {
       const uri = photos[i];
       const ext = uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
       const path = `${userId}/${ts}_${i}.${ext}`;
-      try {
-        const res = await fetch(uri);
-        const blob = await res.blob();
-        const { error } = await supabase.storage
-          .from('trip-photos')
-          .upload(path, blob, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
-        if (!error) {
-          const { data } = supabase.storage.from('trip-photos').getPublicUrl(path);
-          urls.push(data.publicUrl);
-        }
-      } catch (e) {
-        console.warn('Photo upload failed for', path, e);
-      }
+      const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      const url = await uploadMedia('trip-photos', path, uri, contentType);
+      if (url) urls.push(url);
     }
     return urls;
   };

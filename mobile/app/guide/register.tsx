@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
@@ -168,15 +169,9 @@ export default function GuideRegisterScreen() {
     try {
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `${user?.id}/profile_${Date.now()}.${ext}`;
-      const resp = await fetch(uri);
-      const blob = await resp.blob();
-      const { error } = await supabase.storage.from('guide-photos').upload(path, blob, {
-        contentType: `image/${ext}`,
-        upsert: true,
-      });
-      if (error) throw error;
-      const { data } = supabase.storage.from('guide-photos').getPublicUrl(path);
-      setProfilePhotoUrl(data.publicUrl);
+      const url = await uploadMedia('guide-photos', path, uri, `image/${ext}`);
+      if (!url) throw new Error('Failed to upload photo');
+      setProfilePhotoUrl(url);
     } catch (e: any) {
       Alert.alert('Upload Error', e.message || 'Failed to upload photo');
       setProfilePhotoUri(null);
@@ -295,12 +290,8 @@ export default function GuideRegisterScreen() {
     try {
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `${user?.id}/id_${side}_${Date.now()}.${ext}`;
-      const resp = await fetch(uri);
-      const blob = await resp.blob();
-      const { error } = await supabase.storage.from('guide-documents').upload(path, blob, {
-        contentType: `image/${ext}`, upsert: true,
-      });
-      if (error) throw error;
+      const uploaded = await uploadMedia('guide-documents', path, uri, `image/${ext}`);
+      if (!uploaded) throw new Error('Failed to upload document');
       const { data } = await supabase.storage.from('guide-documents').createSignedUrl(path, 7200);
       if (side === 'front') setIdFrontUrl(data?.signedUrl || null);
       else setIdBackUrl(data?.signedUrl || null);
@@ -342,12 +333,8 @@ export default function GuideRegisterScreen() {
       try {
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
         const path = `${user?.id}/cert_${idx}_${Date.now()}.${ext}`;
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const { error } = await supabase.storage.from('guide-documents').upload(path, blob, {
-          contentType: `image/${ext}`, upsert: true,
-        });
-        if (error) throw error;
+        const uploaded = await uploadMedia('guide-documents', path, uri, `image/${ext}`);
+        if (!uploaded) throw new Error('Failed to upload certificate');
         const { data } = await supabase.storage.from('guide-documents').createSignedUrl(path, 7200);
         setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, url: data?.signedUrl || null } : c));
       } catch (e: any) {

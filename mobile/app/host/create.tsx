@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
@@ -280,16 +281,11 @@ export default function CreatePropertyScreen() {
         const uri = uris[i];
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
         const path = `properties/${user?.id}/${Date.now()}/photo_${startIdx + i}.${ext}`;
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const { error } = await supabase.storage.from('homestays').upload(path, blob, {
-          contentType: `image/${ext}`, upsert: true,
-        });
-        if (error) throw error;
-        const { data } = supabase.storage.from('homestays').getPublicUrl(path);
+        const url = await uploadMedia('homestays', path, uri, `image/${ext}`);
+        if (!url) throw new Error('Failed to upload photo');
         setPhotoUrls(prev => {
           const next = [...prev];
-          next[startIdx + i] = data.publicUrl;
+          next[startIdx + i] = url;
           return next;
         });
       }
@@ -421,16 +417,11 @@ export default function CreatePropertyScreen() {
           const uri = uris[i];
           const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
           const path = `properties/${user?.id}/rooms/${draft.id}/photo_${startIdx + i}_${Date.now()}.${ext}`;
-          const resp = await fetch(uri);
-          const blob = await resp.blob();
-          const { error } = await supabase.storage.from('homestays').upload(path, blob, {
-            contentType: `image/${ext}`, upsert: true,
-          });
-          if (error) throw error;
-          const { data } = supabase.storage.from('homestays').getPublicUrl(path);
+          const url = await uploadMedia('homestays', path, uri, `image/${ext}`);
+          if (!url) throw new Error('Failed to upload photo');
           setDraft(d => {
             const next = [...d.photoUrls];
-            next[startIdx + i] = data.publicUrl;
+            next[startIdx + i] = url;
             return { ...d, photoUrls: next };
           });
         }
@@ -500,12 +491,8 @@ export default function CreatePropertyScreen() {
       try {
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
         const path = `${user?.id}/property/id_${side}_${Date.now()}.${ext}`;
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const { error } = await supabase.storage.from('guide-documents').upload(path, blob, {
-          contentType: `image/${ext}`, upsert: true,
-        });
-        if (error) throw error;
+        const uploaded = await uploadMedia('guide-documents', path, uri, `image/${ext}`);
+        if (!uploaded) throw new Error('Failed to upload document');
         const { data } = await supabase.storage.from('guide-documents').createSignedUrl(path, 7200);
         if (side === 'front') setIdFrontUrl(data?.signedUrl || null);
         else setIdBackUrl(data?.signedUrl || null);
@@ -531,12 +518,8 @@ export default function CreatePropertyScreen() {
       try {
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
         const path = `${user?.id}/property/ownership_${Date.now()}.${ext}`;
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        const { error } = await supabase.storage.from('guide-documents').upload(path, blob, {
-          contentType: `image/${ext}`, upsert: true,
-        });
-        if (error) throw error;
+        const uploaded = await uploadMedia('guide-documents', path, uri, `image/${ext}`);
+        if (!uploaded) throw new Error('Failed to upload proof');
         const { data } = await supabase.storage.from('guide-documents').createSignedUrl(path, 7200);
         setOwnershipProofUrl(data?.signedUrl || null);
       } catch (e: any) {

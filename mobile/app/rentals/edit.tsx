@@ -9,6 +9,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
@@ -219,19 +220,9 @@ export default function EditVehicleScreen() {
       const uri = newPhotos[i];
       const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `vehicles/${user?.id}/${ts}/photo_${existingPhotos.length + i + 1}.${ext}`;
-
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
-
-      const { error } = await supabase.storage
-        .from('vehicle-photos')
-        .upload(path, arrayBuffer, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: false });
-
-      if (!error) {
-        const { data: urlData } = supabase.storage.from('vehicle-photos').getPublicUrl(path);
-        if (urlData?.publicUrl) urls.push(urlData.publicUrl);
-      }
+      const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      const url = await uploadMedia('vehicle-photos', path, uri, contentType);
+      if (url) urls.push(url);
     }
     setUploadProgress(100);
     return urls;

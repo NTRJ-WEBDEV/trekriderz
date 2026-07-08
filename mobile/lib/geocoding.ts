@@ -16,7 +16,7 @@ export async function searchPlaces(query: string): Promise<GeocodeResult[]> {
   try {
     const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
       query
-    )}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=5&types=place,address,poi&proximity=77.1025,28.7041`; // Biased to India by default
+    )}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=5&types=place,address,poi&country=IN&proximity=77.1025,28.7041`; // Restricted to India
 
     const response = await fetch(url);
     const data = await response.json();
@@ -38,7 +38,7 @@ export async function searchPlaces(query: string): Promise<GeocodeResult[]> {
  */
 export async function reverseGeocode(lng: number, lat: number): Promise<string | null> {
   try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&types=place,address`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&types=place,address&country=IN`;
     
     const response = await fetch(url);
     const data = await response.json();

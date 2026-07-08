@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useExpeditionStore } from '@/stores/expeditionStore';
 import { checkGuideIsPremium, getMyGuideProfile } from '@/lib/expeditions';
 import PremiumGuardBanner from '@/components/PremiumGuardBanner';
+import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
+import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 
 const DIFFICULTIES = ['easy', 'moderate', 'challenging', 'expert'] as const;
 type Difficulty = typeof DIFFICULTIES[number];
@@ -41,6 +43,11 @@ export default function CreateExpeditionScreen() {
   // Step 1: Basics
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [destSuggestions, setDestSuggestions] = useState<GeocodeResult[]>([]);
+  const [destSearching, setDestSearching] = useState(false);
+  const destSearchTimeout = useRef<any>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('moderate');
@@ -96,6 +103,25 @@ export default function CreateExpeditionScreen() {
       </View>
     );
   }
+
+  const handleDestSearch = (text: string) => {
+    setDestination(text);
+    setCoords(null);
+    if (destSearchTimeout.current) clearTimeout(destSearchTimeout.current);
+    if (text.length < 3) { setDestSuggestions([]); return; }
+    setDestSearching(true);
+    destSearchTimeout.current = setTimeout(async () => {
+      const results = await searchPlaces(text);
+      setDestSuggestions(results);
+      setDestSearching(false);
+    }, 500);
+  };
+
+  const selectDestSuggestion = (place: GeocodeResult) => {
+    setDestination(place.place_name);
+    setCoords({ lat: place.center[1], lng: place.center[0] });
+    setDestSuggestions([]);
+  };
 
   const handleNextStep1 = () => {
     if (!title || !destination || !startDate || !endDate || !description) {
@@ -194,6 +220,8 @@ export default function CreateExpeditionScreen() {
         title,
         description,
         destination,
+        lat: coords?.lat,
+        lng: coords?.lng,
         start_date: startDate,
         end_date: endDate,
         difficulty,
@@ -282,13 +310,38 @@ export default function CreateExpeditionScreen() {
 
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Destination *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Uttarakhand, India"
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={destination}
-                onChangeText={setDestination}
-              />
+              <View style={styles.destInputRow}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="e.g., Uttarakhand, India"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  value={destination}
+                  onChangeText={handleDestSearch}
+                />
+                {destSearching && <ActivityIndicator size="small" color="#8CC63F" style={{ marginLeft: 8 }} />}
+              </View>
+              {destSuggestions.length > 0 && (
+                <View style={styles.suggestions}>
+                  {destSuggestions.map((sug, i) => (
+                    <TouchableOpacity
+                      key={sug.id}
+                      style={[styles.suggItem, i < destSuggestions.length - 1 && styles.suggBorder]}
+                      onPress={() => selectDestSuggestion(sug)}
+                    >
+                      <Ionicons name="location-outline" size={14} color="#8CC63F" />
+                      <Text style={styles.suggText} numberOfLines={2}>{sug.place_name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <TouchableOpacity style={styles.mapPinBtn} onPress={() => setShowMapPicker(true)}>
+                <Ionicons name="map-outline" size={14} color="#8CC63F" />
+                <Text style={styles.mapPinText}>
+                  {coords
+                    ? `📍 ${coords.lat.toFixed(4)}° N, ${coords.lng.toFixed(4)}° E — tap to adjust`
+                    : 'Pin exact destination on the map'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.fieldRow}>
@@ -519,6 +572,17 @@ export default function CreateExpeditionScreen() {
           </View>
         )}
       </ScrollView>
+
+      <MapPickerModal
+        visible={showMapPicker}
+        initialLat={coords?.lat}
+        initialLng={coords?.lng}
+        onConfirm={(loc: PickedLocation) => {
+          setCoords({ lat: loc.lat, lng: loc.lng });
+          setShowMapPicker(false);
+        }}
+        onClose={() => setShowMapPicker(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -645,6 +709,24 @@ const styles = StyleSheet.create({
     minHeight: 90,
     paddingTop: 12,
   },
+  destInputRow: { flexDirection: 'row', alignItems: 'center' },
+  suggestions: {
+    backgroundColor: '#141920', borderRadius: 12, marginTop: 6,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', overflow: 'hidden',
+  },
+  suggItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12, gap: 10,
+  },
+  suggBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  suggText: { flex: 1, color: '#FFF', fontSize: 13 },
+  mapPinBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 8, paddingHorizontal: 12, paddingVertical: 12,
+    backgroundColor: 'rgba(140,198,63,0.08)', borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
+  },
+  mapPinText: { fontSize: 12, color: '#8CC63F', fontWeight: '600', flex: 1 },
   difficultyRow: {
     flexDirection: 'row',
     gap: 8,

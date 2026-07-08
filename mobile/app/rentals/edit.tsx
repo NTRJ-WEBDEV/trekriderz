@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import PhoneInput, { splitPhone } from '@/components/PhoneInput';
+import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 
 const GREEN = '#ADFF2F';
 const RED = '#EF4444';
@@ -44,6 +45,8 @@ type Vehicle = {
   description: string | null;
   price_per_day: number;
   location: string;
+  lat: number | null;
+  lng: number | null;
   contact_phone: string;
   contact_whatsapp: string | null;
   seats: number | null;
@@ -82,6 +85,8 @@ export default function EditVehicleScreen() {
   const [description, setDescription] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
   const [location, setLocation] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
   const [contactPhoneCode, setContactPhoneCode] = useState('+91');
   const [contactWhatsApp, setContactWhatsApp] = useState('');
@@ -138,6 +143,7 @@ export default function EditVehicleScreen() {
     setDescription(v.description ?? '');
     setPricePerDay(String(v.price_per_day ?? ''));
     setLocation(v.location ?? '');
+    setCoords(v.lat != null && v.lng != null ? { lat: v.lat, lng: v.lng } : null);
     const phoneSplit = splitPhone(v.contact_phone ?? '');
     setContactPhoneCode(phoneSplit.countryCode);
     setContactPhone(phoneSplit.number);
@@ -266,6 +272,8 @@ export default function EditVehicleScreen() {
       description: description.trim() || null,
       price_per_day: parseInt(pricePerDay),
       location: location.trim(),
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       contact_phone: `${contactPhoneCode}${contactPhone.trim()}`,
       contact_whatsapp: contactWhatsApp.trim() ? `${contactWhatsAppCode}${contactWhatsApp.trim()}` : null,
       seats: needsSeats && seats ? parseInt(seats) : null,
@@ -675,6 +683,15 @@ export default function EditVehicleScreen() {
           <TextInput style={styles.input} placeholderTextColor="rgba(255,255,255,0.25)"
             placeholder="Where is the vehicle available?" value={location} onChangeText={setLocation} />
 
+          <TouchableOpacity style={styles.mapPinBtn} onPress={() => setShowMapPicker(true)}>
+            <Ionicons name="map-outline" size={14} color={GREEN} />
+            <Text style={styles.mapPinText}>
+              {coords
+                ? `📍 ${coords.lat.toFixed(4)}° N, ${coords.lng.toFixed(4)}° E — tap to adjust`
+                : 'Pin exact pickup location on the map'}
+            </Text>
+          </TouchableOpacity>
+
           <Text style={styles.label}>Description</Text>
           <TextInput style={[styles.input, styles.textarea]} placeholderTextColor="rgba(255,255,255,0.25)"
             placeholder="Condition, usage tips, notes..." value={description} onChangeText={setDescription}
@@ -758,6 +775,17 @@ export default function EditVehicleScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
+
+      <MapPickerModal
+        visible={showMapPicker}
+        initialLat={coords?.lat}
+        initialLng={coords?.lng}
+        onConfirm={(loc: PickedLocation) => {
+          setCoords({ lat: loc.lat, lng: loc.lng });
+          setShowMapPicker(false);
+        }}
+        onClose={() => setShowMapPicker(false)}
+      />
     </View>
   );
 }
@@ -863,6 +891,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13, color: '#FFF', fontSize: 14,
   },
   textarea: { height: 90, paddingTop: 12 },
+  mapPinBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 12,
+    backgroundColor: 'rgba(140,198,63,0.08)', borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
+  },
+  mapPinText: { fontSize: 12, color: GREEN, fontWeight: '600', flex: 1 },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: 'rgba(255,255,255,0.07)',

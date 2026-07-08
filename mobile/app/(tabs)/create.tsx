@@ -15,6 +15,7 @@ import { Calendar } from 'react-native-calendars';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import PhoneInput from '@/components/PhoneInput';
+import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -73,6 +74,8 @@ export default function CreateTripScreen() {
   const [groupSize, setGroupSize]     = useState('');
   const [budget, setBudget]           = useState('');
   const [meetingPoint, setMeetingPoint] = useState('');
+  const [meetingCoords, setMeetingCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showMeetingMapPicker, setShowMeetingMapPicker] = useState(false);
   const [experienceLevel, setExperienceLevel] = useState('');
   const [isPublic, setIsPublic]       = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -111,7 +114,7 @@ export default function CreateTripScreen() {
   const resetForm = () => {
     setTripType('trek'); setDestination(''); setCoords(null);
     setTitle(''); setDescription(''); setStartDate(''); setEndDate(''); setDateModal(false); setPhotos([]);
-    setGroupSize(''); setBudget(''); setMeetingPoint(''); setExperienceLevel('');
+    setGroupSize(''); setBudget(''); setMeetingPoint(''); setMeetingCoords(null); setExperienceLevel('');
     setIsPublic(false); setLookingForPartner(false);
     setPartnerGender('any'); setBikeRole('rider');
     setSlotsAvailable(1); setContactWhatsApp(''); setContactWhatsAppCode('+91');
@@ -203,6 +206,7 @@ export default function CreateTripScreen() {
     if (photoUrls.length > 0) newTrip.photos = photoUrls;
     if (isPublic) newTrip.is_public = true;
     if (meetingPoint.trim()) newTrip.meeting_point = meetingPoint.trim();
+    if (meetingCoords) { newTrip.meeting_lat = meetingCoords.lat; newTrip.meeting_lng = meetingCoords.lng; }
     if (experienceLevel) newTrip.experience_level = experienceLevel;
 
     if (isPublic && lookingForPartner) {
@@ -357,6 +361,14 @@ export default function CreateTripScreen() {
                 onChangeText={setMeetingPoint}
               />
             </View>
+            <TouchableOpacity style={s.mapPinBtn} onPress={() => setShowMeetingMapPicker(true)}>
+              <Ionicons name="map-outline" size={14} color={GREEN} />
+              <Text style={s.mapPinText}>
+                {meetingCoords
+                  ? `📍 ${meetingCoords.lat.toFixed(4)}° N, ${meetingCoords.lng.toFixed(4)}° E — tap to adjust`
+                  : 'Pin exact meeting point on the map'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* ── TRIP DETAILS ── */}
@@ -722,6 +734,17 @@ export default function CreateTripScreen() {
           </View>
         </View>
       </Modal>
+
+      <MapPickerModal
+        visible={showMeetingMapPicker}
+        initialLat={meetingCoords?.lat}
+        initialLng={meetingCoords?.lng}
+        onConfirm={(loc: PickedLocation) => {
+          setMeetingCoords({ lat: loc.lat, lng: loc.lng });
+          setShowMeetingMapPicker(false);
+        }}
+        onClose={() => setShowMeetingMapPicker(false)}
+      />
     </View>
   );
 }
@@ -774,6 +797,14 @@ const s = StyleSheet.create({
   },
   optional: { fontWeight: '400', color: 'rgba(255,255,255,0.2)' },
   fieldGap: { marginBottom: 14 },
+
+  mapPinBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 2, paddingHorizontal: 12, paddingVertical: 12,
+    backgroundColor: 'rgba(140,198,63,0.08)', borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
+  },
+  mapPinText: { fontSize: 12, color: GREEN, fontWeight: '600', flex: 1 },
 
   typeScroll: { marginHorizontal: -20 },
   typeRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingBottom: 4 },

@@ -14,6 +14,7 @@ import { haptic } from '@/lib/haptics';
 import { Calendar } from 'react-native-calendars';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -82,6 +83,7 @@ export default function CreateTripScreen() {
   const [bikeRole, setBikeRole]                   = useState('rider');
   const [slotsAvailable, setSlotsAvailable]       = useState<string | number>(1);
   const [contactWhatsApp, setContactWhatsApp]     = useState('');
+  const [contactWhatsAppCode, setContactWhatsAppCode] = useState('+91');
 
   // Location autocomplete
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
@@ -112,7 +114,7 @@ export default function CreateTripScreen() {
     setGroupSize(''); setBudget(''); setMeetingPoint(''); setExperienceLevel('');
     setIsPublic(false); setLookingForPartner(false);
     setPartnerGender('any'); setBikeRole('rider');
-    setSlotsAvailable(1); setContactWhatsApp('');
+    setSlotsAvailable(1); setContactWhatsApp(''); setContactWhatsAppCode('+91');
   };
 
   const pickImage = async () => {
@@ -208,7 +210,7 @@ export default function CreateTripScreen() {
       newTrip.partner_gender = partnerGender;
       newTrip.slots_available = slotsAvailable === '6+' ? 6 : Number(slotsAvailable);
       if (isBike(tripType)) newTrip.partner_role = bikeRole;
-      if (contactWhatsApp.trim()) newTrip.contact_whatsapp = contactWhatsApp.trim();
+      if (contactWhatsApp.trim()) newTrip.contact_whatsapp = `${contactWhatsAppCode}${contactWhatsApp.trim()}`;
     }
 
     try {
@@ -600,17 +602,10 @@ export default function CreateTripScreen() {
 
                   {/* WhatsApp contact */}
                   <Text style={s.partnerLabel}>WhatsApp for Quick Connect <Text style={s.optional}>(optional)</Text></Text>
-                  <View style={s.inputRow}>
-                    <Ionicons name="logo-whatsapp" size={17} color="#25D366" />
-                    <TextInput
-                      style={s.input}
-                      placeholder="+91 98765 43210"
-                      placeholderTextColor="rgba(255,255,255,0.2)"
-                      keyboardType="phone-pad"
-                      value={contactWhatsApp}
-                      onChangeText={setContactWhatsApp}
-                    />
-                  </View>
+                  <PhoneInput
+                    countryCode={contactWhatsAppCode} onChangeCountryCode={setContactWhatsAppCode}
+                    number={contactWhatsApp} onChangeNumber={setContactWhatsApp}
+                  />
 
                   {/* Summary tag */}
                   <View style={s.partnerSummary}>

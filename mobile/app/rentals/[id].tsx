@@ -64,8 +64,9 @@ export default function RentalDetailScreen() {
   };
 
   const handleWhatsApp = () => {
-    const num = vehicle?.contact_whatsapp || vehicle?.contact_phone;
-    if (!num) return;
+    const raw = vehicle?.contact_whatsapp || vehicle?.contact_phone;
+    if (!raw) return;
+    const num = raw.replace(/\D/g, '');
     const msg = encodeURIComponent(
       `Hi! I found your ${vehicle?.vehicle_type} (${vehicle?.make} ${vehicle?.model}) on TrekRiderz and I'm interested in renting it. Is it available?`
     );

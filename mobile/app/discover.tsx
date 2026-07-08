@@ -325,8 +325,11 @@ function TripCard({
     const msg = encodeURIComponent(
       `Hi! I saw your trip "${trip.title}" to ${trip.destination} on TrekRiderz and I'm interested in joining as a travel partner. Are spots still available?`
     );
+    const phone = trip.contact_whatsapp.replace(/\D/g, '');
     import('react-native').then(({ Linking }) =>
-      Linking.openURL(`whatsapp://send?phone=${trip.contact_whatsapp}&text=${msg}`)
+      Linking.openURL(`whatsapp://send?phone=${phone}&text=${msg}`).catch(() =>
+        Linking.openURL(`https://wa.me/${phone}?text=${msg}`)
+      )
     );
   };
 

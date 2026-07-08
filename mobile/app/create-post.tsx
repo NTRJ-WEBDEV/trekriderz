@@ -144,7 +144,7 @@ export default function CreatePostScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={[styles.cancelBtn, { color: colors.text }]}>Cancel</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>New Post</Text>

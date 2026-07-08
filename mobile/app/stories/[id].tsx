@@ -186,7 +186,7 @@ export default function StoryDetailScreen() {
           try {
             const { error } = await supabase.from('posts').delete().eq('id', id);
             if (error) throw error;
-            router.back();
+            if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
           } catch {
             Alert.alert('Error', 'Could not delete story.');
           }
@@ -223,7 +223,7 @@ export default function StoryDetailScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>Story not found.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backFallback}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backFallback}>
           <Text style={styles.backFallbackText}>Go back</Text>
         </TouchableOpacity>
       </View>
@@ -251,7 +251,7 @@ export default function StoryDetailScreen() {
           <View style={styles.coverOverlay} />
           <SafeAreaView edges={['top']} style={StyleSheet.absoluteFill}>
             <View style={styles.topBar}>
-              <TouchableOpacity style={styles.circleBtn} onPress={() => router.back()}>
+              <TouchableOpacity style={styles.circleBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
                 <Ionicons name="arrow-back" size={20} color="#FFF" />
               </TouchableOpacity>
               <View style={styles.topBarRight}>

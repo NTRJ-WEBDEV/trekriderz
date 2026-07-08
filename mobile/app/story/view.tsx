@@ -92,7 +92,7 @@ export default function StoryViewScreen() {
   const goNext = useCallback(() => {
     setIndex((i) => {
       if (i + 1 >= stories.length) {
-        router.back();
+        if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
         return i;
       }
       return i + 1;
@@ -109,7 +109,7 @@ export default function StoryViewScreen() {
       onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 120) {
-          router.back();
+          if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
         } else {
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
         }
@@ -170,7 +170,7 @@ export default function StoryViewScreen() {
             if (error) throw error;
             setStories((prev) => {
               const next = prev.filter((s) => s.id !== current.id);
-              if (next.length === 0) router.back();
+              if (next.length === 0) { if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); }
               return next;
             });
           } catch {
@@ -189,7 +189,7 @@ export default function StoryViewScreen() {
     return (
       <View style={[styles.overlay, styles.center]}>
         <Text style={styles.emptyText}>No active stories</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeFallback}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.closeFallback}>
           <Ionicons name="close" size={28} color="#FFF" />
         </TouchableOpacity>
       </View>
@@ -246,7 +246,7 @@ export default function StoryViewScreen() {
           >
             <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.iconBtn}>
             <Ionicons name="close" size={24} color="#FFF" />
           </TouchableOpacity>
         </View>

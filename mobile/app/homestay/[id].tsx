@@ -184,7 +184,7 @@ export default function HomestayDetailScreen() {
       <View style={styles.loadingContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
         <Text style={styles.errorText}>Property not found</Text>
-        <TouchableOpacity style={styles.backBtnSmall} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtnSmall} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={styles.backBtnTextSmall}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -209,7 +209,7 @@ export default function HomestayDetailScreen() {
           </Swiper>
           <LinearGradient colors={['rgba(8,12,20,0.55)', 'transparent']} style={styles.topGradient} />
           <SafeAreaView edges={['top']} style={styles.headerActions}>
-            <TouchableOpacity style={styles.circleBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.circleBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
               <Ionicons name="chevron-back" size={22} color="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.circleBtn} onPress={handleShare}>

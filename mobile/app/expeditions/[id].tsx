@@ -60,7 +60,7 @@ export default function ExpeditionDetailScreen() {
       <View style={styles.centerContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
         <Text style={styles.errorText}>{error || 'Expedition not found'}</Text>
-        <TouchableOpacity style={styles.backBtnInline} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtnInline} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -182,7 +182,7 @@ export default function ExpeditionDetailScreen() {
           />
 
           <SafeAreaView edges={['top']} style={styles.heroActions}>
-            <TouchableOpacity style={styles.circleBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.circleBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
               <Ionicons name="chevron-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.circleBtn} onPress={handleShare}>

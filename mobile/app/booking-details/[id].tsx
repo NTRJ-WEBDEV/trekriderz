@@ -161,7 +161,7 @@ export default function BookingDetailsScreen() {
               });
 
               Alert.alert('Cancelled', `Your booking has been cancelled. ${allowed ? 'No charges apply.' : 'Contact the host for refund details.'}`);
-              router.back();
+              if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
             } catch (error) {
               Alert.alert('Error', 'Failed to cancel booking. Please try again.');
             } finally {
@@ -228,7 +228,7 @@ export default function BookingDetailsScreen() {
         <View style={styles.centerContainer}>
           <Ionicons name="alert-circle-outline" size={56} color="rgba(255,255,255,0.2)" />
           <Text style={styles.errorText}>Booking not found</Text>
-          <TouchableOpacity style={styles.goBackBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.goBackBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Text style={styles.goBackBtnText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -254,7 +254,7 @@ export default function BookingDetailsScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Booking Details</Text>

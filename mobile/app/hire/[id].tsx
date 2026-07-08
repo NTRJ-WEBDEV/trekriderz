@@ -151,7 +151,7 @@ function VehicleHireScreen({ id }: { id: string }) {
   if (!vehicle) return (
     <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 12 }}>Vehicle not found</Text>
-      <TouchableOpacity onPress={() => router.back()}><Text style={{ color: GREEN }}>Go back</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}><Text style={{ color: GREEN }}>Go back</Text></TouchableOpacity>
     </View>
   );
 
@@ -162,7 +162,7 @@ function VehicleHireScreen({ id }: { id: string }) {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={vStyles.header}>
-          <TouchableOpacity style={vStyles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={vStyles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={vStyles.headerTitle}>Book Vehicle</Text>
@@ -513,7 +513,7 @@ function GuideHireScreen({ id, name, price }: { id: string; name: string; price:
       Alert.alert(
         'Request Sent! 🧭',
         `Your inquiry has been sent to ${name}.\n\nTrekRiderz team will confirm your booking within 24 hours.`,
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }]
       );
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to submit inquiry.');
@@ -525,7 +525,7 @@ function GuideHireScreen({ id, name, price }: { id: string; name: string; price:
   return (
     <SafeAreaView style={gStyles.container}>
       <View style={gStyles.header}>
-        <TouchableOpacity style={gStyles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={gStyles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={gStyles.headerTitle}>Hire Guide</Text>

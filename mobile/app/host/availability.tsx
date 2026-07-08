@@ -38,7 +38,11 @@ export default function HostAvailabilityScreen() {
         .eq('owner_id', user.id)
         .single();
 
-      if (!homestay) { Alert.alert('No property found', 'Register a homestay first.'); router.back(); return; }
+      if (!homestay) {
+        Alert.alert('No property found', 'Register a homestay first.');
+        if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+        return;
+      }
       setHomestayId(homestay.id);
       setHomestayName(homestay.name);
       setCancellationPolicy(homestay.cancellation_policy || 'moderate');
@@ -146,7 +150,7 @@ export default function HostAvailabilityScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={s.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={s.title} numberOfLines={1}>Availability</Text>

@@ -93,7 +93,7 @@ export default function CreatePostScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="close" size={28} color="#FFF" /></TouchableOpacity>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}><Ionicons name="close" size={28} color="#FFF" /></TouchableOpacity>
         <Text style={styles.headerTitle}>Create Post</Text>
         <TouchableOpacity onPress={handlePost} disabled={posting || uploading} style={[styles.postBtn, (posting || uploading) && { opacity: 0.5 }]}>
           {posting ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.postBtnText}>Post</Text>}

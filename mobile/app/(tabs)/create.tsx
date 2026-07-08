@@ -212,7 +212,7 @@ export default function CreateTripScreen() {
     }
 
     try {
-      const { error } = await supabase.from('trips').insert([newTrip]);
+      const { data, error } = await supabase.from('trips').insert([newTrip]).select('id').single();
       if (error) {
         // Only save offline for genuine network failures
         const isNetworkError = error.message?.toLowerCase().includes('network') ||
@@ -221,7 +221,9 @@ export default function CreateTripScreen() {
         if (isNetworkError) {
           await queueTask('INSERT', 'trips', newTrip);
           Alert.alert('Saved Offline 📡', 'No connection — trip saved locally and will sync when you\'re back online.', [
-            { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+            // No id yet — it only exists locally until the sync queue runs, so
+            // there's nothing to view. Go to Home instead of a no-op.
+            { text: 'OK', onPress: () => { resetForm(); router.replace('/(tabs)'); } },
           ]);
         } else {
           Alert.alert('Failed to Create Trip', error.message || 'Something went wrong. Please try again.');
@@ -234,14 +236,23 @@ export default function CreateTripScreen() {
             ? 'Your trip is live on Discover — fellow travelers can join!'
             : 'Your adventure is planned.';
         Alert.alert(isPublic ? 'Trip Published! 🎉' : 'Trip Created! 🏔️', msg, [
-          { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+          {
+            text: 'OK', onPress: () => {
+              resetForm();
+              // Create is a bottom-tab root, not pushed onto a stack, so
+              // router.back() here was always a silent no-op — take the user
+              // straight to their new trip instead.
+              if (data?.id) router.replace(`/trip/${data.id}` as any);
+              else router.replace('/(tabs)');
+            },
+          },
         ]);
       }
     } catch (e: any) {
       // Catch-block is true network failure (fetch threw)
       await queueTask('INSERT', 'trips', newTrip);
       Alert.alert('Saved Offline 📡', 'Trip saved locally and will sync when you\'re back online.', [
-        { text: 'OK', onPress: () => { resetForm(); router.back(); } },
+        { text: 'OK', onPress: () => { resetForm(); router.replace('/(tabs)'); } },
       ]);
     } finally {
       setLoading(false);

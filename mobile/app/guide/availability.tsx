@@ -37,7 +37,11 @@ export default function GuideAvailabilityScreen() {
         .eq('user_id', user.id)
         .single();
 
-      if (!guide) { Alert.alert('Not a guide', 'Register as a guide first.'); router.back(); return; }
+      if (!guide) {
+        Alert.alert('Not a guide', 'Register as a guide first.');
+        if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+        return;
+      }
       setGuideId(guide.id);
       setCancellationPolicy(guide.cancellation_policy || 'moderate');
 
@@ -144,7 +148,7 @@ export default function GuideAvailabilityScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={s.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={s.title}>My Availability</Text>

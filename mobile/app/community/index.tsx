@@ -183,9 +183,19 @@ export default function CommunityListScreen({ embedded }: { embedded?: boolean }
   return (
     <SafeAreaView style={styles.container} edges={embedded ? ['left', 'right', 'bottom'] : undefined}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Communities</Text>
-          <Text style={styles.subtitle}>Find your tribe of adventurers</Text>
+        <View style={styles.headerLeft}>
+          {!embedded && (
+            <TouchableOpacity
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+              style={styles.backBtn}
+            >
+              <Ionicons name="chevron-back" size={22} color="#FFF" />
+            </TouchableOpacity>
+          )}
+          <View>
+            <Text style={styles.title}>Communities</Text>
+            <Text style={styles.subtitle}>Find your tribe of adventurers</Text>
+          </View>
         </View>
         {canCreate && (
           <TouchableOpacity
@@ -283,6 +293,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center',
   },
   title: { color: '#FFF', fontSize: 26, fontWeight: '900' },
   subtitle: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 },

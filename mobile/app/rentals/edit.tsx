@@ -125,7 +125,7 @@ export default function EditVehicleScreen() {
       .single();
     if (error || !data) {
       Alert.alert('Error', 'Vehicle not found.');
-      router.back();
+      if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
       return;
     }
     const v = data as Vehicle;
@@ -295,7 +295,7 @@ export default function EditVehicleScreen() {
     }
 
     Alert.alert('Saved!', 'Your vehicle listing has been updated.', [
-      { text: 'OK', onPress: () => router.back() }
+      { text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }
     ]);
   };
 
@@ -374,7 +374,7 @@ export default function EditVehicleScreen() {
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Edit Vehicle</Text>

@@ -106,7 +106,7 @@ export default function GuideProfileScreen() {
       <View style={styles.loadingContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
         <Text style={styles.errorText}>Guide not found</Text>
-        <TouchableOpacity style={styles.backBtnInline} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtnInline} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={styles.backBtnInlineText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -141,7 +141,7 @@ export default function GuideProfileScreen() {
           />
 
           <SafeAreaView edges={['top']} style={styles.headerActions}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.circleBtn}>
+            <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.circleBtn}>
               <Ionicons name="chevron-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleShare} style={styles.circleBtn}>

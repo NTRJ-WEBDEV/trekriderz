@@ -126,7 +126,7 @@ export default function RentalDetailScreen() {
               style={styles.photoGradient}
             />
             {/* Back button */}
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
               <Ionicons name="arrow-back" size={22} color="#FFF" />
             </TouchableOpacity>
             {/* Type badge */}

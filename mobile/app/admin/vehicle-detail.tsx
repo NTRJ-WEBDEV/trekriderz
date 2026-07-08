@@ -62,7 +62,7 @@ export default function VehicleDetailScreen() {
       });
     }
     setActionLoading(false);
-    Alert.alert('Approved ✓', 'Listing is now live.', [{ text: 'Done', onPress: () => router.back() }]);
+    Alert.alert('Approved ✓', 'Listing is now live.', [{ text: 'Done', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }]);
   };
 
   const handleReject = async () => {
@@ -92,7 +92,7 @@ export default function VehicleDetailScreen() {
     }
     setActionLoading(false);
     setRejectVisible(false);
-    Alert.alert('Rejected', 'Owner has been notified.', [{ text: 'Done', onPress: () => router.back() }]);
+    Alert.alert('Rejected', 'Owner has been notified.', [{ text: 'Done', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }]);
   };
 
   if (loading) {
@@ -107,7 +107,7 @@ export default function VehicleDetailScreen() {
     return (
       <View style={[styles.container, styles.center]}>
         <Text style={{ color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>Vehicle not found</Text>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={{ color: GREEN }}>Go back</Text>
         </TouchableOpacity>
       </View>
@@ -132,7 +132,7 @@ export default function VehicleDetailScreen() {
     <View style={styles.container}>
       <SafeAreaView edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="chevron-back" size={22} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>

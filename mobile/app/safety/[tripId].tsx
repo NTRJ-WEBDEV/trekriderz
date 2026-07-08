@@ -152,7 +152,7 @@ export default function SafetyScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={28} color="#8CC63F" />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>

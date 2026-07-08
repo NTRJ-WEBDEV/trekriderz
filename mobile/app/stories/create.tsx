@@ -150,7 +150,7 @@ export default function CreateStoryScreen() {
 
       haptic.success();
       if (isEditing) {
-        router.back();
+        if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
       } else {
         Alert.alert(
           'Story Published! 🎉',
@@ -181,7 +181,7 @@ export default function CreateStoryScreen() {
     <View style={styles.container}>
       <SafeAreaView edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()} disabled={loading}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} disabled={loading}>
             <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{isEditing ? 'Edit Story' : 'Write a Story'}</Text>

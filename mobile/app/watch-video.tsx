@@ -42,14 +42,14 @@ export default function WatchVideoScreen() {
     // Block hopping to any other video/channel/search — keep the viewer pinned
     // to this one video, similar to a status/story viewer rather than a full browser.
     if (videoId && !navState.url.includes(`v=${videoId}`) && navState.url !== watchUrl) {
-      router.back();
+      if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
     }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.closeBtn}>
           <Ionicons name="close" size={28} color="#FFF" />
         </TouchableOpacity>
       </View>

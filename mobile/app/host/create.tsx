@@ -670,7 +670,7 @@ export default function CreatePropertyScreen() {
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => (step === 0 ? router.back() : goBack())}>
+        <TouchableOpacity style={s.backBtn} onPress={() => (step === 0 ? (router.canGoBack() ? router.back() : router.replace('/(tabs)')) : goBack())}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

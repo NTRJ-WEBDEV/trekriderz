@@ -91,7 +91,7 @@ export default function ManageExpeditionScreen() {
               .update({ status: newStatus })
               .eq('id', id);
             if (newStatus === 'cancelled') {
-              router.back();
+              if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
             } else {
               loadData();
             }
@@ -114,7 +114,7 @@ export default function ManageExpeditionScreen() {
       <View style={styles.centerContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="rgba(255,255,255,0.2)" />
         <Text style={styles.notFoundText}>Expedition not found</Text>
-        <TouchableOpacity style={styles.backBtnInline} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtnInline} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Text style={styles.backBtnInlineText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -142,7 +142,7 @@ export default function ManageExpeditionScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>

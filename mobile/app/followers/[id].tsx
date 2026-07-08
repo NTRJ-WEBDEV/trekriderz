@@ -55,7 +55,7 @@ export default function FollowersScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </TouchableOpacity>
         <View style={styles.tabRow}>

@@ -58,7 +58,7 @@ export default function AddHomestayScreen() {
       if (error) throw error;
 
       Alert.alert('Success', 'Homestay added successfully!', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) },
       ]);
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -70,7 +70,7 @@ export default function AddHomestayScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Homestay</Text>

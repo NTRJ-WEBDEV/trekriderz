@@ -87,7 +87,7 @@ export default function StoryCreateScreen() {
       });
 
       if (error) throw error;
-      router.back();
+      if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Failed to post your story.');
@@ -99,7 +99,7 @@ export default function StoryCreateScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
           <Ionicons name="close" size={28} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add to Story</Text>

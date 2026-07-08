@@ -170,7 +170,7 @@ export default function RegisterRentalScreen() {
     Alert.alert(
       'Listing Submitted!',
       'Your vehicle has been submitted for review. It will appear on the app once approved (usually within 24 hours).',
-      [{ text: 'OK', onPress: () => router.back() }]
+      [{ text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) }]
     );
   };
 
@@ -178,7 +178,7 @@ export default function RegisterRentalScreen() {
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Ionicons name="arrow-back" size={22} color="#FFF" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

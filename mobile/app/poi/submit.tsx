@@ -184,7 +184,7 @@ export default function SubmitPoiScreen() {
             Thanks! "{name}" won't appear on the public map yet — an admin needs to
             review and approve it first. We'll notify you once it's live.
           </Text>
-          <TouchableOpacity style={styles.confirmPrimaryBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.confirmPrimaryBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
             <Text style={styles.confirmPrimaryText}>Back to Explore Map</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.confirmSecondaryBtn} onPress={resetForm}>
@@ -198,7 +198,7 @@ export default function SubmitPoiScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.headerBtn}>
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add a Place</Text>

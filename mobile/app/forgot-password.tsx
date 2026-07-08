@@ -72,7 +72,7 @@ export default function ForgotPasswordScreen() {
       >
         {/* Header */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={28} color="#8CC63F" />
           </TouchableOpacity>
         </View>
@@ -117,7 +117,7 @@ export default function ForgotPasswordScreen() {
 
           <TouchableOpacity
             style={styles.backToLogin}
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           >
             <Ionicons name="arrow-back-outline" size={16} color="#8CC63F" style={{ marginRight: 6 }} />
             <Text style={styles.backToLoginText}>Back to Login</Text>

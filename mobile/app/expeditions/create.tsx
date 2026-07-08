@@ -85,7 +85,7 @@ export default function CreateExpeditionScreen() {
       <View style={styles.container}>
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
               <Ionicons name="chevron-back" size={24} color="#FFF" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Create Expedition</Text>
@@ -245,7 +245,7 @@ export default function CreateExpeditionScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => (step === 1 ? router.back() : setStep(step - 1))}
+          onPress={() => (step === 1 ? (router.canGoBack() ? router.back() : router.replace('/(tabs)')) : setStep(step - 1))}
         >
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>

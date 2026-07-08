@@ -131,7 +131,7 @@ export default function TripMapScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header trip={null} onBack={() => router.back()} />
+        <Header trip={null} onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#8CC63F" />
           <Text style={styles.loadingText}>Loading trip map…</Text>
@@ -142,7 +142,7 @@ export default function TripMapScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header trip={trip} onBack={() => router.back()} />
+      <Header trip={trip} onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
 
       {/* Weather bar for destination */}
       {weather && (

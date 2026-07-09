@@ -14,6 +14,7 @@ import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
+import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
 import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
@@ -71,6 +72,8 @@ type LocEntry = {
   lng: number;
   radius_km: number;
   rate_per_day: number;
+  state?: string;
+  district?: string;
 };
 
 type CertEntry = {
@@ -99,6 +102,8 @@ export default function GuideRegisterScreen() {
   const [editingLocIdx, setEditingLocIdx] = useState<number | null>(null);
   // Location editor state
   const [locName, setLocName] = useState('');
+  const [locState, setLocState] = useState('');
+  const [locDistrict, setLocDistrict] = useState('');
   const [locCoords, setLocCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locRadius, setLocRadius] = useState(50);
   const [locRate, setLocRate] = useState('');
@@ -189,7 +194,7 @@ export default function GuideRegisterScreen() {
     if (text.length < 3) { setLocSuggestions([]); return; }
     setLocSearching(true);
     locSearchTimeout.current = setTimeout(async () => {
-      const results = await searchPlaces(text);
+      const results = await searchPlaces(text, getStateCenter(locState));
       setLocSuggestions(results);
       setLocSearching(false);
     }, 500);
@@ -203,7 +208,7 @@ export default function GuideRegisterScreen() {
 
   const openAddLocation = () => {
     setEditingLocIdx(null);
-    setLocName(''); setLocCoords(null); setLocRadius(50); setLocRate('');
+    setLocName(''); setLocState(''); setLocDistrict(''); setLocCoords(null); setLocRadius(50); setLocRate('');
     setLocSuggestions([]);
     setShowLocModal(true);
   };
@@ -212,6 +217,8 @@ export default function GuideRegisterScreen() {
     const loc = locations[idx];
     setEditingLocIdx(idx);
     setLocName(loc.name);
+    setLocState(loc.state || '');
+    setLocDistrict(loc.district || '');
     setLocCoords({ lat: loc.lat, lng: loc.lng });
     setLocRadius(loc.radius_km);
     setLocRate(String(loc.rate_per_day));
@@ -230,6 +237,8 @@ export default function GuideRegisterScreen() {
       lng: locCoords.lng,
       radius_km: locRadius,
       rate_per_day: parseFloat(locRate),
+      state: locState || undefined,
+      district: locDistrict || undefined,
     };
 
     if (editingLocIdx !== null) {
@@ -792,7 +801,13 @@ export default function GuideRegisterScreen() {
             </View>
 
             <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-              <Text style={s.label}>Location Name *</Text>
+              <Text style={s.label}>State / District</Text>
+              <LocationPicker
+                value={{ state: locState, district: locDistrict }}
+                onChange={(v) => { setLocState(v.state); setLocDistrict(v.district); }}
+              />
+
+              <Text style={[s.label, { marginTop: 16 }]}>Location Name *</Text>
               <View style={s.searchBox}>
                 <Ionicons name="location-outline" size={16} color={GREEN} />
                 <TextInput

@@ -18,6 +18,7 @@ import { checkGuideIsPremium, getMyGuideProfile } from '@/lib/expeditions';
 import PremiumGuardBanner from '@/components/PremiumGuardBanner';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
+import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
 
 const DIFFICULTIES = ['easy', 'moderate', 'challenging', 'expert'] as const;
 type Difficulty = typeof DIFFICULTIES[number];
@@ -43,6 +44,8 @@ export default function CreateExpeditionScreen() {
   // Step 1: Basics
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  const [destState, setDestState] = useState('');
+  const [destDistrict, setDestDistrict] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [destSuggestions, setDestSuggestions] = useState<GeocodeResult[]>([]);
@@ -111,7 +114,7 @@ export default function CreateExpeditionScreen() {
     if (text.length < 3) { setDestSuggestions([]); return; }
     setDestSearching(true);
     destSearchTimeout.current = setTimeout(async () => {
-      const results = await searchPlaces(text);
+      const results = await searchPlaces(text, getStateCenter(destState));
       setDestSuggestions(results);
       setDestSearching(false);
     }, 500);
@@ -220,6 +223,8 @@ export default function CreateExpeditionScreen() {
         title,
         description,
         destination,
+        destination_state: destState || undefined,
+        destination_district: destDistrict || undefined,
         lat: coords?.lat,
         lng: coords?.lng,
         start_date: startDate,
@@ -310,7 +315,11 @@ export default function CreateExpeditionScreen() {
 
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Destination *</Text>
-              <View style={styles.destInputRow}>
+              <LocationPicker
+                value={{ state: destState, district: destDistrict }}
+                onChange={(v) => { setDestState(v.state); setDestDistrict(v.district); }}
+              />
+              <View style={[styles.destInputRow, { marginTop: 12 }]}>
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   placeholder="e.g., Uttarakhand, India"

@@ -17,6 +17,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import PhoneInput from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
+import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -63,6 +64,8 @@ export default function CreateTripScreen() {
   // Basic fields
   const [tripType, setTripType]       = useState('trek');
   const [destination, setDestination] = useState('');
+  const [destState, setDestState]     = useState('');
+  const [destDistrict, setDestDistrict] = useState('');
   const [coords, setCoords]           = useState<[number, number] | null>(null);
   const [title, setTitle]             = useState('');
   const [description, setDescription] = useState('');
@@ -100,7 +103,7 @@ export default function CreateTripScreen() {
     if (text.length < 3) { setSuggestions([]); return; }
     setSearching(true);
     searchTimeout.current = setTimeout(async () => {
-      const results = await searchPlaces(text);
+      const results = await searchPlaces(text, getStateCenter(destState));
       setSuggestions(results);
       setSearching(false);
     }, 500);
@@ -113,7 +116,7 @@ export default function CreateTripScreen() {
   };
 
   const resetForm = () => {
-    setTripType('trek'); setDestination(''); setCoords(null);
+    setTripType('trek'); setDestination(''); setDestState(''); setDestDistrict(''); setCoords(null);
     setTitle(''); setDescription(''); setStartDate(''); setEndDate(''); setDateModal(false); setPhotos([]);
     setGroupSize(''); setBudget(''); setMeetingPoint(''); setMeetingCoords(null); setExperienceLevel('');
     setIsPublic(false); setLookingForPartner(false);
@@ -183,6 +186,8 @@ export default function CreateTripScreen() {
       created_by: user?.id,
       title: title.trim(),
       destination: destination.trim(),
+      destination_state: destState || null,
+      destination_district: destDistrict || null,
       lat: coords ? coords[1] : null,
       lng: coords ? coords[0] : null,
       start_date: startDate,
@@ -313,6 +318,12 @@ export default function CreateTripScreen() {
 
           {/* ── DESTINATION ── */}
           <SectionLabel title="Destination" icon="location-outline" />
+          <View style={s.fieldGap}>
+            <LocationPicker
+              value={{ state: destState, district: destDistrict }}
+              onChange={(v) => { setDestState(v.state); setDestDistrict(v.district); }}
+            />
+          </View>
           <View style={s.inputRow}>
             <Ionicons name="search-outline" size={18} color={GREEN} />
             <TextInput

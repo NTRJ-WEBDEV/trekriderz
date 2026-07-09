@@ -47,6 +47,8 @@ interface ExpeditionState {
       title: string;
       description: string;
       destination: string;
+      destination_state?: string;
+      destination_district?: string;
       lat?: number;
       lng?: number;
       start_date: string;

@@ -13,6 +13,7 @@ import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import PhoneInput from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
+import LocationPicker from '@/components/LocationPicker';
 
 const GREEN = '#8CC63F';
 const BG = '#080C14';
@@ -51,6 +52,8 @@ export default function RegisterRentalScreen() {
   const [description, setDescription] = useState('');
   const [pricePerDay, setPricePerDay] = useState('');
   const [location, setLocation] = useState('');
+  const [pickupState, setPickupState] = useState('');
+  const [pickupDistrict, setPickupDistrict] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
@@ -140,6 +143,8 @@ export default function RegisterRentalScreen() {
       description: description.trim() || null,
       price_per_day: parseInt(pricePerDay),
       location: location.trim(),
+      pickup_state: pickupState || null,
+      pickup_district: pickupDistrict || null,
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
       contact_phone: `${contactPhoneCode}${contactPhone.trim()}`,
@@ -422,8 +427,14 @@ export default function RegisterRentalScreen() {
             </>
           )}
 
+          <Text style={styles.label}>State / District</Text>
+          <LocationPicker
+            value={{ state: pickupState, district: pickupDistrict }}
+            onChange={(v) => { setPickupState(v.state); setPickupDistrict(v.district); }}
+          />
+
           <Text style={styles.label}>Location *</Text>
-          <TextInput style={styles.input} placeholder="Where is the vehicle available? (city/area)" placeholderTextColor="rgba(255,255,255,0.25)" value={location} onChangeText={setLocation} />
+          <TextInput style={styles.input} placeholder="Town/area, e.g. Madikeri" placeholderTextColor="rgba(255,255,255,0.25)" value={location} onChangeText={setLocation} />
 
           <TouchableOpacity style={styles.mapPinBtn} onPress={() => setShowMapPicker(true)}>
             <Ionicons name="map-outline" size={14} color={GREEN} />

@@ -14,6 +14,7 @@ import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
+import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
 import PhoneInput from '@/components/PhoneInput';
 
 const GREEN = '#8CC63F';
@@ -63,17 +64,7 @@ const CANCELLATION_POLICIES: { id: string; label: string; emoji: string; desc: s
   { id: 'non_refundable', label: 'Non-refundable', emoji: '⛔', desc: 'No refund on cancellation. Lower price attracts more bookings.' },
 ];
 
-const INDIA_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa',
-  'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala',
-  'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland',
-  'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
-  'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands',
-  'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
-  'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
-];
 const OTHER_COUNTRIES = ['Nepal', 'Bhutan', 'Philippines', 'Indonesia', 'Cambodia'];
-const STATE_OPTIONS = [...INDIA_STATES, ...OTHER_COUNTRIES];
 
 const ROOM_CATEGORIES = [
   { id: 'private_room', label: 'Private Room' },
@@ -196,13 +187,13 @@ export default function CreatePropertyScreen() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [district, setDistrict] = useState('');
   const [pincode, setPincode] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationName, setLocationName] = useState('');
   const [locSuggestions, setLocSuggestions] = useState<GeocodeResult[]>([]);
   const [locSearching, setLocSearching] = useState(false);
   const [showMapPicker, setShowMapPicker] = useState(false);
-  const [showStatePicker, setShowStatePicker] = useState(false);
   const locSearchTimeout = useRef<any>(null);
 
   const [checkinTime, setCheckinTime] = useState('14:00');
@@ -309,7 +300,7 @@ export default function CreatePropertyScreen() {
     if (text.length < 3) { setLocSuggestions([]); return; }
     setLocSearching(true);
     locSearchTimeout.current = setTimeout(async () => {
-      const results = await searchPlaces(text);
+      const results = await searchPlaces(text, getStateCenter(state));
       setLocSuggestions(results);
       setLocSearching(false);
     }, 500);
@@ -566,6 +557,7 @@ export default function CreatePropertyScreen() {
         address: address.trim(),
         city: city.trim(),
         state,
+        district: district || null,
         country,
         pincode: pincode.trim() || null,
         lat: coords?.lat,
@@ -693,7 +685,8 @@ export default function CreatePropertyScreen() {
               address={address} onAddressChange={handleLocSearch}
               locSuggestions={locSuggestions} locSearching={locSearching} onSelectSuggestion={selectLocSuggestion}
               city={city} setCity={setCity}
-              state={state} onOpenStatePicker={() => setShowStatePicker(true)}
+              state={state} district={district}
+              onLocationChange={(v: { state: string; district: string }) => { setState(v.state); setDistrict(v.district); }}
               country={country}
               pincode={pincode} setPincode={setPincode}
               coords={coords} onOpenMap={() => setShowMapPicker(true)}
@@ -774,33 +767,6 @@ export default function CreatePropertyScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* State Picker Modal */}
-      <Modal visible={showStatePicker} animationType="slide" transparent>
-        <View style={s.modalOverlay}>
-          <SafeAreaView style={s.modalSheet} edges={['bottom']}>
-            <View style={s.modalHandle} />
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Select State / Country</Text>
-              <TouchableOpacity onPress={() => setShowStatePicker(false)}>
-                <Ionicons name="close" size={22} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 20 }}>
-              {STATE_OPTIONS.map((opt, i) => (
-                <TouchableOpacity
-                  key={opt}
-                  style={[s.stateOption, i < STATE_OPTIONS.length - 1 && s.stateOptionBorder]}
-                  onPress={() => { setState(opt); setShowStatePicker(false); }}
-                >
-                  <Text style={[s.stateOptionText, state === opt && { color: GREEN, fontWeight: '800' }]}>{opt}</Text>
-                  {state === opt && <Ionicons name="checkmark" size={16} color={GREEN} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </Modal>
 
       <MapPickerModal
         visible={showMapPicker}
@@ -1057,7 +1023,7 @@ function Step1(props: any) {
     photoUris, photoUrls, photoUploading, onPickPhotos, onRemovePhoto,
     name, setName, propertyTypes, onToggleType, description, setDescription,
     address, onAddressChange, locSuggestions, locSearching, onSelectSuggestion,
-    city, setCity, state, onOpenStatePicker, country, pincode, setPincode,
+    city, setCity, state, district, onLocationChange, country, pincode, setPincode,
     coords, onOpenMap, checkinTime, setCheckinTime, checkoutTime, setCheckoutTime,
     amenities, onToggleAmenity, smokingAllowed, setSmokingAllowed,
     petsAllowed, setPetsAllowed, partiesAllowed, setPartiesAllowed,
@@ -1152,21 +1118,13 @@ function Step1(props: any) {
         </View>
       </View>
 
-      <View style={s.row2}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.label}>State *</Text>
-          <TouchableOpacity style={s.selectBox} onPress={onOpenStatePicker}>
-            <Text style={[s.selectBoxText, !state && { color: '#555' }]}>{state || 'Select state'}</Text>
-            <Ionicons name="chevron-down" size={16} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.label}>Country</Text>
-          <View style={[s.selectBox, { opacity: 0.6 }]}>
-            <Text style={s.selectBoxText}>{country}</Text>
-          </View>
-        </View>
-      </View>
+      <LocationPicker
+        value={{ state, district }}
+        onChange={onLocationChange}
+        extraStateOptions={OTHER_COUNTRIES}
+        stateLabel="State *"
+      />
+      <Text style={s.countryHint}>Country: {country}</Text>
 
       <TouchableOpacity style={s.mapPinBtn} onPress={onOpenMap}>
         <Ionicons name="map-outline" size={14} color={GREEN} />
@@ -1601,6 +1559,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 16,
   },
   selectBoxText: { color: '#FFF', fontSize: 15 },
+  countryHint: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: -12, marginBottom: 16 },
   mapPinBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginBottom: 20, paddingHorizontal: 12, paddingVertical: 12,

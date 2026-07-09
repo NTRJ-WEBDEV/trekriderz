@@ -117,10 +117,10 @@ function VehicleHireScreen({ id }: { id: string }) {
     }
   };
 
-  const openWhatsApp = () => {
-    if (!vehicle) return;
-    if (!startDate || !endDate) { Alert.alert('Select Dates', 'Please select your rental dates.'); return; }
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
+  const goToWhatsApp = () => {
+    if (!vehicle || !startDate || !endDate) return;
     const vehicleName = `${vehicle.make} ${vehicle.model}`;
     const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     const isUnlimited = rentalType === 'local' ? vehicle.local_unlimited_km : vehicle.outstation_unlimited_km;
@@ -140,6 +140,47 @@ function VehicleHireScreen({ id }: { id: string }) {
     Linking.openURL(`whatsapp://send?phone=${phone}&text=${msg}`).catch(() =>
       Linking.openURL(`https://wa.me/${phone}?text=${msg}`)
     );
+  };
+
+  const openWhatsApp = async () => {
+    if (!vehicle) return;
+    if (!startDate || !endDate) { Alert.alert('Select Dates', 'Please select your rental dates.'); return; }
+
+    setSubmittingInquiry(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id;
+
+      let hasOverlap = false;
+      if (userId) {
+        const { data: overlap } = await supabase.rpc('check_rental_inquiry_overlap', {
+          p_vehicle_id: vehicle.id,
+          p_start: startDate,
+          p_end: endDate,
+        });
+        hasOverlap = !!overlap;
+
+        await supabase.from('rental_inquiries').insert({
+          vehicle_id: vehicle.id,
+          user_id: userId,
+          start_date: startDate,
+          end_date: endDate,
+          status: 'new',
+        });
+      }
+
+      if (hasOverlap) {
+        Alert.alert(
+          'Heads Up',
+          'These dates may already be requested by someone else for this vehicle. You can still message the owner to confirm.',
+          [{ text: 'Continue to WhatsApp', onPress: goToWhatsApp }, { text: 'Cancel', style: 'cancel' }]
+        );
+      } else {
+        goToWhatsApp();
+      }
+    } finally {
+      setSubmittingInquiry(false);
+    }
   };
 
   if (fetching) return (
@@ -344,8 +385,8 @@ function VehicleHireScreen({ id }: { id: string }) {
               {days} day{days > 1 ? 's' : ''} · ₹{cost.total.toLocaleString('en-IN')} estimated
             </Text>
           )}
-          <TouchableOpacity style={vStyles.waBtn} onPress={openWhatsApp} activeOpacity={0.85}>
-            <Ionicons name="logo-whatsapp" size={20} color="#FFF" />
+          <TouchableOpacity style={[vStyles.waBtn, submittingInquiry && { opacity: 0.6 }]} onPress={openWhatsApp} activeOpacity={0.85} disabled={submittingInquiry}>
+            {submittingInquiry ? <ActivityIndicator color="#FFF" /> : <Ionicons name="logo-whatsapp" size={20} color="#FFF" />}
             <Text style={vStyles.waBtnText}>Book via WhatsApp</Text>
           </TouchableOpacity>
         </View>
@@ -498,11 +539,25 @@ function GuideHireScreen({ id, name, price }: { id: string; name: string; price:
     try {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user?.id) { Alert.alert('Login Required', 'You must be logged in to hire a guide.'); router.push('/login' as any); return; }
+
+      const { data: hasOverlap, error: overlapError } = await supabase.rpc('check_guide_inquiry_overlap', {
+        p_guide_id: id,
+        p_start: startDate,
+        p_end: endDate,
+      });
+      if (overlapError) throw overlapError;
+      if (hasOverlap) {
+        Alert.alert('Dates Unavailable', 'This guide already has a pending or confirmed request for these dates. Please choose different dates.');
+        return;
+      }
+
       const tripDates = startDate === endDate ? startDate : `${startDate} to ${endDate}`;
       const { error } = await supabase.from('guide_inquiries').insert({
         guide_id: id,
         user_id: authData.user.id,
         trip_dates: tripDates,
+        start_date: startDate,
+        end_date: endDate,
         location: tripLocation || null,
         group_size: guests,
         specialization_needed: specializationNeeded || null,

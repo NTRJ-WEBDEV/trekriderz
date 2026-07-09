@@ -119,13 +119,25 @@ export default function NotificationsScreen() {
 
     setActionLoading(notif.id);
     try {
-      const { error: memberError } = await supabase
-        .from('trip_members')
-        .update({ status: action })
-        .eq('trip_id', tripId)
-        .eq('user_id', user.id);
+      if (action === 'accepted') {
+        const { data: result, error: acceptError } = await supabase.rpc('accept_trip_invite', {
+          p_trip_id: tripId,
+        });
+        if (acceptError) throw acceptError;
+        if (!result?.success) {
+          Alert.alert('Cannot Join', result?.message || 'This trip is already full.');
+          setActionLoading(null);
+          return;
+        }
+      } else {
+        const { error: memberError } = await supabase
+          .from('trip_members')
+          .update({ status: action })
+          .eq('trip_id', tripId)
+          .eq('user_id', user.id);
 
-      if (memberError) throw memberError;
+        if (memberError) throw memberError;
+      }
 
       await supabase
         .from('notifications')

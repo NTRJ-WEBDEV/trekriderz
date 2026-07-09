@@ -149,6 +149,18 @@ export default function HomestayDetailScreen() {
     }
     setSubmittingEnquiry(true);
     try {
+      const { data: hasOverlap, error: overlapError } = await supabase.rpc('check_property_inquiry_overlap', {
+        p_room_type_id: calcRoom.id,
+        p_checkin: checkin,
+        p_checkout: checkout,
+      });
+      if (overlapError) throw overlapError;
+      if (hasOverlap) {
+        Alert.alert('Dates Unavailable', 'These dates are already requested or booked for this room. Please choose different dates.');
+        setSubmittingEnquiry(false);
+        return;
+      }
+
       const { error } = await supabase.from('property_inquiries').insert({
         property_id: property.id,
         room_type_id: calcRoom.id,

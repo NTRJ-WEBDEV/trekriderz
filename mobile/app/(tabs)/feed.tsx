@@ -103,11 +103,13 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
 
       if (userId) {
         try {
+          const today = new Date().toISOString().split('T')[0];
           const { data: trips } = await supabase
             .from('trips')
             .select('id, title, destination, trip_type, start_date')
             .eq('created_by', userId)
             .in('status', ['planning', 'confirmed'])
+            .gte('end_date', today)
             .order('start_date', { ascending: true })
             .limit(4);
 

@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -34,6 +35,7 @@ export default function EditProfileScreen() {
     bio: '',
     avatar_url: '',
     location: '',
+    is_private: false,
   });
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function EditProfileScreen() {
           bio: data.bio || '',
           avatar_url: data.avatar_url || '',
           location: data.location || '',
+          is_private: !!data.is_private,
         });
       }
     } catch (error) {
@@ -114,6 +117,7 @@ export default function EditProfileScreen() {
           bio: form.bio.trim(),
           avatar_url: form.avatar_url,
           location: form.location.trim(),
+          is_private: form.is_private,
           updated_at: new Date().toISOString(),
         });
 
@@ -259,6 +263,25 @@ export default function EditProfileScreen() {
               />
             </View>
           </View>
+
+          {/* Private Account */}
+          <View style={styles.fieldGroup}>
+            <View style={styles.privacyRow}>
+              <View style={styles.privacyTextWrap}>
+                <Text style={styles.fieldLabel}>Private Account</Text>
+                <Text style={styles.privacyHint}>
+                  When on, new followers need your approval before they're added. This only
+                  affects who can follow you — your posts stay visible to everyone for now.
+                </Text>
+              </View>
+              <Switch
+                value={form.is_private}
+                onValueChange={v => setForm(prev => ({ ...prev, is_private: v }))}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: GREEN }}
+                thumbColor="#FFF"
+              />
+            </View>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.cancelBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
@@ -319,6 +342,9 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: '#FFF', fontSize: 15 },
   bioInput: { minHeight: 90, lineHeight: 22 },
   charCount: { color: 'rgba(255,255,255,0.3)', fontSize: 12, textAlign: 'right', marginTop: 4 },
+  privacyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  privacyTextWrap: { flex: 1 },
+  privacyHint: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4, lineHeight: 17 },
   cancelBtn: {
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     borderRadius: 14, height: 52,

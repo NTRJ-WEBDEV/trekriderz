@@ -33,7 +33,7 @@ export default function UserProfileScreen() {
     setLoading(true);
     try {
       const [profileRes, tripsRes, followersRes, followingRes, myFollowRes] = await Promise.all([
-        supabase.from('users').select('id, full_name, avatar_url, bio, location, role, is_verified, created_at').eq('id', targetId).single(),
+        supabase.from('users').select('id, full_name, avatar_url, bio, location, role, is_verified, is_private, created_at').eq('id', targetId).single(),
         supabase.from('trips').select('id', { count: 'exact', head: true }).eq('created_by', targetId),
         supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('following_id', targetId).eq('status', 'accepted'),
         supabase.from('user_follows').select('id', { count: 'exact', head: true }).eq('follower_id', targetId).eq('status', 'accepted'),
@@ -66,21 +66,21 @@ export default function UserProfileScreen() {
           setStats(prev => ({ ...prev, followers: Math.max(0, prev.followers - 1) }));
         }
       } else {
-        const { error } = await supabase.from('user_follows').insert({
+        const isPrivate = !!profile?.is_private;
+        // upsert, not insert — a prior decline leaves a 'rejected' row occupying the
+        // (follower_id, following_id) unique slot, which a plain insert would conflict on
+        const { error } = await supabase.from('user_follows').upsert({
           follower_id: user.id,
           following_id: targetId,
-          status: 'pending',
-        });
+          status: isPrivate ? 'pending' : 'accepted',
+        }, { onConflict: 'follower_id,following_id' });
         if (error) throw error;
-        await supabase.from('notifications').insert({
-          user_id: targetId,
-          sender_id: user.id,
-          type: 'follow',
-          title: 'New Follow Request',
-          message: 'wants to follow you',
-          related_id: user.id,
-        });
-        setFollowStatus('pending');
+        if (isPrivate) {
+          setFollowStatus('pending');
+        } else {
+          setFollowStatus('accepted');
+          setStats(prev => ({ ...prev, followers: prev.followers + 1 }));
+        }
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not update follow status');

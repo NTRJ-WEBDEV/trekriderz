@@ -169,20 +169,16 @@ export default function NotificationsScreen() {
 
     setActionLoading(notif.id);
     try {
-      if (action === 'accepted') {
-        const { error } = await supabase
-          .from('user_follows')
-          .update({ status: 'accepted' })
-          .eq('follower_id', followerId)
-          .eq('following_id', user.id);
-        if (error) throw error;
-      } else {
-        await supabase
-          .from('user_follows')
-          .delete()
-          .eq('follower_id', followerId)
-          .eq('following_id', user.id);
-      }
+      // RLS only lets the follower delete their own row (follows_delete: follower_id =
+      // auth.uid()), so the followee accepting/declining must go through follows_update
+      // (following_id = auth.uid()) for both actions — a delete here would silently
+      // affect zero rows instead of erroring.
+      const { error } = await supabase
+        .from('user_follows')
+        .update({ status: action === 'accepted' ? 'accepted' : 'rejected' })
+        .eq('follower_id', followerId)
+        .eq('following_id', user.id);
+      if (error) throw error;
 
       await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
       fetchNotifications();

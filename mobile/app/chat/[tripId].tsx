@@ -39,7 +39,7 @@ export default function TripChatScreen() {
     fetchMembers();
     setupRealtime();
     return () => {
-      channelRef.current?.unsubscribe();
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
   }, [tripId]);
 

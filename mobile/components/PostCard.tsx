@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { usePostRealtime } from '@/hooks/usePostRealtime';
 import YouTubePlayer from './YouTubePlayer';
+import PostShareSheet from './PostShareSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,6 +139,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editCaption, setEditCaption] = useState('');
   const [reportVisible, setReportVisible] = useState(false);
+  const [shareVisible, setShareVisible] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handleSave = async () => {
@@ -392,7 +394,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
           >
             <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity onPress={() => setShareVisible(true)} style={styles.actionBtn}>
             <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
@@ -403,9 +405,11 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
 
       {/* Likes Count */}
       <View style={styles.metaSection}>
-        <Text style={[styles.likesText, { color: colors.text }]}>
-          {likesCount} {likesCount === 1 ? 'like' : 'likes'}
-        </Text>
+        <TouchableOpacity onPress={() => router.push(`/post/likes/${post.id}` as any)}>
+          <Text style={[styles.likesText, { color: colors.text }]}>
+            {likesCount} {likesCount === 1 ? 'like' : 'likes'}
+          </Text>
+        </TouchableOpacity>
 
         {/* Caption */}
         {caption ? (
@@ -562,6 +566,18 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      </Modal>
+
+      {/* Share Sheet */}
+      <Modal
+        visible={shareVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShareVisible(false)}
+      >
+        <View style={styles.editOverlay}>
+          <PostShareSheet postId={post.id} content={caption} onClose={() => setShareVisible(false)} />
         </View>
       </Modal>
     </View>

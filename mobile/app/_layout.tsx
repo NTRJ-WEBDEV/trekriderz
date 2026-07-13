@@ -185,6 +185,7 @@ export default function RootLayout() {
         <Stack.Screen name="user/[id]" />
         <Stack.Screen name="trips/[id]" />
         <Stack.Screen name="followers/[id]" />
+        <Stack.Screen name="post/likes/[id]" />
       </Stack>
       <StatusBar style="light" />
     </QueryClientProvider>

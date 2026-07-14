@@ -10,6 +10,7 @@ import { searchPlaces } from '@/lib/geocoding';
 import { fetchWeatherOpenMeteo, formatWeatherAge, WeatherData } from '@/lib/weather';
 import { Ionicons } from '@expo/vector-icons';
 import ExploreMapView, { MapMarker } from '@/components/ExploreMapView';
+import { setActiveTrailTripId, primeTrailCache } from '@/lib/offline-safety';
 
 const WEATHER_EMOJI: Record<string, string> = {
   sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
@@ -60,6 +61,21 @@ export default function TripMapScreen() {
           setDestLng(dlng);
           const w = await fetchWeatherOpenMeteo(dlat, dlng).catch(() => null);
           if (w) setWeather(w);
+        }
+
+        // Trail recording is active only while today falls within the trip's
+        // own dates — viewing a past or future trip's map doesn't start it.
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isOngoing = tripData.start_date <= todayStr && todayStr <= tripData.end_date;
+        if (isOngoing) {
+          await setActiveTrailTripId(tripData.id);
+          primeTrailCache({
+            tripId: tripData.id,
+            tripTitle: tripData.title,
+            tripEndDate: tripData.end_date,
+            destinationLat: dlat ?? undefined,
+            destinationLng: dlng ?? undefined,
+          }).catch(() => {});
         }
       }
 
@@ -143,6 +159,17 @@ export default function TripMapScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Header trip={trip} onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} />
+
+      {/* Offline safety view — sibling of the WebView map, not inside it, so
+          it's reachable even if the map's WebView never loads (no network). */}
+      <TouchableOpacity
+        style={styles.trailViewBtn}
+        onPress={() => router.push(`/trail-view?tripId=${tripId}` as any)}
+        accessibilityLabel="Open offline trail view"
+      >
+        <Ionicons name="shield-checkmark-outline" size={16} color="#080C14" />
+        <Text style={styles.trailViewBtnText}>Trail View</Text>
+      </TouchableOpacity>
 
       {/* Weather bar for destination */}
       {weather && (
@@ -307,6 +334,13 @@ const styles = StyleSheet.create({
   },
   destName: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   destDates: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 },
+  trailViewBtn: {
+    position: 'absolute', right: 14, bottom: 100, zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 22, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
+  },
+  trailViewBtnText: { color: '#080C14', fontWeight: '800', fontSize: 12.5 },
   refreshBtn: {
     width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(140,198,63,0.1)', borderRadius: 18,

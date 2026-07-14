@@ -9,8 +9,10 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Swiper from 'react-native-swiper';
+import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { cacheHomestayRoute } from '@/lib/offline-safety';
 
 const { width } = Dimensions.get('window');
 const GREEN = '#8CC63F';
@@ -89,11 +91,36 @@ export default function HomestayDetailScreen() {
         .single();
       if (error) throw error;
       setProperty(data);
+
+      // Cache a straight-line "route to shelter" while we're online and know
+      // where the user is — this is what the offline safety view falls back
+      // to if signal drops before they reach it.
+      if (data?.lat && data?.lng) {
+        cacheRouteToShelter(data).catch(() => {});
+      }
     } catch (error) {
       console.error('Error fetching property:', error);
       Alert.alert('Error', 'Failed to load property details. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cacheRouteToShelter = async (homestay: any) => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      await cacheHomestayRoute({
+        homestayId: homestay.id,
+        homestayName: homestay.name,
+        homestayLat: parseFloat(homestay.lat),
+        homestayLng: parseFloat(homestay.lng),
+        fromLat: loc.coords.latitude,
+        fromLng: loc.coords.longitude,
+      });
+    } catch (_) {
+      // No GPS fix / permission denied — nothing to cache, not fatal.
     }
   };
 

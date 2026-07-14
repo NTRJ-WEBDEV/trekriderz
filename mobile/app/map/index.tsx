@@ -280,6 +280,17 @@ export default function ExploreMapScreen() {
       </ScrollView>
 
       {/* Map */}
+      {/* Offline safety view — sibling of the WebView map, not inside it, so
+          it's reachable even if the map's WebView never loads (no network). */}
+      <TouchableOpacity
+        style={styles.trailViewBtn}
+        onPress={() => router.push('/trail-view' as any)}
+        accessibilityLabel="Open offline trail view"
+      >
+        <Ionicons name="shield-checkmark-outline" size={16} color="#080C14" />
+        <Text style={styles.trailViewBtnText}>Trail View</Text>
+      </TouchableOpacity>
+
       {loading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color="#8CC63F" />
@@ -489,6 +500,13 @@ const styles = StyleSheet.create({
   inlineWeatherWind: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginLeft: 4 },
   inlineWeatherStale: { color: '#F59E0B', fontSize: 11, fontWeight: '700', marginLeft: 4 },
   inlineWeatherNoData: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginVertical: 10 },
+  trailViewBtn: {
+    position: 'absolute', right: 14, bottom: 24, zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 22, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, elevation: 6,
+  },
+  trailViewBtnText: { color: '#080C14', fontWeight: '800', fontSize: 12.5 },
 
   sheetActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   sheetBtnPrimary: {

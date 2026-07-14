@@ -24,6 +24,7 @@ import '@/services/background-location';
 import OfflineBanner from '@/components/OfflineBanner';
 import { syncService } from '@/services/sync-service';
 import { maybeRequestReview } from '@/lib/review-prompt';
+import { cleanupExpiredOfflineCaches } from '@/lib/offline-safety';
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,10 @@ export default function RootLayout() {
   useEffect(() => {
     init();
     setupNotificationCategories();
+    // Purely local (AsyncStorage only) — runs unconditionally, before auth or
+    // any network resolves, so expired offline-safety caches get pruned even
+    // on a fully offline cold start.
+    cleanupExpiredOfflineCaches().catch(() => {});
     const sub = Linking.addEventListener('url', (e) => handleDeepLink(e.url));
     Linking.getInitialURL().then((u) => { if (u) handleDeepLink(u); });
     return () => {
@@ -136,6 +141,7 @@ export default function RootLayout() {
         <Stack.Screen name="budget/[tripId]" />
         <Stack.Screen name="safety/[tripId]" />
         <Stack.Screen name="map/[tripId]" />
+        <Stack.Screen name="trail-view/index" />
         <Stack.Screen name="poi/submit" />
         <Stack.Screen name="homestay/[id]" />
         <Stack.Screen name="guide/[id]" />

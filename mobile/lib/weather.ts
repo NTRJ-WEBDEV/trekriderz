@@ -1,4 +1,3 @@
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Key is server-side only — mobile calls our own Next.js proxy
@@ -8,7 +7,10 @@ const WEATHER_PROXY_URL = process.env.EXPO_PUBLIC_WEB_API_URL
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const CACHE_KEY_PREFIX = 'weather_cache_';
-const CACHE_EXPIRY = 3 * 60 * 60 * 1000; // 3 hours
+// How recent a cached entry must be to skip a live fetch entirely — a
+// freshness optimization, not an eviction rule. Entries older than this are
+// never deleted; they're always what gets served if a live fetch fails.
+const FRESH_WINDOW = 3 * 60 * 60 * 1000; // 3 hours
 
 export interface WeatherData {
   currentTemp: number;
@@ -21,21 +23,88 @@ export interface WeatherData {
     temp: number;
     icon: string;
   }>;
+  /** True when this payload was served from cache because a live fetch failed
+   *  (not merely because it was within the freshness window). */
+  isStale?: boolean;
+  /** Epoch ms this data was actually fetched from the network. */
+  fetchedAt?: number;
 }
 
 /**
- * Fetch detailed weather using coordinates with 24h caching
+ * Human-readable cache age, for "Last updated Xh ago" style UI copy.
+ */
+export function formatWeatherAge(fetchedAt: number): string {
+  const diffMs = Date.now() - fetchedAt;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+// ── Shared "last known good" cache — one implementation, used by every provider ──
+
+interface CacheEnvelope {
+  timestamp: number;
+  data: WeatherData;
+}
+
+function cacheKeyFor(provider: 'proxy' | 'om', lat: number, lng: number): string {
+  return `${CACHE_KEY_PREFIX}${provider}_${lat.toFixed(2)}_${lng.toFixed(2)}`;
+}
+
+async function readWeatherCache(key: string): Promise<CacheEnvelope | null> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as CacheEnvelope) : null;
+  } catch (error) {
+    console.error('Weather cache read error:', error);
+    return null;
+  }
+}
+
+async function writeWeatherCache(key: string, data: WeatherData): Promise<void> {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), data } as CacheEnvelope));
+  } catch (error) {
+    console.error('Weather cache write error:', error);
+  }
+}
+
+function withMeta(data: WeatherData, fetchedAt: number, isStale: boolean): WeatherData {
+  return { ...data, isStale, fetchedAt };
+}
+
+// ── OpenWeatherMap via server proxy (key stays server-side) ────────────────
+
+function getIconName(iconCode: string): string {
+  const map: Record<string, string> = {
+    '01d': 'sunny', '01n': 'moon', '02d': 'partly-sunny', '02n': 'cloudy-night',
+    '03d': 'cloudy', '03n': 'cloudy', '04d': 'cloudy', '04n': 'cloudy',
+    '09d': 'rainy', '09n': 'rainy', '10d': 'rainy', '10n': 'rainy',
+    '11d': 'thunderstorm', '11n': 'thunderstorm', '13d': 'snow', '13n': 'snow',
+    '50d': 'help-circle-outline', '50n': 'help-circle-outline'
+  };
+  return map[iconCode] || 'cloud-outline';
+}
+
+/**
+ * Fetch detailed weather using coordinates, backed by a persistent
+ * last-known-good cache. Never returns null while ANY cached entry exists
+ * for this coordinate — only when there is truly nothing cached and no
+ * provider (including the Open-Meteo fallback) can be reached.
  */
 export async function fetchWeatherByCoords(lat: number, lng: number): Promise<WeatherData | null> {
-  const cacheKey = `${CACHE_KEY_PREFIX}${lat.toFixed(2)}_${lng.toFixed(2)}`;
+  const key = cacheKeyFor('proxy', lat, lng);
+  const cached = await readWeatherCache(key);
+
+  if (cached && Date.now() - cached.timestamp < FRESH_WINDOW) {
+    return withMeta(cached.data, cached.timestamp, false);
+  }
 
   try {
-    const cachedData = await AsyncStorage.getItem(cacheKey);
-    if (cachedData) {
-      const { timestamp, data } = JSON.parse(cachedData);
-      if (Date.now() - timestamp < CACHE_EXPIRY) return data;
-    }
-
     // Call our own Next.js proxy — API key never leaves the server
     const res = await fetch(`${WEATHER_PROXY_URL}?lat=${lat}&lng=${lng}`);
     if (!res.ok) throw new Error(`Proxy error ${res.status}`);
@@ -54,11 +123,15 @@ export async function fetchWeatherByCoords(lat: number, lng: number): Promise<We
       })),
     };
 
-    await AsyncStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: weatherData }));
-    return weatherData;
+    await writeWeatherCache(key, weatherData);
+    return withMeta(weatherData, Date.now(), false);
   } catch (error) {
     console.error('Error fetching weather:', error);
-    // Fallback to Open-Meteo if proxy unavailable
+    if (cached) {
+      return withMeta(cached.data, cached.timestamp, true);
+    }
+    // No cache at all for this coordinate under this provider — fall back
+    // to Open-Meteo, which has its own fresh/stale/null handling.
     return fetchWeatherOpenMeteo(lat, lng);
   }
 }
@@ -89,18 +162,19 @@ function wmoToCondition(code: number): string {
 }
 
 export async function fetchWeatherOpenMeteo(lat: number, lng: number): Promise<WeatherData | null> {
-  const cacheKey = `${CACHE_KEY_PREFIX}om_${lat.toFixed(2)}_${lng.toFixed(2)}`;
-  try {
-    const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached) {
-      const { timestamp, data } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_EXPIRY) return data;
-    }
+  const key = cacheKeyFor('om', lat, lng);
+  const cached = await readWeatherCache(key);
 
+  if (cached && Date.now() - cached.timestamp < FRESH_WINDOW) {
+    return withMeta(cached.data, cached.timestamp, false);
+  }
+
+  try {
     const res = await fetch(
       `${OPEN_METEO_URL}?latitude=${lat}&longitude=${lng}&current_weather=true` +
       `&daily=temperature_2m_max,weathercode&timezone=auto&forecast_days=4`
     );
+    if (!res.ok) throw new Error(`Open-Meteo error ${res.status}`);
     const json = await res.json();
     const cw = json.current_weather;
     const daily = json.daily || {};
@@ -120,23 +194,13 @@ export async function fetchWeatherOpenMeteo(lat: number, lng: number): Promise<W
       forecast,
     };
 
-    await AsyncStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: weatherData }));
-    return weatherData;
+    await writeWeatherCache(key, weatherData);
+    return withMeta(weatherData, Date.now(), false);
   } catch (error) {
     console.error('Open-Meteo error:', error);
+    if (cached) {
+      return withMeta(cached.data, cached.timestamp, true);
+    }
     return null;
   }
-}
-
-// ── OpenWeatherMap via server proxy (key stays server-side) ────────────────
-
-function getIconName(iconCode: string): string {
-  const map: Record<string, string> = {
-    '01d': 'sunny', '01n': 'moon', '02d': 'partly-sunny', '02n': 'cloudy-night',
-    '03d': 'cloudy', '03n': 'cloudy', '04d': 'cloudy', '04n': 'cloudy',
-    '09d': 'rainy', '09n': 'rainy', '10d': 'rainy', '10n': 'rainy',
-    '11d': 'thunderstorm', '11n': 'thunderstorm', '13d': 'snow', '13n': 'snow',
-    '50d': 'help-circle-outline', '50n': 'help-circle-outline'
-  };
-  return map[iconCode] || 'cloud-outline';
 }

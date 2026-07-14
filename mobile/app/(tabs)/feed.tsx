@@ -18,7 +18,7 @@ import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchWeatherOpenMeteo } from '@/lib/weather';
+import { fetchWeatherOpenMeteo, formatWeatherAge } from '@/lib/weather';
 import { searchPlaces, reverseGeocode } from '@/lib/geocoding';
 import PostCard from '@/components/PostCard';
 
@@ -42,6 +42,8 @@ interface WeatherCardData {
   icon: string;
   isCurrentLocation?: boolean;
   tripEmoji?: string;
+  isStale?: boolean;
+  fetchedAt?: number;
 }
 
 function WeatherCard({ card, colors }: { card: WeatherCardData; colors: any }) {
@@ -68,6 +70,11 @@ function WeatherCard({ card, colors }: { card: WeatherCardData; colors: any }) {
           {card.sublabel}
         </Text>
       )}
+      {card.isStale && card.fetchedAt && (
+        <Text style={weatherStyles.staleText} numberOfLines={1}>
+          {formatWeatherAge(card.fetchedAt)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -75,14 +82,17 @@ function WeatherCard({ card, colors }: { card: WeatherCardData; colors: any }) {
 function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
   const [cards, setCards] = useState<WeatherCardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attempted, setAttempted] = useState(false);
 
   useEffect(() => {
     let active = true;
     async function load() {
       const result: WeatherCardData[] = [];
+      let attemptedAny = false;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
+          attemptedAny = true;
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           const [w, placeName] = await Promise.all([
             fetchWeatherOpenMeteo(loc.coords.latitude, loc.coords.longitude),
@@ -96,6 +106,8 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
               condition: w.condition,
               icon: w.icon,
               isCurrentLocation: true,
+              isStale: w.isStale,
+              fetchedAt: w.fetchedAt,
             });
           }
         }
@@ -113,6 +125,8 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
             .order('start_date', { ascending: true })
             .limit(4);
 
+          if (trips && trips.length > 0) attemptedAny = true;
+
           for (const trip of trips || []) {
             try {
               const places = await searchPlaces(trip.destination);
@@ -128,6 +142,8 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
                     condition: w.condition,
                     icon: w.icon,
                     tripEmoji: TRIP_EMOJI[trip.trip_type] || '🗺️',
+                    isStale: w.isStale,
+                    fetchedAt: w.fetchedAt,
                   });
                 }
               }
@@ -138,6 +154,7 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
 
       if (active) {
         setCards(result);
+        setAttempted(attemptedAny);
         setLoading(false);
       }
     }
@@ -157,7 +174,7 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
     );
   }
 
-  if (cards.length === 0) return null;
+  if (cards.length === 0 && !attempted) return null;
 
   return (
     <View style={[weatherStyles.strip, { borderBottomColor: colors.border }]}>
@@ -165,11 +182,15 @@ function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
         <Ionicons name="partly-sunny-outline" size={14} color={colors.subtext} />
         <Text style={[weatherStyles.stripTitle, { color: colors.subtext }]}>Live Weather</Text>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={weatherStyles.scrollRow}>
-        {cards.map(card => (
-          <WeatherCard key={card.id} card={card} colors={colors} />
-        ))}
-      </ScrollView>
+      {cards.length === 0 ? (
+        <Text style={[weatherStyles.noDataText, { color: colors.subtext }]}>No weather data available</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={weatherStyles.scrollRow}>
+          {cards.map(card => (
+            <WeatherCard key={card.id} card={card} colors={colors} />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -235,6 +256,18 @@ const weatherStyles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  staleText: {
+    fontSize: 8.5,
+    marginTop: 3,
+    textAlign: 'center',
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  noDataText: {
+    fontSize: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
 });
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchWeatherByCoords, WeatherData } from '@/lib/weather';
+import { fetchWeatherByCoords, formatWeatherAge, WeatherData } from '@/lib/weather';
 
 interface WeatherCardProps {
   lat: number;
@@ -30,7 +30,13 @@ export default function WeatherCard({ lat, lng, locationName }: WeatherCardProps
     );
   }
 
-  if (!weather) return null;
+  if (!weather) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.noData}>No weather data available</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.card}>
@@ -38,6 +44,9 @@ export default function WeatherCard({ lat, lng, locationName }: WeatherCardProps
         <View>
           <Text style={styles.location}>{locationName}</Text>
           <Text style={styles.condition}>{weather.condition}</Text>
+          {weather.isStale && weather.fetchedAt && (
+            <Text style={styles.staleText}>Last updated {formatWeatherAge(weather.fetchedAt)}</Text>
+          )}
         </View>
         <Text style={styles.temp}>{weather.currentTemp}°C</Text>
       </View>
@@ -97,6 +106,18 @@ const styles = StyleSheet.create({
   condition: {
     fontSize: 13,
     color: '#9CA3AF',
+  },
+  staleText: {
+    fontSize: 11,
+    color: '#F59E0B',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  noData: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
   temp: {
     fontSize: 32,

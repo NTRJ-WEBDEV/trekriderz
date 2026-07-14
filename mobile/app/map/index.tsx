@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { searchPlaces } from '@/lib/geocoding';
-import { fetchWeatherOpenMeteo, WeatherData } from '@/lib/weather';
+import { fetchWeatherOpenMeteo, formatWeatherAge, WeatherData } from '@/lib/weather';
 import ExploreMapView, { MapMarker, MarkerKind, PoiCategory } from '@/components/ExploreMapView';
 
 const WEATHER_EMOJI: Record<string, string> = {
@@ -229,6 +229,9 @@ export default function ExploreMapScreen() {
             <Text style={styles.headerSub}>
               {WEATHER_EMOJI[weather.icon] || '🌤️'} {weather.currentTemp}°C · {weather.condition}
               {userLat ? ' · Near you' : ''}
+              {weather.isStale && weather.fetchedAt && (
+                <Text style={styles.headerSubStale}> · {formatWeatherAge(weather.fetchedAt)}</Text>
+              )}
             </Text>
           )}
         </View>
@@ -366,12 +369,17 @@ function WeatherInline({ lat, lng }: { lat: number; lng: number }) {
   useEffect(() => {
     fetchWeatherOpenMeteo(lat, lng).then(setW).catch(() => {});
   }, [lat, lng]);
-  if (!w) return null;
+  if (!w) {
+    return <Text style={styles.inlineWeatherNoData}>No weather data available</Text>;
+  }
   return (
     <View style={styles.inlineWeather}>
       <Text style={styles.inlineWeatherEmoji}>{WEATHER_EMOJI[w.icon] || '🌤️'}</Text>
       <Text style={styles.inlineWeatherText}>{w.currentTemp}°C · {w.condition}</Text>
       {w.wind > 0 && <Text style={styles.inlineWeatherWind}>💨 {w.wind} km/h</Text>}
+      {w.isStale && w.fetchedAt && (
+        <Text style={styles.inlineWeatherStale}>· {formatWeatherAge(w.fetchedAt)}</Text>
+      )}
     </View>
   );
 }
@@ -424,6 +432,7 @@ const styles = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
   headerSub: { color: '#8CC63F', fontSize: 12, marginTop: 1 },
+  headerSubStale: { color: '#F59E0B', fontWeight: '700' },
 
   filterScroll: { maxHeight: 52 },
   filterRow: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
@@ -478,6 +487,8 @@ const styles = StyleSheet.create({
   inlineWeatherEmoji: { fontSize: 20 },
   inlineWeatherText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
   inlineWeatherWind: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginLeft: 4 },
+  inlineWeatherStale: { color: '#F59E0B', fontSize: 11, fontWeight: '700', marginLeft: 4 },
+  inlineWeatherNoData: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginVertical: 10 },
 
   sheetActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
   sheetBtnPrimary: {

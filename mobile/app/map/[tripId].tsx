@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { searchPlaces } from '@/lib/geocoding';
-import { fetchWeatherOpenMeteo, WeatherData } from '@/lib/weather';
+import { fetchWeatherOpenMeteo, formatWeatherAge, WeatherData } from '@/lib/weather';
 import { Ionicons } from '@expo/vector-icons';
 import ExploreMapView, { MapMarker } from '@/components/ExploreMapView';
 
@@ -151,6 +151,9 @@ export default function TripMapScreen() {
           <Text style={styles.weatherText}>
             {weather.currentTemp}°C · {weather.condition}
           </Text>
+          {weather.isStale && weather.fetchedAt && (
+            <Text style={styles.weatherStale}>· {formatWeatherAge(weather.fetchedAt)}</Text>
+          )}
           {weather.wind > 0 && (
             <Text style={styles.weatherWind}>💨 {weather.wind} km/h</Text>
           )}
@@ -267,6 +270,7 @@ const styles = StyleSheet.create({
   weatherEmoji: { fontSize: 18 },
   weatherText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
   weatherWind: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+  weatherStale: { color: '#F59E0B', fontSize: 11, fontWeight: '700' },
   weatherSpacer: { flex: 1 },
   forecastItem: { alignItems: 'center', marginLeft: 10 },
   forecastDay: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' },

@@ -47,6 +47,7 @@ export default function AdminDashboard() {
   // Moderation state
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectType, setRejectType] = useState<'homestays' | 'guides'>('homestays');
+  const [roleModal, setRoleModal] = useState<{ userId: string; currentRole: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [detailProperty, setDetailProperty] = useState<any | null>(null);
@@ -322,23 +323,25 @@ export default function AdminDashboard() {
 
   // ── Users ─────────────────────────────────────────────────────────────────
 
+  // Android's native Alert.alert dialog caps out at 3 buttons (a platform
+  // limit, not an RN bug) — with 3 role options + Cancel that's 4, so the
+  // Cancel button silently disappeared and the dialog became undismissable.
+  // A custom row-list modal has no such limit.
   const handleRoleChange = (userId: string, currentRole: string) => {
-    const options = ROLES.filter(r => r !== currentRole).map(r => ({
-      text: r.replace('_', ' '),
-      onPress: async () => {
-        try {
-          await supabase.from('users').update({ role: r }).eq('id', userId);
-          setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: r } : u));
-        } catch (e: any) {
-          Alert.alert('Error', e.message || 'Could not update role.');
-        }
-      },
-    }));
-    Alert.alert(
-      'Change Role',
-      `Current role: ${currentRole.replace('_', ' ')}`,
-      [...options, { text: 'Cancel', style: 'cancel' as const }]
-    );
+    setRoleModal({ userId, currentRole });
+  };
+
+  const selectRole = async (role: string) => {
+    if (!roleModal) return;
+    const { userId } = roleModal;
+    try {
+      await supabase.from('users').update({ role }).eq('id', userId);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not update role.');
+    } finally {
+      setRoleModal(null);
+    }
   };
 
   const handleCleanExpiredStories = async () => {
@@ -683,6 +686,27 @@ export default function AdminDashboard() {
                 {actionLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.modalRejectText}>Send Rejection</Text>}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* Change Role Modal */}
+      {roleModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Change Role</Text>
+            <Text style={styles.modalSub}>Current role: {roleModal.currentRole.replace('_', ' ')}</Text>
+            <View style={{ gap: 8 }}>
+              {ROLES.filter(r => r !== roleModal.currentRole).map(r => (
+                <TouchableOpacity key={r} style={styles.roleOptionRow} onPress={() => selectRole(r)}>
+                  <Text style={styles.roleOptionText}>{r.replace('_', ' ')}</Text>
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.roleCancelBtn} onPress={() => setRoleModal(null)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1353,6 +1377,16 @@ const styles = StyleSheet.create({
   modalCancelText: { color: 'rgba(255,255,255,0.6)', fontWeight: '600', fontSize: 14 },
   modalReject: { flex: 2, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#EF4444' },
   modalRejectText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+  roleOptionRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12,
+    backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
+  },
+  roleOptionText: { color: '#FFF', fontSize: 15, fontWeight: '600', textTransform: 'capitalize' },
+  roleCancelBtn: {
+    paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    backgroundColor: CARD, borderWidth: 1, borderColor: BORDER,
+  },
   modalApprove: { flex: 2, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: GREEN },
   approveText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   categoryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },

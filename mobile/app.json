@@ -89,7 +89,14 @@
         }
       ],
       "./plugins/withGradleProperties",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#8CC63F"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

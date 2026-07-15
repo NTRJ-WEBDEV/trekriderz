@@ -142,6 +142,19 @@ export function setupNotificationCategories() {
       },
     ]);
   }
+
+  // Without this, Android falls back to a default channel with no custom
+  // name/sound — notifications look like generic OS noise rather than
+  // branded TrekRiderz alerts.
+  if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'TrekRiderz',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#8CC63F',
+      sound: 'default',
+    });
+  }
 }
 
 // Listen for notification responses

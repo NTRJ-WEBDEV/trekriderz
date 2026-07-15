@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,6 +67,7 @@ const SECTIONS = [
 
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
   const [trips, setTrips] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<{ full_name?: string; avatar_url?: string } | null>(null);
@@ -134,6 +136,7 @@ export default function HomeScreen() {
               <View style={styles.topRight}>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/(tabs)/notifications' as any)}>
                   <Ionicons name="notifications-outline" size={20} color="#FFF" />
+                  {unreadCount > 0 && <View style={styles.notifDot} />}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/(tabs)/profile' as any)}>
                   <Image source={{ uri: avatarUrl }} style={styles.avatar} contentFit="cover" />
@@ -264,6 +267,12 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+  },
+  notifDot: {
+    position: 'absolute', top: 6, right: 7,
+    width: 9, height: 9, borderRadius: 4.5,
+    backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#080C14',
   },
   avatar: { width: 36, height: 36, borderRadius: 18 },
   heroContent: { marginTop: 'auto', paddingHorizontal: 20, paddingBottom: 28 },

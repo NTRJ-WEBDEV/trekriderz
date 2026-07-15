@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, To
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
@@ -67,6 +68,14 @@ export default function NotificationsScreen() {
       setRefreshing(false);
     }
   };
+
+  // Opening this screen is treated as "seen" for the purposes of the Home
+  // bell badge — a coarser signal than per-row is_read, but matches what
+  // was asked for (clear on open) without needing to thread individual
+  // mark-read actions back into the global count.
+  useEffect(() => {
+    if (user) useNotificationStore.getState().reset();
+  }, [user]);
 
   useEffect(() => {
     if (user) {

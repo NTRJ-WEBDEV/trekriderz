@@ -175,16 +175,30 @@ export default function DiscoverScreen() {
       });
       if (error) throw error;
 
-      await supabase.from('notifications').insert({
+      // notifications has no `data` column (only `metadata`) — the old key
+      // name meant this insert failed silently every time (error wasn't
+      // even checked), so organizers never actually got notified despite
+      // the request itself succeeding.
+      const { error: notifError } = await supabase.from('notifications').insert({
         user_id: trip.created_by,
+        sender_id: user.id,
         title: 'New Join Request',
         message: `Someone wants to join your trip: ${trip.title}`,
         type: 'trip_invite',
-        data: { trip_id: trip.id },
+        related_id: trip.id,
+        metadata: { trip_id: trip.id },
       });
 
       setMyTripIds((prev) => new Set([...prev, trip.id]));
-      Alert.alert('Request Sent! 🎉', 'The organizer will review your join request.');
+      if (notifError) {
+        console.error('Failed to notify trip organizer:', notifError);
+        Alert.alert(
+          'Request Sent — With a Catch',
+          'Your join request was recorded, but we could not notify the organizer. They may not see it right away.'
+        );
+      } else {
+        Alert.alert('Request Sent! 🎉', 'The organizer will review your join request.');
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not send request. Try again.');
     } finally {

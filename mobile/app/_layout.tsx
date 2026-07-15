@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { supabase } from '@/lib/supabase';
 import { Alert, Linking } from 'react-native';
 import { handleDeepLink } from '@/lib/deep-linking';
@@ -58,6 +59,7 @@ export default function RootLayout() {
         maybeRequestReview();
         await requestNotificationPermissions();
         await registerPushToken(user.id);
+        useNotificationStore.getState().init(user.id);
         requestLocationPermissions().then(() => startLocationSharing()).catch(() => {});
         // Sync service initialized via background location
 
@@ -66,13 +68,24 @@ export default function RootLayout() {
         });
 
         const resListener = addNotificationResponseListener((res) => {
-          const { data } = res.notification.request.content;
+          const { data } = res.notification.request.content as { data?: any };
           if (data?.type === 'trip_invite') {
             router.push('/notifications' as any);
           } else if (data?.type === 'booking') {
             router.push('/bookings' as any);
           } else if (data?.type === 'chat' && data.trip_id) {
             router.push(`/chat/${data.trip_id}` as any);
+          } else if (data?.type === 'follow') {
+            // sender_id is the follower — forwarded by send-notification
+            // from the notification row itself, not metadata (follow never
+            // sets metadata).
+            if (data.sender_id) router.push(`/user/${data.sender_id}` as any);
+            else router.push('/notifications' as any);
+          } else {
+            // like/comment (no post-detail screen exists yet to deep-link
+            // to) or any other/future type — land on the list rather than
+            // doing nothing.
+            router.push('/notifications' as any);
           }
         });
 
@@ -95,6 +108,7 @@ export default function RootLayout() {
           resListener.remove();
           recListener.remove();
           supabase.removeChannel(channel);
+          useNotificationStore.getState().cleanup();
         };
       } catch (err) {
         console.error('Root setup err:', err);

@@ -27,7 +27,21 @@ serve(async (req) => {
     const userId = body.record?.user_id ?? body.userId
     const title = body.record?.title ?? body.title
     const message = body.record?.message ?? body.body
-    const data = body.record?.metadata ?? body.data ?? {}
+
+    // Previously this only forwarded record.metadata (which none of the
+    // trigger functions ever populate) — the row's own type/related_id/
+    // sender_id never made it into the push payload at all, so the
+    // on-device tap handler's `data?.type` check could never match
+    // anything. Base identifying fields always go through; metadata (e.g.
+    // { post_id } from the like/comment triggers) layers on top.
+    const data = body.record
+      ? {
+          type: body.record.type,
+          related_id: body.record.related_id,
+          sender_id: body.record.sender_id,
+          ...(body.record.metadata || {}),
+        }
+      : body.data ?? {}
 
     if (!userId || !title || !message) {
       return new Response(JSON.stringify({ error: 'Missing user_id/title/message' }), {

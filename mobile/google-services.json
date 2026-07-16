@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "367817634986",
+    "project_id": "trekriderz",
+    "storage_bucket": "trekriderz.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:367817634986:android:a160ba364ea4d34a5a4cd3",
+        "android_client_info": {
+          "package_name": "com.trekriderz.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOd4AKNHeFYh1KU2tNDw9HZ5wEXnClLq4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

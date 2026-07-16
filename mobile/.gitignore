@@ -14,6 +14,11 @@ ios/
 .env
 .env.local
 
+# Firebase Admin SDK service account key — this grants real Google Cloud
+# project access, unlike google-services.json (client config, safe to
+# commit). Never belongs in git history.
+*firebase-adminsdk*.json
+
 # Debug
 npm-debug.*
 yarn-debug.*

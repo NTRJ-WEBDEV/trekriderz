@@ -85,6 +85,28 @@ serve(async (req) => {
     })
 
     const result = await expoRes.json()
+
+    // Expo's push API returns HTTP 200 even when the push itself failed —
+    // per-ticket errors (DeviceNotRegistered, InvalidCredentials,
+    // MessageTooBig, etc.) live in the response body, not the status code.
+    // A single-recipient request gets back a single ticket object at
+    // result.data (not an array); top-level malformed-request errors show
+    // up in result.errors instead.
+    const ticket = result?.data
+    const topLevelError = result?.errors?.[0]
+    const failed = !!topLevelError || ticket?.status === 'error'
+
+    if (failed) {
+      const errorType = ticket?.details?.error ?? topLevelError?.code ?? 'Unknown'
+      const errorMessage = ticket?.message ?? topLevelError?.message ?? 'no message'
+      console.error(`Push send failed for user ${userId}: ${errorType} — ${errorMessage}`)
+      return new Response(JSON.stringify({ success: false, userId, errorType, errorMessage, result }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log(`Push sent successfully to user ${userId}`)
     return new Response(JSON.stringify({ success: true, result }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

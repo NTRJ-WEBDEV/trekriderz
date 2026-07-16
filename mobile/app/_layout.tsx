@@ -55,14 +55,48 @@ export default function RootLayout() {
     if (!user) return;
 
     const setupServices = async () => {
+      // Each piece below runs in its own try/catch — previously all of this
+      // sat in one try/catch, so a notification-permission denial (which
+      // requestNotificationPermissions() throws on) silently skipped the
+      // push token, the unread badge, the location-consent check, and the
+      // notification listeners too, with one generic "Root setup err" log
+      // that gave no way to tell which piece actually failed.
       try {
         maybeRequestReview();
+      } catch (err) {
+        console.error('Review prompt setup failed:', err);
+      }
+
+      try {
         await requestNotificationPermissions();
         await registerPushToken(user.id);
-        useNotificationStore.getState().init(user.id);
-        requestLocationPermissions().then(() => startLocationSharing()).catch(() => {});
-        // Sync service initialized via background location
+      } catch (err) {
+        console.error('Push notification setup failed:', err);
+      }
 
+      try {
+        useNotificationStore.getState().init(user.id);
+      } catch (err) {
+        console.error('Notification badge init failed:', err);
+      }
+
+      // Permission is still requested up front (offline trail recording
+      // needs it too), but the background task only auto-starts if the
+      // user already consented to member-location-sharing on a previous
+      // visit to the Safety screen — it's no longer unconditional.
+      requestLocationPermissions()
+        .then(async () => {
+          const { data } = await supabase
+            .from('users')
+            .select('location_sharing_enabled')
+            .eq('id', user.id)
+            .single();
+          if (data?.location_sharing_enabled) await startLocationSharing();
+        })
+        .catch((err) => console.error('Location consent check failed:', err));
+      // Sync service initialized via background location
+
+      try {
         const recListener = addNotificationReceivedListener((notif) => {
           if (__DEV__) console.log('Foreground Notif:', notif);
         });
@@ -75,6 +109,10 @@ export default function RootLayout() {
             router.push('/bookings' as any);
           } else if (data?.type === 'chat' && data.trip_id) {
             router.push(`/chat/${data.trip_id}` as any);
+          } else if (data?.type === 'sos_alert' && data.trip_id) {
+            // Map screen shows live member pins — the most actionable place
+            // to land someone who just got paged about an emergency.
+            router.push(`/map/${data.trip_id}` as any);
           } else if (data?.type === 'follow') {
             // sender_id is the follower — forwarded by send-notification
             // from the notification row itself, not metadata (follow never
@@ -91,13 +129,14 @@ export default function RootLayout() {
 
         const channel = supabase
           .channel(`notifications:${user.id}`)
-          .on('postgres_changes', { 
-            event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` 
+          .on('postgres_changes', {
+            event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}`
           }, (p) => {
             Alert.alert(p.new.title, p.new.message, [
               { text: 'View', onPress: () => {
                 if (p.new.type === 'trip_invite') router.push('/notifications' as any);
                 else if (p.new.type === 'booking') router.push('/bookings' as any);
+                else if (p.new.type === 'sos_alert' && p.new.related_id) router.push(`/map/${p.new.related_id}` as any);
               }},
               { text: 'Later' }
             ]);
@@ -111,7 +150,7 @@ export default function RootLayout() {
           useNotificationStore.getState().cleanup();
         };
       } catch (err) {
-        console.error('Root setup err:', err);
+        console.error('Notification listeners setup failed:', err);
       }
     };
 
@@ -147,6 +186,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/confirm" />
         <Stack.Screen name="forgot-password" />
         <Stack.Screen name="trip/[id]" />
+        <Stack.Screen name="trip/edit/[id]" />
         <Stack.Screen name="chat/[tripId]" />
         <Stack.Screen name="trip-members/[tripId]" />
         <Stack.Screen name="invite/[tripId]" />

@@ -58,8 +58,11 @@ serve(async (req) => {
     }))
 
     let sent = 0
+    let failed = 0
+    const failuresByType: Record<string, number> = {}
     for (let i = 0; i < messages.length; i += EXPO_BATCH_SIZE) {
       const chunk = messages.slice(i, i + EXPO_BATCH_SIZE)
+      const chunkTargets = targets.slice(i, i + EXPO_BATCH_SIZE)
       if (chunk.length === 0) continue
       const expoRes = await fetch(EXPO_PUSH_URL, {
         method: 'POST',
@@ -70,11 +73,45 @@ serve(async (req) => {
         },
         body: JSON.stringify(chunk),
       })
-      if (expoRes.ok) sent += chunk.length
+
+      const result = await expoRes.json()
+
+      // Batch requests get back result.data as an array of tickets, in the
+      // same order as the request — expoRes.ok alone says nothing about
+      // whether any individual push actually succeeded (Expo returns HTTP
+      // 200 even when every ticket failed).
+      if (result?.errors?.length) {
+        // Request-level failure (e.g. malformed batch) — none of this chunk sent.
+        const errorType = result.errors[0]?.code ?? 'Unknown'
+        console.error(`Daily reminder batch failed entirely: ${errorType} — ${result.errors[0]?.message ?? 'no message'}`)
+        failed += chunk.length
+        failuresByType[errorType] = (failuresByType[errorType] ?? 0) + chunk.length
+        continue
+      }
+
+      const tickets = Array.isArray(result?.data) ? result.data : []
+      tickets.forEach((ticket: { status: string; details?: { error?: string }; message?: string }, idx: number) => {
+        if (ticket?.status === 'error') {
+          const errorType = ticket.details?.error ?? 'Unknown'
+          const userId = chunkTargets[idx]?.id
+          console.error(`Daily reminder push failed for user ${userId}: ${errorType} — ${ticket.message ?? 'no message'}`)
+          failed += 1
+          failuresByType[errorType] = (failuresByType[errorType] ?? 0) + 1
+        } else {
+          sent += 1
+        }
+      })
     }
 
     return new Response(
-      JSON.stringify({ success: true, eligibleUsers: candidates?.length ?? 0, targeted: targets.length, sent }),
+      JSON.stringify({
+        success: true,
+        eligibleUsers: candidates?.length ?? 0,
+        targeted: targets.length,
+        sent,
+        failed,
+        failuresByType,
+      }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {

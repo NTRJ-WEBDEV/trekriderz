@@ -35,7 +35,12 @@ export async function requestNotificationPermissions() {
 
 import { supabase } from './supabase';
 
-// Get and register push token
+// Get and register push token. Stays non-blocking for the caller (always
+// resolves, never throws) — but each failure mode logs distinctly, since a
+// single generic catch here previously made "permission denied," "no
+// project ID," "token fetch failed" (the usual symptom of a missing/
+// misconfigured FCM or APNs credential), and "DB save failed" all
+// indistinguishable in logs.
 export async function registerPushToken(userId: string) {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -44,15 +49,27 @@ export async function registerPushToken(userId: string) {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    if (finalStatus !== 'granted') return null;
+    if (finalStatus !== 'granted') {
+      console.warn('Push token not registered: notification permission denied');
+      return null;
+    }
 
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
 
-    const token = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
+    if (!projectId) {
+      console.warn('Push token not registered: no EAS project ID found in app config');
+      return null;
+    }
+
+    let token;
+    try {
+      token = await Notifications.getExpoPushTokenAsync({ projectId });
+    } catch (tokenError) {
+      console.error('Push token not registered: getExpoPushTokenAsync failed —', (tokenError as Error).message);
+      return null;
+    }
 
     if (token.data) {
       const { error } = await supabase
@@ -60,12 +77,12 @@ export async function registerPushToken(userId: string) {
         .update({ push_token: token.data })
         .eq('id', userId);
 
-      if (error) console.error('Error saving push token to DB:', error);
+      if (error) console.error('Push token obtained but failed to save to DB:', error.message);
     }
 
     return token.data;
   } catch (error) {
-    console.error('Error registering push token:', error);
+    console.error('Unexpected error registering push token:', (error as Error).message);
     return null;
   }
 }

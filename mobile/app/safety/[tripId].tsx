@@ -13,6 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
+import { requestLocationPermissions, startLocationSharing, stopLocationSharing } from '@/lib/location-service';
+import { getActiveTrailTripId } from '@/lib/offline-safety';
+import * as Location from 'expo-location';
 
 interface SafetyItem {
   id: string;
@@ -59,7 +63,9 @@ const SAFETY_TIPS = [
 
 export default function SafetyScreen() {
   const { tripId } = useLocalSearchParams();
+  const currentUser = useAuthStore((state) => state.user);
   const [isSharingLocation, setIsSharingLocation] = useState(false);
+  const [lastLocationUpdate, setLastLocationUpdate] = useState<string | null>(null);
   const [trip, setTrip] = useState<any>(null);
   const [checklist, setChecklist] = useState<SafetyItem[]>(DEFAULT_SAFETY_CHECKLIST);
   const [loading, setLoading] = useState(true);
@@ -67,7 +73,21 @@ export default function SafetyScreen() {
 
   useEffect(() => {
     fetchTripAndChecklist();
+    fetchLocationSharingState();
   }, [tripId]);
+
+  const fetchLocationSharingState = async () => {
+    if (!currentUser?.id) return;
+    const { data } = await supabase
+      .from('users')
+      .select('location_sharing_enabled, last_location_update')
+      .eq('id', currentUser.id)
+      .single();
+    if (data) {
+      setIsSharingLocation(!!data.location_sharing_enabled);
+      setLastLocationUpdate(data.last_location_update ?? null);
+    }
+  };
 
   const fetchTripAndChecklist = async () => {
     try {
@@ -109,16 +129,51 @@ export default function SafetyScreen() {
   const handleSOS = () => {
     Alert.alert(
       'SOS ACTIVATED',
-      'This will call emergency services. Are you in an emergency?',
+      'This will alert your trip members with your location and call emergency services. Are you in an emergency?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'CALL 112',
           style: 'destructive',
-          onPress: () => Linking.openURL('tel:112')
+          onPress: () => {
+            // The dial must never be delayed by a network call — it fires
+            // immediately, alerting the trip runs alongside it.
+            Linking.openURL('tel:112');
+            sendSosAlert();
+          }
         }
       ]
     );
+  };
+
+  const sendSosAlert = async () => {
+    if (!currentUser?.id || !tripId) return;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    try {
+      // Fresh one-shot capture, independent of the ambient location-sharing
+      // toggle — this is an explicit disclosure the user is actively
+      // initiating by pressing SOS, not a change to their ambient tracking
+      // consent.
+      await Location.requestForegroundPermissionsAsync();
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch (error) {
+      console.error('SOS location capture failed:', error);
+    }
+
+    const { error } = await supabase.from('sos_alerts').insert({
+      trip_id: tripId,
+      user_id: currentUser.id,
+      latitude,
+      longitude,
+    });
+
+    if (error) {
+      console.error('Error sending SOS alert:', error);
+      Alert.alert('Alert Not Sent', 'Could not notify your trip members — please also try contacting them directly.');
+    }
   };
 
   const toggleLocationSharing = () => {
@@ -128,18 +183,66 @@ export default function SafetyScreen() {
         'Your real-time location will be shared with trip members.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Enable', onPress: () => setIsSharingLocation(true) },
+          { text: 'Enable', onPress: enableLocationSharing },
         ]
       );
     } else {
-      setIsSharingLocation(false);
+      disableLocationSharing();
     }
+  };
+
+  const enableLocationSharing = async () => {
+    if (!currentUser?.id) return;
+    try {
+      await requestLocationPermissions();
+    } catch (error) {
+      Alert.alert('Permission Needed', 'Location permission is required to share your location with trip members.');
+      return;
+    }
+    const { error } = await supabase
+      .from('users')
+      .update({ location_sharing_enabled: true })
+      .eq('id', currentUser.id);
+    if (error) {
+      Alert.alert('Error', 'Failed to enable location sharing.');
+      return;
+    }
+    await startLocationSharing();
+    setIsSharingLocation(true);
+  };
+
+  const disableLocationSharing = async () => {
+    if (!currentUser?.id) return;
+    const { error } = await supabase
+      .from('users')
+      .update({ location_sharing_enabled: false })
+      .eq('id', currentUser.id);
+    if (error) {
+      Alert.alert('Error', 'Failed to disable location sharing.');
+      return;
+    }
+    // Don't stop the background task out from under an active offline-safety
+    // trail recording — the write-gate in updateDatabaseLocation() already
+    // stops member-visible writes regardless of whether the task keeps running.
+    const activeTrail = await getActiveTrailTripId();
+    if (!activeTrail) await stopLocationSharing();
+    setIsSharingLocation(false);
   };
 
   const callNumber = (number: string) => {
     const cleaned = number.replace(/-/g, '');
     Linking.openURL(`tel:${cleaned}`);
   };
+
+  // Ground truth for "am I actually being tracked right now" — derived from
+  // the last real DB write, not from the toggle's stated intent, so a stale
+  // or desynced toggle can never claim tracking is happening when it isn't
+  // (or hide that it is). Location ticks land every ~5 minutes, so anything
+  // older than 10 minutes reads as not currently live.
+  const minutesSinceLocationUpdate = lastLocationUpdate
+    ? Math.floor((Date.now() - new Date(lastLocationUpdate).getTime()) / 60000)
+    : null;
+  const isLiveTracking = isSharingLocation && minutesSinceLocationUpdate !== null && minutesSinceLocationUpdate < 10;
 
   const completedCount = checklist.filter(i => i.completed).length;
   const totalCount = checklist.length;
@@ -188,6 +291,17 @@ export default function SafetyScreen() {
           <View style={[styles.locationToggleDot, isSharingLocation && styles.locationToggleDotActive]} />
         </View>
       </TouchableOpacity>
+
+      {/* Ground-truth tracking status — reflects the last real DB write, not
+          just the toggle's stated intent */}
+      <View style={styles.trackingStatus}>
+        <View style={[styles.trackingDot, isLiveTracking && styles.trackingDotLive]} />
+        <Text style={styles.trackingStatusText}>
+          {isLiveTracking
+            ? `Live — last sent ${minutesSinceLocationUpdate === 0 ? 'just now' : `${minutesSinceLocationUpdate}m ago`}`
+            : 'Not currently being tracked'}
+        </Text>
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -415,6 +529,26 @@ const styles = StyleSheet.create({
   },
   locationToggleDotActive: {
     backgroundColor: '#8CC63F',
+  },
+  trackingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    gap: 7,
+  },
+  trackingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  trackingDotLive: {
+    backgroundColor: '#8CC63F',
+  },
+  trackingStatusText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
   },
   tabs: {
     flexDirection: 'row',

@@ -73,6 +73,11 @@ export async function updateDatabaseLocation(coords: { latitude: number; longitu
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Gate at the write, not at whether the background task runs — the task
+    // also drives offline trail recording, which must keep working
+    // regardless of member-sharing consent. This is the real privacy
+    // boundary: it silently matches zero rows when the user hasn't
+    // consented, instead of ever writing a position trip members can see.
     const { error } = await supabase
       .from('users')
       .update({
@@ -80,7 +85,8 @@ export async function updateDatabaseLocation(coords: { latitude: number; longitu
         last_longitude: coords.longitude,
         last_location_update: new Date().toISOString(),
       })
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .eq('location_sharing_enabled', true);
 
     if (error) throw error;
   } catch (error) {

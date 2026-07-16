@@ -11,6 +11,7 @@ import { fetchWeatherOpenMeteo, formatWeatherAge, WeatherData } from '@/lib/weat
 import { Ionicons } from '@expo/vector-icons';
 import ExploreMapView, { MapMarker } from '@/components/ExploreMapView';
 import { setActiveTrailTripId, primeTrailCache } from '@/lib/offline-safety';
+import { startLocationSharing } from '@/lib/location-service';
 
 const WEATHER_EMOJI: Record<string, string> = {
   sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
@@ -69,6 +70,11 @@ export default function TripMapScreen() {
         const isOngoing = tripData.start_date <= todayStr && todayStr <= tripData.end_date;
         if (isOngoing) {
           await setActiveTrailTripId(tripData.id);
+          // Idempotent — no-ops if already running. Ensures trail recording
+          // works even for a user who hasn't consented to member-location
+          // sharing; the write-gate in updateDatabaseLocation() is what
+          // actually stops their position from becoming visible to others.
+          startLocationSharing().catch(() => {});
           primeTrailCache({
             tripId: tripData.id,
             tripTitle: tripData.title,

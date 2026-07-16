@@ -5,7 +5,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { haptic } from '@/lib/haptics';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 
 const CONTACTS_KEY = 'sos_emergency_contacts';
 
@@ -15,11 +18,13 @@ interface Contact {
 }
 
 interface Props {
+  tripId?: string;
   tripName?: string;
   location?: string;
 }
 
-export default function SOSButton({ tripName, location }: Props) {
+export default function SOSButton({ tripId, tripName, location }: Props) {
+  const currentUser = useAuthStore((state) => state.user);
   const [showPanel, setShowPanel] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [editMode, setEditMode] = useState(false);
@@ -59,8 +64,8 @@ export default function SOSButton({ tripName, location }: Props) {
     Alert.alert(
       '🆘 Send SOS',
       contacts.length
-        ? `This will call your first emergency contact (${contacts[0].name}) and open WhatsApp for others.`
-        : 'No emergency contacts saved. Add contacts first, or call emergency services directly.',
+        ? `This will call your first emergency contact (${contacts[0].name}), open WhatsApp for others, and alert your trip members.`
+        : 'No emergency contacts saved. Add contacts first, or call emergency services directly. Your trip members will also be alerted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -68,6 +73,9 @@ export default function SOSButton({ tripName, location }: Props) {
           style: 'destructive',
           onPress: () => {
             const num = contacts.length ? contacts[0].phone : '112';
+            // None of these must be delayed by a network call — the dial and
+            // WhatsApp messages fire immediately, alerting the trip runs
+            // alongside them.
             Linking.openURL(`tel:${num}`);
             contacts.slice(1).forEach((c) => {
               setTimeout(() => {
@@ -77,10 +85,40 @@ export default function SOSButton({ tripName, location }: Props) {
                 Linking.openURL(`whatsapp://send?phone=${digits}&text=${encodeURIComponent(msg)}`);
               }, 1500);
             });
+            sendSosAlert();
           },
         },
       ]
     );
+  };
+
+  const sendSosAlert = async () => {
+    if (!currentUser?.id || !tripId) return;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    try {
+      // Fresh one-shot capture, independent of the ambient location-sharing
+      // toggle — same pattern as the Safety screen's SOS button: an
+      // explicit disclosure the user is actively initiating by pressing
+      // SOS, not a change to their ambient tracking consent.
+      await Location.requestForegroundPermissionsAsync();
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch (error) {
+      console.error('SOS location capture failed:', error);
+    }
+
+    const { error } = await supabase.from('sos_alerts').insert({
+      trip_id: tripId,
+      user_id: currentUser.id,
+      latitude,
+      longitude,
+    });
+
+    if (error) {
+      console.error('Error sending SOS alert:', error);
+    }
   };
 
   const openPanel = () => {
@@ -110,7 +148,7 @@ export default function SOSButton({ tripName, location }: Props) {
             <View style={styles.emergencyRow}>
               {[
                 { label: 'Police', num: '100', icon: 'shield' },
-                { label: 'Ambulance', num: '108', icon: 'medical' },
+                { label: 'Ambulance', num: '102', icon: 'medical' },
                 { label: 'Mountain\nRescue', num: '1800-180-1234', icon: 'flag' },
               ].map((e) => (
                 <TouchableOpacity

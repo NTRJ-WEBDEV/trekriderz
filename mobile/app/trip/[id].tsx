@@ -26,6 +26,7 @@ interface Trip {
   trip_type: string;
   group_size: number;
   budget: number;
+  budget_type?: 'total' | 'per_person';
   status: string;
   itinerary: any;
   packing_list: any;
@@ -61,6 +62,39 @@ export default function TripDetailScreen() {
       Alert.alert('Error', 'Failed to load trip details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = () => {
+    Alert.alert(
+      'Delete Trip',
+      'This permanently deletes the trip, its chat, expenses, photos, and itinerary for everyone. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('trips').delete().eq('id', id);
+              if (error) throw error;
+              router.replace('/(tabs)');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to delete trip');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpdateStatus = async (newStatus: 'completed' | 'cancelled') => {
+    try {
+      const { error } = await supabase.from('trips').update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
+      setTrip((prev) => (prev ? { ...prev, status: newStatus } : prev));
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update trip status');
     }
   };
 
@@ -108,7 +142,9 @@ export default function TripDetailScreen() {
   }
 
   const duration = getDuration(trip.start_date, trip.end_date);
-  const perPersonBudget = Math.round(trip.budget / trip.group_size);
+  const isPerPersonBudget = trip.budget_type === 'per_person';
+  const perPersonBudget = isPerPersonBudget ? trip.budget : Math.round(trip.budget / trip.group_size);
+  const totalBudget = isPerPersonBudget ? trip.budget * trip.group_size : trip.budget;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -118,7 +154,7 @@ export default function TripDetailScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trip Details</Text>
         {isOrganizer ? (
-          <TouchableOpacity onPress={() => Alert.alert('Coming Soon', 'Edit feature is being developed')}>
+          <TouchableOpacity onPress={() => router.push(`/trip/edit/${trip.id}` as any)}>
             <Ionicons name="create-outline" size={24} color="#8CC63F" />
           </TouchableOpacity>
         ) : <View style={{ width: 20 }} />}
@@ -130,9 +166,33 @@ export default function TripDetailScreen() {
           <Text style={styles.heroTitle}>{trip.title}</Text>
           <Text style={styles.heroDestination}>📍 {trip.destination}</Text>
           <View style={[styles.statusBadge, (styles as any)[`status${trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}`]]}>
-            <Text style={styles.statusText}>{trip.status}</Text>
+            <Text style={styles.statusText}>
+              {trip.status === 'pending_confirmation' ? 'Awaiting Confirmation' : trip.status}
+            </Text>
           </View>
         </View>
+
+        {trip.status === 'pending_confirmation' && (
+          <View style={styles.confirmBanner}>
+            <Ionicons name="help-circle-outline" size={20} color="#F5A623" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.confirmBannerTitle}>How did this trip go?</Text>
+              <Text style={styles.confirmBannerSub}>
+                {formatDate(trip.end_date)} has passed{isOrganizer ? ' — let members know the outcome.' : '. Waiting for the organizer to confirm.'}
+              </Text>
+              {isOrganizer && (
+                <View style={styles.confirmBannerActions}>
+                  <TouchableOpacity style={styles.confirmBtn} onPress={() => handleUpdateStatus('completed')}>
+                    <Text style={styles.confirmBtnText}>Mark Completed</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => handleUpdateStatus('cancelled')}>
+                    <Text style={styles.cancelBtnText}>Mark Cancelled</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {trip.lat && trip.lng && (
           <View style={{ padding: 20, paddingTop: 0 }}>
@@ -143,7 +203,7 @@ export default function TripDetailScreen() {
         <View style={styles.infoSection}>
           <InfoCard icon="📅" title="Dates" value={`${formatDate(trip.start_date)} - ${formatDate(trip.end_date)}`} subtitle={`${duration} days plan`} />
           <InfoCard icon="👥" title="Travelers" value={`${trip.group_size} People`} />
-          <InfoCard icon="💰" title="Budget" value={`₹${trip.budget.toLocaleString()}`} subtitle={`₹${perPersonBudget.toLocaleString()} / head`} />
+          <InfoCard icon="💰" title="Budget" value={`₹${totalBudget.toLocaleString()}`} subtitle={`₹${perPersonBudget.toLocaleString()} / head`} />
         </View>
 
         <View style={styles.actionsSection}>
@@ -198,6 +258,12 @@ export default function TripDetailScreen() {
             subtitle="Emergency contacts & safety tips"
             onPress={() => router.push(`/safety/${trip.id}` as any)}
           />
+          {isOrganizer && (
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteTrip}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+              <Text style={styles.deleteButtonText}>Delete Trip</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={[styles.section, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
@@ -205,15 +271,15 @@ export default function TripDetailScreen() {
             <Text style={styles.sectionTitle}>Emergency</Text>
             <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 }}>Long press SOS to alert contacts</Text>
           </View>
-          <SOSButton tripName={trip.title} location={trip.destination} />
+          <SOSButton tripId={trip.id} tripName={trip.title} location={trip.destination} />
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Budget Estimation</Text>
-          <BudgetItem category="Stay & Lodging" amount={trip.budget * 0.4} />
-          <BudgetItem category="Travel & Tickets" amount={trip.budget * 0.3} />
-          <BudgetItem category="Dining" amount={trip.budget * 0.2} />
-          <BudgetItem category="Misc" amount={trip.budget * 0.1} />
+          <BudgetItem category="Stay & Lodging" amount={totalBudget * 0.4} />
+          <BudgetItem category="Travel & Tickets" amount={totalBudget * 0.3} />
+          <BudgetItem category="Dining" amount={totalBudget * 0.2} />
+          <BudgetItem category="Misc" amount={totalBudget * 0.1} />
         </View>
 
         <View style={{ height: 40 }} />
@@ -350,6 +416,61 @@ const styles = StyleSheet.create({
   statusCompleted: {
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
+  'statusPending_confirmation': {
+    backgroundColor: 'rgba(245,166,35,0.2)',
+  },
+  statusCancelled: {
+    backgroundColor: 'rgba(239,68,68,0.2)',
+  },
+  confirmBanner: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245,166,35,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,166,35,0.25)',
+  },
+  confirmBannerTitle: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmBannerSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  confirmBannerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  confirmBtn: {
+    backgroundColor: '#8CC63F',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  confirmBtnText: {
+    color: '#080C14',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cancelBtn: {
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  cancelBtnText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   statusText: {
     color: 'white',
     fontSize: 13,
@@ -397,6 +518,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     gap: 10,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)',
+    backgroundColor: 'rgba(239,68,68,0.06)',
+  },
+  deleteButtonText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '700',
   },
   actionButton: {
     flexDirection: 'row',

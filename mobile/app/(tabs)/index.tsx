@@ -89,11 +89,13 @@ export default function HomeScreen() {
   };
 
   const fetchTrips = async () => {
+    const today = new Date().toISOString().split('T')[0];
     const { data } = await supabase
       .from('trips')
       .select('id, title, destination, start_date, trip_type, status')
       .eq('created_by', user?.id)
       .in('status', ['planning', 'confirmed'])
+      .gte('end_date', today)
       .order('start_date', { ascending: true })
       .limit(3);
     setTrips(data || []);

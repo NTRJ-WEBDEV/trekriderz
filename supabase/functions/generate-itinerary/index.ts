@@ -13,22 +13,28 @@ serve(async (req) => {
   }
 
   try {
-    const { tripId, destination, startDate, endDate, budget, tripType, groupSize } = await req.json()
+    const { tripId, destination, startDate, endDate, budget, budgetType, tripType, groupSize } = await req.json()
 
     // Calculate duration
     const start = new Date(startDate)
     const end = new Date(endDate)
     const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
 
+    // trips.budget means different things depending on budget_type — this
+    // resolves both to a single group total and a per-person figure once,
+    // so the rest of the prompt never has to divide/multiply again.
+    const totalBudget = budgetType === 'per_person' ? budget * groupSize : budget
+    const perPersonBudget = budgetType === 'per_person' ? budget : Math.round(budget / groupSize)
+
     // Prepare DeepSeek API request
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
-    
+
     const prompt = `Create a detailed ${duration}-day ${tripType} trip itinerary for ${destination} in India.
 
 Trip Details:
 - Dates: ${startDate} to ${endDate}
 - Group size: ${groupSize} people
-- Total budget: ₹${budget} (₹${Math.round(budget / groupSize)} per person)
+- Total budget: ₹${totalBudget} (₹${perPersonBudget} per person)
 - Trip type: ${tripType}
 
 Please provide a comprehensive day-by-day itinerary in JSON format with this exact structure:
@@ -52,10 +58,10 @@ Please provide a comprehensive day-by-day itinerary in JSON format with this exa
         "dinner": "Street food tour"
       },
       "accommodation": "Homestay/Hotel name",
-      "dailyBudget": ${Math.round(budget / duration)}
+      "dailyBudget": ${Math.round(totalBudget / duration)}
     }
   ],
-  "totalCost": ${budget},
+  "totalCost": ${totalBudget},
   "difficulty": "moderate",
   "safetyTips": [
     "Carry first aid kit",

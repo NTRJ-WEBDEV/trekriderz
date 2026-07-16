@@ -77,6 +77,7 @@ export default function CreateTripScreen() {
   const [uploading, setUploading]     = useState(false);
   const [groupSize, setGroupSize]     = useState('');
   const [budget, setBudget]           = useState('');
+  const [budgetType, setBudgetType]   = useState<'total' | 'per_person'>('total');
   const [meetingPoint, setMeetingPoint] = useState('');
   const [meetingCoords, setMeetingCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showMeetingMapPicker, setShowMeetingMapPicker] = useState(false);
@@ -118,7 +119,7 @@ export default function CreateTripScreen() {
   const resetForm = () => {
     setTripType('trek'); setDestination(''); setDestState(''); setDestDistrict(''); setCoords(null);
     setTitle(''); setDescription(''); setStartDate(''); setEndDate(''); setDateModal(false); setPhotos([]);
-    setGroupSize(''); setBudget(''); setMeetingPoint(''); setMeetingCoords(null); setExperienceLevel('');
+    setGroupSize(''); setBudget(''); setBudgetType('total'); setMeetingPoint(''); setMeetingCoords(null); setExperienceLevel('');
     setIsPublic(false); setLookingForPartner(false);
     setPartnerGender('any'); setBikeRole('rider');
     setSlotsAvailable(1); setContactWhatsApp(''); setContactWhatsAppCode('+91');
@@ -168,7 +169,7 @@ export default function CreateTripScreen() {
       return;
     }
     if (!Number.isInteger(Number(budget)) || Number(budget) < 1 || Number(budget) > 9999999) {
-      Alert.alert('Invalid Budget', 'Enter a budget per person up to ₹99,99,999.');
+      Alert.alert('Invalid Budget', `Enter a ${budgetType === 'per_person' ? 'per-person' : 'total'} budget up to ₹99,99,999.`);
       return;
     }
     haptic.medium();
@@ -195,6 +196,7 @@ export default function CreateTripScreen() {
       trip_type: tripType,
       group_size: parseInt(groupSize),
       budget: parseInt(budget),
+      budget_type: budgetType,
       status: 'planning',
     };
 
@@ -480,7 +482,7 @@ export default function CreateTripScreen() {
               </View>
             </View>
             <View style={s.half}>
-              <Text style={s.sublabel}>Budget / Person (₹)</Text>
+              <Text style={s.sublabel}>{budgetType === 'per_person' ? 'Budget / Person (₹)' : 'Total Budget (₹)'}</Text>
               <View style={s.inputRow}>
                 <Text style={s.rupeeSign}>₹</Text>
                 <TextInput
@@ -494,6 +496,20 @@ export default function CreateTripScreen() {
                 />
               </View>
             </View>
+          </View>
+
+          <View style={s.chipRow}>
+            {(['total', 'per_person'] as const).map((bt) => (
+              <TouchableOpacity
+                key={bt}
+                style={[s.chip, budgetType === bt && s.chipActive]}
+                onPress={() => { haptic.select(); setBudgetType(bt); }}
+              >
+                <Text style={[s.chipText, budgetType === bt && s.chipTextActive]}>
+                  {bt === 'total' ? 'Overall budget' : 'Per head budget'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Experience Level — for trek/adventure types */}

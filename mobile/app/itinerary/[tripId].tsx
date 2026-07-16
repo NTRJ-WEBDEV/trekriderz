@@ -66,6 +66,7 @@ export default function ItineraryScreen() {
           startDate: trip.start_date,
           endDate: trip.end_date,
           budget: trip.budget,
+          budgetType: trip.budget_type,
           tripType: trip.trip_type,
           groupSize: trip.group_size,
         },

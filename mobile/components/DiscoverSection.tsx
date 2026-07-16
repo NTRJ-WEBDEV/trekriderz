@@ -23,6 +23,15 @@ const TRIP_EMOJI: Record<string, string> = {
   weekend: '🌄', car_ride: '🚗', spiritual: '🙏', wildlife: '🦁', photography: '📸',
 };
 
+// trips.budget means different things depending on budget_type ('total' vs
+// 'per_person') — this always returns the per-person figure regardless of
+// which one a given trip was created with.
+function perPersonBudgetOf(trip: { budget?: number | null; budget_type?: string; group_size?: number | null }) {
+  const budget = trip.budget || 0;
+  if (trip.budget_type === 'per_person') return budget;
+  return Math.round(budget / (trip.group_size || 1));
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
@@ -42,12 +51,14 @@ export default function DiscoverSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const today = new Date().toISOString().split('T')[0];
     const [tripsRes, guidesRes, homestaysRes, vehiclesRes] = await Promise.all([
       supabase
         .from('trips')
-        .select('id, title, destination, start_date, end_date, trip_type, group_size, budget, looking_for_partner, creator:users!created_by(full_name, avatar_url)')
+        .select('id, title, destination, start_date, end_date, trip_type, group_size, budget, budget_type, looking_for_partner, creator:users!created_by(full_name, avatar_url)')
         .eq('is_public', true)
         .in('status', ['planning', 'confirmed'])
+        .gte('end_date', today)
         .order('start_date', { ascending: true })
         .limit(20),
       supabase
@@ -174,7 +185,7 @@ function TripCard({ item }: { item: any }) {
       </View>
       <View style={styles.cardFooter}>
         <Text style={styles.footerChip}>👥 {item.group_size} people</Text>
-        <Text style={styles.footerChip}>₹{(item.budget || 0).toLocaleString('en-IN')}/person</Text>
+        <Text style={styles.footerChip}>₹{perPersonBudgetOf(item).toLocaleString('en-IN')}/person</Text>
         {creator?.full_name && <Text style={styles.footerCreator}>by {creator.full_name.split(' ')[0]}</Text>}
       </View>
     </TouchableOpacity>

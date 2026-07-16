@@ -47,7 +47,7 @@ export default function BudgetScreen() {
       setLoading(true);
       const { data: tripData, error: tripError } = await supabase
         .from('trips')
-        .select('budget, title, currency')
+        .select('budget, budget_type, group_size, title, currency')
         .eq('id', tripId)
         .single();
 
@@ -103,7 +103,13 @@ export default function BudgetScreen() {
   };
 
   const totalSpent = expenses.reduce((sum, item) => sum + item.amount, 0);
-  const budget = trip?.budget || 0;
+  // Expenses are whole-trip amounts, so the tracker's ceiling must be the
+  // full group pool — a 'per_person' budget needs multiplying by group_size
+  // first, or a 2-person trip's real combined spend would read as blowing
+  // the budget at half its actual usage.
+  const budget = trip?.budget_type === 'per_person'
+    ? (trip?.budget || 0) * (trip?.group_size || 1)
+    : (trip?.budget || 0);
   const remaining = budget - totalSpent;
   const percentUsed = budget > 0 ? Math.min((totalSpent / budget) * 100, 100) : 0;
 

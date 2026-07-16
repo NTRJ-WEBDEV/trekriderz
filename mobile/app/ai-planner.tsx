@@ -186,6 +186,13 @@ export default function AIPlannerScreen() {
         itinerary: result.itinerary,
         packing_list: result.packing_essentials,
         notes: result.special_touches,
+        group_size: groupSize,
+        // The AI plan always computes a per-person total — save it as such
+        // rather than converting, so nothing here has to divide/multiply
+        // and risk the same double-counting bug this budget_type column
+        // exists to prevent elsewhere.
+        budget: Math.round(result.budget_breakdown?.total_per_person ?? 0) || null,
+        budget_type: 'per_person',
       }).select('id').single();
 
       if (error) throw error;

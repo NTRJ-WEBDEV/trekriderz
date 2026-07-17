@@ -1,7 +1,27 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+
+// App-owned "who was last signed in" hint, separate from the Supabase SDK's
+// own session storage. supabase.auth.getSession() blocks on a network token
+// refresh whenever the cached access token has actually expired — the
+// common case after the app has been closed longer than its ~1h JWT
+// lifetime — which otherwise stalls the root layout's splash screen for
+// however long that request takes. Reading this hint lets init() render the
+// app immediately on a warm start; the real getSession() call below still
+// runs and corrects course (including signing out) if the refresh fails.
+const LAST_USER_KEY = 'trekriderz_last_user';
+
+async function cacheLastUser(user: User | null) {
+  try {
+    if (user) await AsyncStorage.setItem(LAST_USER_KEY, JSON.stringify(user));
+    else await AsyncStorage.removeItem(LAST_USER_KEY);
+  } catch (e) {
+    // Non-critical — worst case, next cold start falls back to the blocking path.
+  }
+}
 
 // Fires at most once per user per day (upsert is a no-op on repeat opens).
 // Powers the daily-activity leaderboard used to pick giveaway winners.
@@ -35,18 +55,32 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => set({ user }),
   setSession: (session) => set({ session }),
   setLoading: (loading) => set({ loading }),
-  logout: () => set({ user: null, session: null }),
-  
+  logout: () => {
+    cacheLastUser(null);
+    set({ user: null, session: null });
+  },
+
   // Initialize auth state by checking for existing session
   init: async () => {
     try {
+      const cached = await AsyncStorage.getItem(LAST_USER_KEY);
+      if (cached) {
+        set({ user: JSON.parse(cached), loading: false });
+      }
+    } catch (e) {
+      // Ignore — falls through to the normal (blocking) path below.
+    }
+
+    try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session) {
         set({ session, user: session.user, loading: false });
+        cacheLastUser(session.user);
         trackDailyActivity(session.user.id);
       } else {
         set({ session: null, user: null, loading: false });
+        cacheLastUser(null);
       }
 
       // Listen for auth changes
@@ -55,6 +89,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           session,
           user: session?.user ?? null,
         });
+        cacheLastUser(session?.user ?? null);
         if (_event === 'SIGNED_IN' && session) {
           trackDailyActivity(session.user.id);
         }

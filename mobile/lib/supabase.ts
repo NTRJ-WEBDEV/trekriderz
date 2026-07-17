@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import * as Linking from 'expo-linking'
 import Constants from 'expo-constants'
+import { AppState } from 'react-native'
 
 // Redirect URL for email confirmation — Expo Go uses exp:// scheme, production uses trekriderz://
 const getAuthRedirectUrl = () => {
@@ -21,6 +22,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+})
+
+// Supabase's own guidance for React Native: without this, the client never
+// proactively refreshes the access token in the background, so it's
+// typically already expired by the time the app is reopened — every cold
+// start after ~1h away then pays for a blocking network refresh instead of
+// none at all. Keeps the token fresh while foregrounded; stops ticking
+// (saving battery/network) once backgrounded.
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh()
+  } else {
+    supabase.auth.stopAutoRefresh()
+  }
 })
 
 // Auth helper functions

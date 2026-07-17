@@ -11,6 +11,15 @@ const CACHE_KEY_PREFIX = 'weather_cache_';
 // freshness optimization, not an eviction rule. Entries older than this are
 // never deleted; they're always what gets served if a live fetch fails.
 const FRESH_WINDOW = 3 * 60 * 60 * 1000; // 3 hours
+// A hung request (no response, not even an error) would otherwise never hit
+// the catch block that falls back to cache — bound it explicitly.
+const FETCH_TIMEOUT_MS = 8000;
+
+function fetchWithTimeout(url: string, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 
 export interface WeatherData {
   currentTemp: number;
@@ -106,7 +115,7 @@ export async function fetchWeatherByCoords(lat: number, lng: number): Promise<We
 
   try {
     // Call our own Next.js proxy — API key never leaves the server
-    const res = await fetch(`${WEATHER_PROXY_URL}?lat=${lat}&lng=${lng}`);
+    const res = await fetchWithTimeout(`${WEATHER_PROXY_URL}?lat=${lat}&lng=${lng}`);
     if (!res.ok) throw new Error(`Proxy error ${res.status}`);
     const json = await res.json();
 
@@ -170,7 +179,7 @@ export async function fetchWeatherOpenMeteo(lat: number, lng: number): Promise<W
   }
 
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${OPEN_METEO_URL}?latitude=${lat}&longitude=${lng}&current_weather=true` +
       `&daily=temperature_2m_max,weathercode&timezone=auto&forecast_days=4`
     );

@@ -237,7 +237,14 @@ export default function NotificationsScreen() {
         activeOpacity={0.75}
         onPress={() => {
           if (!item.is_read) markRead(item.id);
-          if (item.type === 'follow' && item.sender_id) router.push(`/user/${item.sender_id}` as any);
+          const postId = item.related_id || item.metadata?.post_id;
+          if (item.type === 'follow' && item.sender_id) {
+            router.push(`/user/${item.sender_id}` as any);
+          } else if ((item.type === 'like' || item.type === 'comment') && postId) {
+            router.push(`/post/${postId}` as any);
+          } else if (item.type === 'booking' && item.related_id) {
+            router.push(`/booking-details/${item.related_id}` as any);
+          }
         }}
         style={[styles.notificationItem, !item.is_read && styles.unread]}
       >

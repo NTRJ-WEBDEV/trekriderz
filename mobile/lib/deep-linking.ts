@@ -91,7 +91,7 @@ export async function handleDeepLink(url: string) {
       if (path.startsWith('trip/')) {
         router.push(`/trip/${path.split('/')[1]}` as any);
       } else if (path.startsWith('post/')) {
-        // router.push(`/post/${path.split('/')[1]}` as any);
+        router.push(`/post/${path.split('/')[1]}` as any);
       }
     }
   } catch (error) {

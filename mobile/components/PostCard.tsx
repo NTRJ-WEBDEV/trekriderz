@@ -349,7 +349,9 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
             onScroll={onScrollImage}
             scrollEventThrottle={16}
             renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.postImage} />
+              <TouchableOpacity activeOpacity={1} onPress={() => router.push(`/post/${post.id}` as any)}>
+                <Image source={{ uri: item }} style={styles.postImage} />
+              </TouchableOpacity>
             )}
           />
           {/* Dot Indicators */}
@@ -413,7 +415,10 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
 
         {/* Caption */}
         {caption ? (
-          <Text style={[styles.caption, { color: colors.text }]}>
+          <Text
+            style={[styles.caption, { color: colors.text }]}
+            onPress={() => router.push(`/post/${post.id}` as any)}
+          >
             <Text style={styles.captionUser} onPress={() => router.push(`/user/${post.user.id}` as any)}>{post.user.name} </Text>
             {caption}
           </Text>

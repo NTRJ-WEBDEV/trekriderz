@@ -1,324 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
-import { useNotificationStore } from '@/stores/notificationStore';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-
-interface Notification {
-  id: string;
-  created_at: string;
-  type: 'like' | 'comment' | 'follow' | 'trip_invite' | 'booking';
-  content: string;
-  message?: string;
-  is_read: boolean;
-  sender_id?: string;
-  related_id?: string;
-  metadata?: any;
-  users?: {
-    full_name: string;
-    avatar_url: string;
-  };
-}
-
-function isToday(dateStr: string): boolean {
-  const d = new Date(dateStr);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (isToday(dateStr)) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-}
+import { useNotifications } from '@/hooks/useNotifications';
+import { getTypeConfig } from '@/lib/notifications/registry';
+import { groupNotifications, sectionNotifications, SectionedItem } from '@/lib/notifications/grouping';
+import NotificationRow from '@/components/notifications/NotificationRow';
 
 export default function NotificationsScreen() {
-  const { user } = useAuthStore();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const {
+    raw, postMeta, followingSet, loading, refreshing, actionLoading,
+    onRefresh, markRead, markAllRead, respondFollowRequest, respondTripInvite, followBack,
+  } = useNotifications();
 
-  const fetchNotifications = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select(`
-          *,
-          users:sender_id (full_name, avatar_url)
-        `)
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+  const grouped = groupNotifications(raw);
+  const sections = sectionNotifications(grouped);
+  const unreadCount = raw.filter((n) => !n.is_read).length;
 
-      if (error) throw error;
-      setNotifications(data || []);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const handlePress = (item: (typeof grouped)[number]) => {
+    markRead(item.ids);
+    const cfg = getTypeConfig(item.type);
+    const route = cfg.getRoute(item);
+    if (route) router.push(route as any);
   };
-
-  // Opening this screen is treated as "seen" for the purposes of the Home
-  // bell badge — a coarser signal than per-row is_read, but matches what
-  // was asked for (clear on open) without needing to thread individual
-  // mark-read actions back into the global count.
-  useEffect(() => {
-    if (user) useNotificationStore.getState().reset();
-  }, [user]);
-
-  useEffect(() => {
-    if (user) {
-      fetchNotifications();
-      const channel = supabase
-        .channel(`user_notifications:${user.id}`)
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
-          () => fetchNotifications()
-        )
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }
-  }, [user]);
-
-  const markAllRead = async () => {
-    const unread = notifications.filter((n) => !n.is_read);
-    if (unread.length === 0) return;
-    try {
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', unread.map((n) => n.id));
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    } catch (err) {
-      console.error('Error marking all read:', err);
-    }
-  };
-
-  const markRead = async (id: string) => {
-    try {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-      );
-    } catch (err) {
-      console.error('Error marking read:', err);
-    }
-  };
-
-  const handleRespond = async (notif: Notification, action: 'accepted' | 'declined') => {
-    if (!user || actionLoading) return;
-
-    const tripId = notif.related_id || notif.metadata?.trip_id;
-    if (!tripId) {
-      Alert.alert('Error', 'Missing trip information');
-      return;
-    }
-
-    setActionLoading(notif.id);
-    try {
-      if (action === 'accepted') {
-        const { data: result, error: acceptError } = await supabase.rpc('accept_trip_invite', {
-          p_trip_id: tripId,
-        });
-        if (acceptError) throw acceptError;
-        if (!result?.success) {
-          Alert.alert('Cannot Join', result?.message || 'This trip is already full.');
-          setActionLoading(null);
-          return;
-        }
-      } else {
-        const { error: memberError } = await supabase
-          .from('trip_members')
-          .update({ status: action })
-          .eq('trip_id', tripId)
-          .eq('user_id', user.id);
-
-        if (memberError) throw memberError;
-      }
-
-      await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notif.id);
-
-      Alert.alert('Success', action === 'accepted' ? 'You joined the trip!' : 'Invitation declined');
-
-      if (action === 'accepted') {
-        router.push(`/trip/${tripId}`);
-      }
-
-      fetchNotifications();
-    } catch (error) {
-      console.error('Error responding to invite:', error);
-      Alert.alert('Error', 'Failed to respond to invitation');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleFollowRespond = async (notif: Notification, action: 'accepted' | 'declined') => {
-    if (!user || actionLoading) return;
-    const followerId = notif.sender_id;
-    if (!followerId) {
-      Alert.alert('Error', 'Missing follower information');
-      return;
-    }
-
-    setActionLoading(notif.id);
-    try {
-      // RLS only lets the follower delete their own row (follows_delete: follower_id =
-      // auth.uid()), so the followee accepting/declining must go through follows_update
-      // (following_id = auth.uid()) for both actions — a delete here would silently
-      // affect zero rows instead of erroring.
-      const { error } = await supabase
-        .from('user_follows')
-        .update({ status: action === 'accepted' ? 'accepted' : 'rejected' })
-        .eq('follower_id', followerId)
-        .eq('following_id', user.id);
-      if (error) throw error;
-
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id);
-      fetchNotifications();
-    } catch (error) {
-      console.error('Error responding to follow request:', error);
-      Alert.alert('Error', 'Failed to respond to follow request');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications();
-  };
-
-  const getIcon = (type: string): any => {
-    switch (type) {
-      case 'like': return 'heart';
-      case 'comment': return 'chatbubble';
-      case 'trip_invite': return 'airplane';
-      case 'follow': return 'person-add';
-      case 'booking': return 'receipt';
-      default: return 'notifications';
-    }
-  };
-
-  const getIconColor = (type: string) => {
-    switch (type) {
-      case 'like': return '#ED4956';
-      case 'comment': return '#3897F0';
-      case 'trip_invite': return '#8CC63F';
-      case 'follow': return '#A855F7';
-      case 'booking': return '#F59E0B';
-      default: return '#6B7280';
-    }
-  };
-
-  const renderItem = ({ item }: { item: Notification }) => {
-    const isInvite = item.type === 'trip_invite';
-    const isFollowRequest = item.type === 'follow' && !!item.sender_id;
-    const msg = item.message || item.content;
-    const iconColor = getIconColor(item.type);
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.75}
-        onPress={() => {
-          if (!item.is_read) markRead(item.id);
-          const postId = item.related_id || item.metadata?.post_id;
-          if (item.type === 'follow' && item.sender_id) {
-            router.push(`/user/${item.sender_id}` as any);
-          } else if ((item.type === 'like' || item.type === 'comment') && postId) {
-            router.push(`/post/${postId}` as any);
-          } else if (item.type === 'booking' && item.related_id) {
-            router.push(`/booking-details/${item.related_id}` as any);
-          }
-        }}
-        style={[styles.notificationItem, !item.is_read && styles.unread]}
-      >
-        {!item.is_read && <View style={styles.unreadDot} />}
-
-        <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
-          <Ionicons name={getIcon(item.type)} size={20} color={iconColor} />
-        </View>
-
-        <View style={styles.contentContainer}>
-          <Text style={styles.content} numberOfLines={isInvite ? undefined : 2}>
-            <Text style={styles.senderName}>{item.users?.full_name || 'TrekRiderz'}</Text>
-            {'  '}{msg}
-          </Text>
-          <Text style={styles.time}>{formatTime(item.created_at)}</Text>
-
-          {isInvite && !item.is_read && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.btn, styles.acceptBtn]}
-                onPress={() => handleRespond(item, 'accepted')}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === item.id ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.btnText}>Accept</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.declineBtn]}
-                onPress={() => handleRespond(item, 'declined')}
-                disabled={!!actionLoading}
-              >
-                <Text style={[styles.btnText, { color: '#EF4444' }]}>Decline</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {isFollowRequest && !item.is_read && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.btn, styles.acceptBtn]}
-                onPress={() => handleFollowRespond(item, 'accepted')}
-                disabled={!!actionLoading}
-              >
-                {actionLoading === item.id ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.btnText}>Accept</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.declineBtn]}
-                onPress={() => handleFollowRespond(item, 'declined')}
-                disabled={!!actionLoading}
-              >
-                <Text style={[styles.btnText, { color: '#EF4444' }]}>Decline</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const todayNotifs = notifications.filter((n) => isToday(n.created_at));
-  const earlierNotifs = notifications.filter((n) => !isToday(n.created_at));
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  const sections = [
-    ...(todayNotifs.length > 0 ? [{ type: 'header', label: 'Today', id: 'h-today' }, ...todayNotifs.map((n) => ({ ...n, type: 'item' }))] : []),
-    ...(earlierNotifs.length > 0 ? [{ type: 'header', label: 'Earlier', id: 'h-earlier' }, ...earlierNotifs.map((n) => ({ ...n, type: 'item' }))] : []),
-  ];
 
   if (loading) {
     return (
@@ -350,30 +55,41 @@ export default function NotificationsScreen() {
       </View>
 
       <FlatList
-        data={sections as any[]}
-        keyExtractor={(item) => item.id || item.type + item.label}
+        data={sections}
+        keyExtractor={(item) => item.id}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#8CC63F"
-            colors={['#8CC63F']}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8CC63F" colors={['#8CC63F']} />
         }
-        renderItem={({ item }) => {
-          if (item.type === 'header') {
+        renderItem={({ item }: { item: SectionedItem }) => {
+          if (item.kind === 'header') {
             return <Text style={styles.sectionHeader}>{item.label}</Text>;
           }
-          return renderItem({ item });
+          const n = item.notification;
+          return (
+            <NotificationRow
+              item={n}
+              postMeta={postMeta}
+              followingSet={followingSet}
+              actionLoading={actionLoading}
+              onPress={() => handlePress(n)}
+              onFollowRequest={(action) => respondFollowRequest(n, action)}
+              onTripInvite={(action) => respondTripInvite(n, action)}
+              onFollowBack={() => followBack(n)}
+            />
+          );
         }}
+        removeClippedSubviews
+        maxToRenderPerBatch={12}
+        windowSize={8}
+        initialNumToRender={12}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={72} color="rgba(255,255,255,0.15)" />
             <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptySubtitle}>You have no notifications yet. When someone interacts with your trips or invites you, you'll see it here.</Text>
+            <Text style={styles.emptySubtitle}>You have no notifications yet. When someone interacts with your trips or posts, you'll see it here.</Text>
           </View>
         }
-        contentContainerStyle={notifications.length === 0 && styles.emptyFlex}
+        contentContainerStyle={sections.length === 0 && styles.emptyFlex}
       />
     </SafeAreaView>
   );
@@ -438,80 +154,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 8,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-    position: 'relative',
-  },
-  unread: {
-    backgroundColor: 'rgba(140,198,63,0.05)',
-  },
-  unreadDot: {
-    position: 'absolute',
-    left: 5,
-    top: '50%',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#8CC63F',
-    marginTop: -3,
-  },
-  iconContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  content: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  senderName: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  time: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 8,
-  },
-  btn: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 90,
-  },
-  acceptBtn: {
-    backgroundColor: '#8CC63F',
-  },
-  declineBtn: {
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
-  },
-  btnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   center: {
     flex: 1,

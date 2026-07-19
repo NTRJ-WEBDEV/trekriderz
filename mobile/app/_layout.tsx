@@ -156,7 +156,15 @@ export default function RootLayout() {
 
     setupServices();
     return () => notificationCleanup.current?.();
-  }, [user]);
+    // Depend on the id, not the `user` object reference — auth init sets a
+    // fresh object 2-3x in a row during cold start (cached user, resolved
+    // session, onAuthStateChange's immediate fire) for the same underlying
+    // user, and keying off `[user]` re-ran this effect for each one,
+    // racing multiple concurrent realtime .channel(sameName).subscribe()
+    // calls into the "cannot add postgres_changes callbacks after
+    // subscribe()" error.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Wait for navigator to mount before redirecting
   useEffect(() => {

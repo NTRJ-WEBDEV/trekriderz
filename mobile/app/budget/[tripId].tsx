@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import EmptyState from '@/components/EmptyState';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -207,11 +208,7 @@ export default function BudgetScreen() {
           </View>
 
           {expenses.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>💸</Text>
-              <Text style={styles.emptyTitle}>No expenses yet</Text>
-              <Text style={styles.emptySubtitle}>Track your trip spending here</Text>
-            </View>
+            <EmptyState icon="wallet-outline" title="No expenses yet" subtitle="Track your trip spending here" />
           ) : (
             expenses.map((expense) => {
               const cat = getCategoryInfo(expense.category);
@@ -446,23 +443,6 @@ const styles = StyleSheet.create({
   categoryChipAmount: {
     fontSize: 13,
     fontWeight: '700',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyIcon: {
-    fontSize: 40,
-  },
-  emptyTitle: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  emptySubtitle: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 14,
   },
   expenseItem: {
     flexDirection: 'row',

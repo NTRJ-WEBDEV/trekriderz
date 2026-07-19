@@ -8,9 +8,10 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
-const BG = '#080C14';
-const GREEN = '#8CC63F';
+const BG = AppColors.background;
+const GREEN = AppColors.primary;
 
 const CATEGORIES = [
   { id: 'trek', label: 'Trekking', emoji: '⛰️' },

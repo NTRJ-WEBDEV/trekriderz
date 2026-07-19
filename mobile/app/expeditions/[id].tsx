@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/authStore';
 import PackageTierCard from '@/components/PackageTierCard';
 import ItineraryTimeline from '@/components/ItineraryTimeline';
 import { ExpeditionPackage } from '@/lib/expeditions';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80';
@@ -644,10 +645,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#25D366',
+    borderColor: AppColors.whatsapp,
   },
   waBtnText: {
-    color: '#25D366',
+    color: AppColors.whatsapp,
     fontSize: 14,
     fontWeight: '600',
   },

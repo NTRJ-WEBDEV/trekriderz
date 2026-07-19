@@ -11,9 +11,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import ReviewSheet from '@/components/ReviewSheet';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
-const GREEN = '#8CC63F';
+const GREEN = AppColors.primary;
 
 type GuideData = {
   id: string;

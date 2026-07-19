@@ -8,7 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 
 const CREATE_ACTIONS = [
   { label: 'Create Post', icon: 'image-outline' as const, route: '/post/create' },
-  { label: 'Write Travel Story', icon: 'book-outline' as const, route: '/stories/create' },
+  { label: 'Write Article', icon: 'book-outline' as const, route: '/stories/create' },
   { label: 'Plan a Trip', icon: 'map-outline' as const, route: '/(tabs)/create' },
   { label: 'Add Story (24hr)', icon: 'add-circle-outline' as const, route: '/story/create' },
 ];
@@ -24,6 +24,7 @@ export default function TabsLayout() {
     <>
       <StatusBar style="light" />
       <Tabs
+        initialRouteName="explore"
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: '#8CC63F',
@@ -42,24 +43,24 @@ export default function TabsLayout() {
           },
         }}
       >
-        {/* Home */}
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: 'Home',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
-            ),
-          }}
-        />
-
-        {/* Feed (Instagram-style posts + stories) */}
+        {/* Feed (Instagram-style posts + stories) — landing tab */}
         <Tabs.Screen
           name="explore"
           options={{
             title: 'Feed',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="newspaper-outline" size={size} color={color} />
+            ),
+          }}
+        />
+
+        {/* Adventure (formerly Home) — trip/guide/homestay/rental discovery */}
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Adventure',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="trail-sign-outline" size={size} color={color} />
             ),
           }}
         />
@@ -89,11 +90,11 @@ export default function TabsLayout() {
         {/* Discover — now embedded directly in Home; route stays reachable via deep link */}
         <Tabs.Screen name="discover" options={{ href: null }} />
 
-        {/* Community — groups + travel stories */}
+        {/* Connect — trips, travel partners, rides, organizers, groups */}
         <Tabs.Screen
           name="community"
           options={{
-            title: 'Community',
+            title: 'Connect',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-outline" size={size} color={color} />
             ),
@@ -141,7 +142,6 @@ export default function TabsLayout() {
 
         {/* Hidden tabs — accessible via deep link / router.push only */}
         <Tabs.Screen name="notifications" options={{ href: null }} />
-        <Tabs.Screen name="feed" options={{ href: null }} />
       </Tabs>
 
       <Modal

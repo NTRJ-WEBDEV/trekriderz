@@ -13,11 +13,12 @@ import { uploadMedia } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
 import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#ADFF2F';
+const GREEN = AppColors.primary;
 const RED = '#EF4444';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
+const BG = AppColors.background;
+const CARD = AppColors.card;
 const { width } = Dimensions.get('window');
 const THUMB = (width - 40 - 32) / 4;
 

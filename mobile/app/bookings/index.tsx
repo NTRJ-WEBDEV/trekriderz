@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import EmptyState from '@/components/EmptyState';
 
 type TabType = 'upcoming' | 'past';
 
@@ -233,29 +234,14 @@ export default function MyBookingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8CC63F" />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons
-              name={activeTab === 'upcoming' ? 'calendar-outline' : 'time-outline'}
-              size={64}
-              color="rgba(255,255,255,0.08)"
-            />
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'upcoming' ? 'No upcoming bookings' : 'No past bookings'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {activeTab === 'upcoming'
-                ? 'Start exploring homestays and guides'
-                : 'Your completed trips will appear here'}
-            </Text>
-            {activeTab === 'upcoming' && (
-              <TouchableOpacity
-                style={styles.exploreBtn}
-                onPress={() => router.push('/(tabs)/explore')}
-              >
-                <Text style={styles.exploreBtnText}>Explore Now</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <EmptyState
+            icon={activeTab === 'upcoming' ? 'calendar-outline' : 'time-outline'}
+            title={activeTab === 'upcoming' ? 'No upcoming bookings' : 'No past bookings'}
+            subtitle={activeTab === 'upcoming' ? 'Start exploring homestays and guides' : 'Your completed trips will appear here'}
+            actionLabel={activeTab === 'upcoming' ? 'Explore Now' : undefined}
+            onAction={activeTab === 'upcoming' ? () => router.push('/(tabs)/explore') : undefined}
+            fillScreen
+          />
         }
       />
     </SafeAreaView>
@@ -425,37 +411,5 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 12,
     fontWeight: '600',
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyTitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  emptySub: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 20,
-  },
-  exploreBtn: {
-    marginTop: 8,
-    backgroundColor: '#8CC63F',
-    paddingHorizontal: 28,
-    paddingVertical: 13,
-    borderRadius: 14,
-  },
-  exploreBtnText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 15,
   },
 });

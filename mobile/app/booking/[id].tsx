@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/authStore';
 
 const WHATSAPP_NUMBER = process.env.EXPO_PUBLIC_BUSINESS_WHATSAPP || '917339231537';
 import { Calendar } from 'react-native-calendars';
+import { AppColors } from '@/constants/theme';
 
 export default function BookingScreen() {
   const { id, name, price, type } = useLocalSearchParams<{
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   confirmBtn: {
-    backgroundColor: '#25D366',
+    backgroundColor: AppColors.whatsapp,
     borderRadius: 14,
     paddingVertical: 16,
     flexDirection: 'row',

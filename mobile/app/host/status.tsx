@@ -9,9 +9,11 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
+import EmptyState from '@/components/EmptyState';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 type Property = {
   id: string;
@@ -87,14 +89,14 @@ export default function PropertyStatusScreen() {
           </TouchableOpacity>
           <Text style={s.headerTitle}>Property Application</Text>
         </View>
-        <View style={s.center}>
-          <Ionicons name="home-outline" size={56} color="rgba(255,255,255,0.15)" />
-          <Text style={s.emptyTitle}>No application found</Text>
-          <Text style={s.emptySubtitle}>List your property on TrekRiderz today</Text>
-          <TouchableOpacity style={s.applyBtn} onPress={() => router.replace('/host/create' as any)}>
-            <Text style={s.applyBtnText}>List Your Property</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="home-outline"
+          title="No application found"
+          subtitle="List your property on TrekRiderz today"
+          actionLabel="List Your Property"
+          onAction={() => router.replace('/host/create' as any)}
+          fillScreen
+        />
       </SafeAreaView>
     );
   }
@@ -268,10 +270,6 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFF' },
   content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 60 },
 
-  emptyTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  emptySubtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 14 },
-  applyBtn: { backgroundColor: GREEN, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 14, marginTop: 8 },
-  applyBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
 
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
   statusAvatar: { width: 60, height: 60, borderRadius: 14, borderWidth: 2, borderColor: GREEN },

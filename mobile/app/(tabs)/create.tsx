@@ -18,9 +18,10 @@ import * as ImagePicker from 'expo-image-picker';
 import PhoneInput from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 const { width } = Dimensions.get('window');
 
 const TRIP_TYPES = [

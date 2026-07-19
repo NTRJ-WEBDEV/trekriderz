@@ -14,10 +14,11 @@ import { useAuthStore } from '@/stores/authStore';
 import PhoneInput from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 import LocationPicker from '@/components/LocationPicker';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
 const { width } = Dimensions.get('window');
 const THUMB = (width - 40 - 32) / 4;
 

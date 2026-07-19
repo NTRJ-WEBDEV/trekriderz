@@ -9,10 +9,12 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
+import EmptyState from '@/components/EmptyState';
 
-const GREEN = '#ADFF2F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
 
 type Vehicle = {
   id: string;
@@ -96,7 +98,14 @@ export default function MyVehiclesScreen() {
         </View>
 
         {vehicles.length === 0 ? (
-          <EmptyState />
+          <EmptyState
+            icon="car-outline"
+            title="No vehicles listed yet"
+            subtitle="List your bike, car or jeep and earn by renting it to trekkers."
+            actionLabel="List a Vehicle"
+            onAction={() => router.push('/rentals/register' as any)}
+            fillScreen
+          />
         ) : (
           <FlatList
             data={vehicles}
@@ -160,25 +169,6 @@ function VehicleCard({ vehicle, onPress }: { vehicle: Vehicle; onPress: () => vo
   );
 }
 
-function EmptyState() {
-  return (
-    <View style={styles.empty}>
-      <View style={styles.emptyIcon}>
-        <Ionicons name="car-outline" size={48} color="rgba(255,255,255,0.15)" />
-      </View>
-      <Text style={styles.emptyTitle}>No vehicles listed yet</Text>
-      <Text style={styles.emptyText}>List your bike, car or jeep and earn by renting it to trekkers.</Text>
-      <TouchableOpacity
-        style={styles.emptyBtn}
-        onPress={() => router.push('/rentals/register' as any)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={18} color={BG} />
-        <Text style={styles.emptyBtnText}>List a Vehicle</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
@@ -233,20 +223,4 @@ const styles = StyleSheet.create({
   perDay: { fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.4)' },
   editHint: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   editHintText: { fontSize: 12, fontWeight: '700', color: GREEN },
-
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
-  emptyIcon: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#FFF', marginBottom: 8, textAlign: 'center' },
-  emptyText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 20, marginBottom: 28 },
-  emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: GREEN, borderRadius: 14,
-    paddingHorizontal: 24, paddingVertical: 14,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: '800', color: BG },
 });

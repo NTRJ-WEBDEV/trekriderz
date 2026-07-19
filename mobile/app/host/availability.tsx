@@ -9,9 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
 const TODAY = new Date().toISOString().split('T')[0];
-const GREEN = '#8CC63F';
+const GREEN = AppColors.primary;
 
 type MarkedDates = Record<string, any>;
 

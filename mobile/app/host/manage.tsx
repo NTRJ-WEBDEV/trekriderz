@@ -9,9 +9,10 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -458,7 +459,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(37,211,102,0.1)', borderRadius: 10, paddingVertical: 10,
     borderWidth: 1, borderColor: 'rgba(37,211,102,0.25)',
   },
-  whatsappReplyText: { color: '#25D366', fontSize: 12, fontWeight: '700' },
+  whatsappReplyText: { color: AppColors.whatsapp, fontSize: 12, fontWeight: '700' },
   confirmBtn: { backgroundColor: GREEN, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, justifyContent: 'center' },
   confirmBtnText: { color: '#000', fontSize: 12, fontWeight: '700' },
 

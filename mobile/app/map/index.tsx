@@ -410,22 +410,22 @@ const POI_LABEL: Record<PoiCategory, string> = {
 };
 
 function kindColor(kind: MarkerKind, category?: PoiCategory): string {
-  if (kind === 'poi') return POI_COLOR[category || 'other'];
-  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
+  if (kind === 'poi' || kind === 'trip_point') return POI_COLOR[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi' | 'trip_point'>, string> = {
     homestay: '#F97316', guide: '#8B5CF6', expedition: '#8CC63F', member: '#3B82F6', destination: '#8CC63F',
   };
   return map[kind] || '#8CC63F';
 }
 function kindEmoji(kind: MarkerKind, category?: PoiCategory): string {
-  if (kind === 'poi') return POI_EMOJI[category || 'other'];
-  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
+  if (kind === 'poi' || kind === 'trip_point') return POI_EMOJI[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi' | 'trip_point'>, string> = {
     homestay: '🏠', guide: '👤', expedition: '⛰️', member: '🧑', destination: '📍',
   };
   return map[kind] || '📍';
 }
 function kindLabel(kind: MarkerKind, category?: PoiCategory): string {
-  if (kind === 'poi') return POI_LABEL[category || 'other'];
-  const map: Record<Exclude<MarkerKind, 'poi'>, string> = {
+  if (kind === 'poi' || kind === 'trip_point') return POI_LABEL[category || 'other'];
+  const map: Record<Exclude<MarkerKind, 'poi' | 'trip_point'>, string> = {
     homestay: 'Homestay', guide: 'Guide', expedition: 'Expedition', member: 'Member', destination: 'Destination',
   };
   return map[kind] || kind;

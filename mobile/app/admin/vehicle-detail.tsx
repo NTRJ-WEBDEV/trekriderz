@@ -8,11 +8,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
-const BORDER = 'rgba(255,255,255,0.08)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
+const BORDER = AppColors.border;
 
 const TYPE_EMOJI: Record<string, string> = {
   bike: '🏍️', car: '🚗', jeep: '🚙', tempo: '🚐', auto: '🛺', bus: '🚌',

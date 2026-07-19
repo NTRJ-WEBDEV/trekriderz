@@ -4,14 +4,15 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 
 const ACCENT = '#EC4899';
-const BG = '#080C14';
+const BG = AppColors.background;
 
 type Story = {
   id: string;
@@ -42,9 +43,9 @@ function StoryRow({ story, onEdit, onDelete }: { story: Story; onEdit: () => voi
       </View>
       <TouchableOpacity
         style={styles.rowMenuBtn}
-        onPress={() => Alert.alert('Story Options', undefined, [
-          { text: 'Edit Story', onPress: onEdit },
-          { text: 'Delete Story', style: 'destructive', onPress: onDelete },
+        onPress={() => Alert.alert('Article Options', undefined, [
+          { text: 'Edit Article', onPress: onEdit },
+          { text: 'Delete Article', style: 'destructive', onPress: onDelete },
           { text: 'Cancel', style: 'cancel' },
         ])}
       >
@@ -76,13 +77,13 @@ export default function ManageStoriesScreen() {
   useEffect(() => { load(); }, [load]);
 
   const deleteStory = (story: Story) => {
-    Alert.alert('Delete Story', 'Are you sure? This cannot be undone.', [
+    Alert.alert('Delete Article', 'Are you sure? This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           const { error } = await supabase.from('posts').delete().eq('id', story.id);
           if (error) {
-            Alert.alert('Error', 'Could not delete story.');
+            Alert.alert('Error', 'Could not delete article.');
             return;
           }
           setStories((prev) => prev.filter((s) => s.id !== story.id));
@@ -93,15 +94,7 @@ export default function ManageStoriesScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
-            <Ionicons name="arrow-back" size={22} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Manage Travel Stories</Text>
-          <View style={{ width: 38 }} />
-        </View>
-      </SafeAreaView>
+      <ScreenHeader title="Manage Articles" />
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={ACCENT} /></View>
@@ -122,7 +115,7 @@ export default function ManageStoriesScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="book-outline" size={40} color="rgba(255,255,255,0.2)" />
-              <Text style={styles.emptyText}>You haven't written any travel stories yet.</Text>
+              <Text style={styles.emptyText}>You haven't written any articles yet.</Text>
             </View>
           }
         />
@@ -133,20 +126,7 @@ export default function ManageStoriesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  safeTop: { backgroundColor: BG },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
-  },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#FFF' },
 
   list: { padding: 16, gap: 12, flexGrow: 1 },
 

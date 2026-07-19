@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import EmptyState from '@/components/EmptyState';
 
 export interface ItineraryDay {
   day: number;
@@ -153,16 +154,14 @@ export default function ItineraryScreen() {
           <View style={{ width: 36 }} />
         </View>
 
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🗺️</Text>
-          <Text style={styles.emptyTitle}>No Itinerary Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Let AI create a personalized day-by-day plan for your trip
-          </Text>
-          <TouchableOpacity style={styles.generateButton} onPress={generateItinerary}>
-            <Text style={styles.generateButtonText}>Generate AI Itinerary</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="map-outline"
+          title="No Itinerary Yet"
+          subtitle="Let AI create a personalized day-by-day plan for your trip"
+          actionLabel="Generate AI Itinerary"
+          onAction={generateItinerary}
+          fillScreen
+        />
       </SafeAreaView>
     );
   }
@@ -365,40 +364,6 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 36,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-  },
-  emptyTitle: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  emptySubtitle: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 15,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  generateButton: {
-    backgroundColor: '#8CC63F',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  generateButtonText: {
-    color: '#080C14',
-    fontSize: 16,
-    fontWeight: '700',
   },
   daySelector: {
     maxHeight: 56,

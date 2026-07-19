@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import VerifiedBadge from '@/components/VerifiedBadge';
+import { SkeletonCard } from '@/components/SkeletonLoader';
 
 const SPECIALTY_CHIPS = [
   { id: '', label: 'All', emoji: '🧭' },
@@ -128,7 +129,11 @@ export default function GuidesScreen() {
         />
 
         {loading ? (
-          <ActivityIndicator color="#8CC63F" style={{ marginTop: 60 }} />
+          <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
         ) : (
           <FlatList
             data={filtered}

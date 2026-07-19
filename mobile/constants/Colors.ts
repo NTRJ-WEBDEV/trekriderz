@@ -22,6 +22,11 @@ export const Colors = {
     warning: '#F59E0B',
     surface: '#0D1320',
     subtext: '#9CA3AF',
+    // Third-party brand color, kept distinct from `primary` deliberately —
+    // "via WhatsApp" action buttons use WhatsApp's own green so the button
+    // is instantly recognizable as leading to WhatsApp, the same way
+    // "Share on WhatsApp" buttons work everywhere on the web.
+    whatsapp: '#25D366',
   },
   dark: {
     text: '#F8FAFC',
@@ -39,5 +44,10 @@ export const Colors = {
     warning: '#FBBF24',
     surface: '#0D1320',
     subtext: '#9CA3AF',
+    // Third-party brand color, kept distinct from `primary` deliberately —
+    // "via WhatsApp" action buttons use WhatsApp's own green so the button
+    // is instantly recognizable as leading to WhatsApp, the same way
+    // "Share on WhatsApp" buttons work everywhere on the web.
+    whatsapp: '#25D366',
   },
 };

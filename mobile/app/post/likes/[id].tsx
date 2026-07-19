@@ -7,11 +7,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import UserAvatar from '@/components/UserAvatar';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
-const BORDER = 'rgba(255,255,255,0.07)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
+const BORDER = AppColors.border;
 
 interface Person {
   id: string;
@@ -47,7 +48,7 @@ export default function PostLikesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Likes</Text>

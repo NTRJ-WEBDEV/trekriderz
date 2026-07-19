@@ -8,9 +8,10 @@ import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
-const BG = '#080C14';
-const GREEN = '#8CC63F';
+const BG = AppColors.background;
+const GREEN = AppColors.primary;
 
 type ManageTab = 'requests' | 'members';
 
@@ -71,14 +72,18 @@ export default function CommunityManageScreen() {
       // Increment member count
       supabase.rpc('increment_community_members', { community_id: id });
 
-      // Notify the user they were approved
-      supabase.from('notifications').insert({
+      // Notify the user they were approved — best-effort, doesn't roll back
+      // the approval itself if it fails, but logged rather than swallowed.
+      const { error: notifyError } = await supabase.from('notifications').insert({
         user_id: memberId,
+        sender_id: user?.id,
         type: 'community_approved',
         title: 'Request Approved! 🎉',
         message: `You're now a member of "${community?.name}"`,
-        data: { community_id: id },
+        related_id: id,
+        metadata: { community_id: id },
       });
+      if (notifyError) console.error('Failed to notify approved member:', notifyError);
     } catch {
       // Revert
       fetchData();
@@ -95,13 +100,16 @@ export default function CommunityManageScreen() {
         .eq('community_id', id)
         .eq('user_id', memberId);
 
-      supabase.from('notifications').insert({
+      const { error: notifyError } = await supabase.from('notifications').insert({
         user_id: memberId,
+        sender_id: user?.id,
         type: 'community_rejected',
         title: 'Join Request Declined',
         message: `Your request to join "${community?.name}" was not approved.`,
-        data: { community_id: id },
+        related_id: id,
+        metadata: { community_id: id },
       });
+      if (notifyError) console.error('Failed to notify rejected member:', notifyError);
     } catch {
       fetchData();
     }

@@ -8,9 +8,10 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { Calendar } from 'react-native-calendars';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 const TODAY = new Date().toISOString().split('T')[0];
 
 // ─── Vehicle rental inquiry ───────────────────────────────────────────────────
@@ -437,7 +438,7 @@ const vStyles = StyleSheet.create({
   costNote: { color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 10, fontStyle: 'italic' },
   footer: { padding: 20, paddingBottom: 30, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', gap: 10 },
   footerSummary: { color: 'rgba(255,255,255,0.5)', fontSize: 13, textAlign: 'center' },
-  waBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#25D366', borderRadius: 14, paddingVertical: 16 },
+  waBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: AppColors.whatsapp, borderRadius: 14, paddingVertical: 16 },
   waBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
 });
 

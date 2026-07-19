@@ -8,9 +8,10 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
-const BG = '#080C14';
-const GREEN = '#8CC63F';
+const BG = AppColors.background;
+const GREEN = AppColors.primary;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CATEGORIES = [
@@ -98,14 +99,19 @@ export default function CommunityListScreen({ embedded }: { embedded?: boolean }
       });
       if (error) throw error;
 
-      // Notify community owner
-      supabase.from('notifications').insert({
+      // Notify community owner — best-effort, doesn't roll back the join
+      // request itself if it fails, but logging (rather than swallowing
+      // silently) so a broken notification insert doesn't go unnoticed again.
+      const { error: notifyError } = await supabase.from('notifications').insert({
         user_id: community.created_by,
+        sender_id: user?.id,
         type: 'community_join_request',
         title: 'New Join Request',
         message: `${user?.user_metadata?.full_name || 'Someone'} wants to join "${community.name}"`,
-        data: { community_id: community.id },
+        related_id: community.id,
+        metadata: { community_id: community.id },
       });
+      if (notifyError) console.error('Failed to notify community owner:', notifyError);
     } catch {
       // Revert on error
       setCommunities((prev) =>

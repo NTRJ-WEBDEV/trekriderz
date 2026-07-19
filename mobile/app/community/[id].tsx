@@ -10,9 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { moderationAgent } from '@/lib/moderation';
+import { AppColors } from '@/constants/theme';
 
-const BG = '#080C14';
-const GREEN = '#8CC63F';
+const BG = AppColors.background;
+const GREEN = AppColors.primary;
 
 type Tab = 'posts' | 'chat';
 
@@ -121,15 +122,18 @@ export default function CommunityDetailScreen() {
       Alert.alert('Error', 'Failed to send join request.');
       return;
     }
-    // Notify owner
+    // Notify owner — best-effort, doesn't roll back the join request itself.
     if (community?.created_by) {
-      supabase.from('notifications').insert({
+      const { error: notifyError } = await supabase.from('notifications').insert({
         user_id: community.created_by,
+        sender_id: user?.id,
         type: 'community_join_request',
         title: 'New Join Request',
         message: `${user?.user_metadata?.full_name || 'Someone'} wants to join "${community.name}"`,
-        data: { community_id: id },
+        related_id: id,
+        metadata: { community_id: id },
       });
+      if (notifyError) console.error('Failed to notify community owner:', notifyError);
     }
     Alert.alert('Request Sent', 'The community owner will review your request.');
   };

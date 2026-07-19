@@ -9,11 +9,12 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors, Radius } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
-const BORDER = 'rgba(255,255,255,0.07)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
+const BORDER = AppColors.border;
 
 type Tab = 'homestays' | 'guides' | 'expeditions' | 'communities' | 'users' | 'vehicles' | 'reports';
 
@@ -152,13 +153,19 @@ export default function AdminDashboard() {
       const item = type === 'homestays' ? homestays.find(h => h.id === id) : guides.find(g => g.id === id);
       const recipientId = type === 'homestays' ? item?.owner_id : item?.user_id;
       if (recipientId) {
-        await supabase.from('notifications').insert({
+        // 'system' isn't a valid notifications.type value (see
+        // notifications_type_check) — this insert was failing the CHECK
+        // constraint on every homestay approval, silently, since the error
+        // was never checked. 'homestay_approved' was already the type this
+        // was meant to use, and is already in the constraint.
+        const { error: notifyError } = await supabase.from('notifications').insert({
           user_id: recipientId,
-          type: type === 'homestays' ? 'system' : 'guide_approved',
+          type: type === 'homestays' ? 'homestay_approved' : 'guide_approved',
           title: `${type === 'homestays' ? 'Property' : 'Guide profile'} Approved!`,
           message: `Your ${type === 'homestays' ? 'property listing' : 'guide profile'} has been verified on TrekRiderz.`,
           related_id: id,
         });
+        if (notifyError) console.error('Failed to notify approval:', notifyError);
       }
 
       if (type === 'homestays') setHomestays(prev => prev.filter(h => h.id !== id));
@@ -865,7 +872,7 @@ const statStyles = StyleSheet.create({
   card: {
     width: '47%',
     backgroundColor: CARD,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 16,
     borderWidth: 1,
     borderColor: BORDER,
@@ -916,7 +923,7 @@ function CommunityCard({ item, onDelete }: { item: any; onDelete: () => void }) 
 }
 
 const communityStyles = StyleSheet.create({
-  card: { backgroundColor: CARD, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
+  card: { backgroundColor: CARD, borderRadius: Radius.lg, marginBottom: 12, borderWidth: 1, borderColor: BORDER },
   body: { padding: 16, gap: 10 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   name: { color: '#FFF', fontSize: 16, fontWeight: '700', marginBottom: 4 },
@@ -1232,7 +1239,7 @@ function ExpeditionAdminCard({
 
 const expStyles = StyleSheet.create({
   card: {
-    backgroundColor: CARD, borderRadius: 16, marginBottom: 12,
+    backgroundColor: CARD, borderRadius: Radius.lg, marginBottom: 12,
     borderWidth: 1, borderColor: BORDER, padding: 16, gap: 10,
   },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
@@ -1272,7 +1279,7 @@ const expStyles = StyleSheet.create({
 });
 
 const cardStyles = StyleSheet.create({
-  card: { backgroundColor: CARD, borderRadius: 18, marginBottom: 14, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
+  card: { backgroundColor: CARD, borderRadius: Radius.lg, marginBottom: 14, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' },
   photo: { width: '100%', height: 160 },
   body: { padding: 16, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -1436,7 +1443,7 @@ function VehicleAdminRow({ item, onApprove, onReject }: { item: any; onApprove: 
 }
 
 const vStyles = StyleSheet.create({
-  card: { backgroundColor: CARD, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
+  card: { backgroundColor: CARD, borderRadius: Radius.lg, marginBottom: 10, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 2 },
   meta: { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
@@ -1533,7 +1540,7 @@ function FlaggedUserRow({ item, onUnflag, onBan }: { item: any; onUnflag: () => 
 }
 
 const rStyles = StyleSheet.create({
-  card: { backgroundColor: CARD, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', padding: 14, gap: 10 },
+  card: { backgroundColor: CARD, borderRadius: Radius.lg, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', padding: 14, gap: 10 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   flagIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.1)', justifyContent: 'center', alignItems: 'center' },
   reason: { color: '#FFF', fontSize: 14, fontWeight: '700', marginBottom: 2 },

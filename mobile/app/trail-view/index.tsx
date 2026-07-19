@@ -15,10 +15,11 @@ import {
   CachedTrail,
   CachedHomestayRoute,
 } from '@/lib/offline-safety';
+import { AppColors } from '@/constants/theme';
 
-const BG = '#080C14';
+const BG = AppColors.background;
 const AMBER = '#F59E0B';
-const GREEN = '#8CC63F';
+const GREEN = AppColors.primary;
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CANVAS_H = 420;

@@ -10,9 +10,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { authHelpers } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
+import { AppColors } from '@/constants/theme';
+import Wordmark from '@/components/ui/Wordmark';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -58,11 +60,7 @@ export default function LoginScreen() {
           >
             {/* Logo / Hero */}
             <View style={styles.hero}>
-              <View style={styles.logoRow}>
-                <Ionicons name="triangle" size={20} color={GREEN} />
-                <Text style={styles.logoText}>TREK<Text style={styles.logoGreen}>RIDERZ</Text></Text>
-              </View>
-              <Text style={styles.heroSub}>TREK. TRAVEL. CONNECT.</Text>
+              <Wordmark size="lg" tagline />
               <Text style={styles.heroHeadline}>Welcome back,{'\n'}Adventurer 🏔️</Text>
             </View>
 
@@ -148,11 +146,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   kbView: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 24, paddingBottom: 32 },
 
-  hero: { marginBottom: 36, paddingHorizontal: 4 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  logoText: { fontSize: 22, fontWeight: '900', color: '#FFF', letterSpacing: 2 },
-  logoGreen: { color: GREEN },
-  heroSub: { color: GREEN, fontSize: 11, fontWeight: '700', letterSpacing: 3, marginBottom: 10 },
+  hero: { marginBottom: 36, paddingHorizontal: 4, gap: 16 },
   heroHeadline: { color: '#FFF', fontSize: 30, fontWeight: '900', lineHeight: 38 },
 
   card: {

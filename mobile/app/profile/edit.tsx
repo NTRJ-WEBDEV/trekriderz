@@ -19,9 +19,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '@/lib/storage';
 import { Ionicons } from '@expo/vector-icons';
 import PhoneInput, { splitPhone } from '@/components/PhoneInput';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 export default function EditProfileScreen() {
   const { user, setUser } = useAuthStore();

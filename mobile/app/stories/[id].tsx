@@ -11,10 +11,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { haptic } from '@/lib/haptics';
 import { translateText } from '@/lib/translate';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const ACCENT = '#EC4899';
-const BG = '#080C14';
+const BG = AppColors.background;
 
 const REPORT_REASONS = [
   'Nudity or sexual content',
@@ -179,16 +180,16 @@ export default function StoryDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Story', 'Are you sure? This cannot be undone.', [
+    Alert.alert('Delete Article', 'Are you sure? This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             const { error } = await supabase.from('posts').delete().eq('id', id);
             if (error) throw error;
-            if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+            if (router.canGoBack()) router.back(); else router.replace('/(tabs)/explore');
           } catch {
-            Alert.alert('Error', 'Could not delete story.');
+            Alert.alert('Error', 'Could not delete article.');
           }
         },
       },
@@ -198,13 +199,13 @@ export default function StoryDetailScreen() {
   const handleOptions = () => {
     const isOwn = story?.user_id === user?.id;
     if (isOwn) {
-      Alert.alert('Story Options', undefined, [
-        { text: 'Edit Story', onPress: () => router.push(`/stories/create?id=${id}` as any) },
-        { text: 'Delete Story', style: 'destructive', onPress: handleDelete },
+      Alert.alert('Article Options', undefined, [
+        { text: 'Edit Article', onPress: () => router.push(`/stories/create?id=${id}` as any) },
+        { text: 'Delete Article', style: 'destructive', onPress: handleDelete },
         { text: 'Cancel', style: 'cancel' },
       ]);
     } else {
-      Alert.alert('Story Options', undefined, [
+      Alert.alert('Article Options', undefined, [
         { text: 'Report', onPress: () => setReportVisible(true) },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -222,8 +223,8 @@ export default function StoryDetailScreen() {
   if (!story) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>Story not found.</Text>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.backFallback}>
+        <Text style={styles.errorText}>Article not found.</Text>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))} style={styles.backFallback}>
           <Text style={styles.backFallbackText}>Go back</Text>
         </TouchableOpacity>
       </View>
@@ -251,7 +252,7 @@ export default function StoryDetailScreen() {
           <View style={styles.coverOverlay} />
           <SafeAreaView edges={['top']} style={StyleSheet.absoluteFill}>
             <View style={styles.topBar}>
-              <TouchableOpacity style={styles.circleBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
+              <TouchableOpacity style={styles.circleBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))}>
                 <Ionicons name="arrow-back" size={20} color="#FFF" />
               </TouchableOpacity>
               <View style={styles.topBarRight}>
@@ -286,7 +287,7 @@ export default function StoryDetailScreen() {
           )}
 
           {/* Title */}
-          <Text style={styles.title}>{translatedTitle || story.title || 'Untitled Story'}</Text>
+          <Text style={styles.title}>{translatedTitle || story.title || 'Untitled Article'}</Text>
           {translatedContent && (
             <TouchableOpacity onPress={() => { setTranslatedTitle(null); setTranslatedContent(null); }}>
               <View style={styles.translatedBadge}>
@@ -372,7 +373,7 @@ export default function StoryDetailScreen() {
 
       {reportVisible && (
         <View style={styles.reportSheet}>
-          <Text style={styles.reportTitle}>Report Story</Text>
+          <Text style={styles.reportTitle}>Report Article</Text>
           {REPORT_REASONS.map((reason) => (
             <TouchableOpacity key={reason} style={styles.reportRow} onPress={() => submitReport(reason)}>
               <Text style={styles.reportRowText}>{reason}</Text>

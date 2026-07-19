@@ -4,14 +4,15 @@ import {
   ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 type Post = {
   id: string;
@@ -26,20 +27,22 @@ function PostRow({ post, onEdit, onDelete }: { post: Post; onEdit: () => void; o
   const cover = post.media?.[0] ?? null;
   return (
     <View style={styles.row}>
-      {cover ? (
-        <Image source={{ uri: cover }} style={styles.thumb} contentFit="cover" />
-      ) : (
-        <View style={[styles.thumb, styles.thumbPlaceholder]}>
-          <Ionicons name="document-text-outline" size={22} color="rgba(255,255,255,0.3)" />
+      <TouchableOpacity style={styles.rowTapArea} onPress={() => router.push(`/post/${post.id}` as any)}>
+        {cover ? (
+          <Image source={{ uri: cover }} style={styles.thumb} contentFit="cover" />
+        ) : (
+          <View style={[styles.thumb, styles.thumbPlaceholder]}>
+            <Ionicons name="document-text-outline" size={22} color="rgba(255,255,255,0.3)" />
+          </View>
+        )}
+        <View style={styles.rowBody}>
+          <Text style={styles.rowContent} numberOfLines={2}>{post.content || '(no caption)'}</Text>
+          <Text style={styles.rowMeta}>
+            {new Date(post.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            {'  ·  '}{post.likes_count || 0} likes  ·  {post.comments_count || 0} comments
+          </Text>
         </View>
-      )}
-      <View style={styles.rowBody}>
-        <Text style={styles.rowContent} numberOfLines={2}>{post.content || '(no caption)'}</Text>
-        <Text style={styles.rowMeta}>
-          {new Date(post.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-          {'  ·  '}{post.likes_count || 0} likes  ·  {post.comments_count || 0} comments
-        </Text>
-      </View>
+      </TouchableOpacity>
       <TouchableOpacity
         style={styles.rowMenuBtn}
         onPress={() => Alert.alert('Post Options', undefined, [
@@ -111,15 +114,7 @@ export default function ManagePostsScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
-            <Ionicons name="arrow-back" size={22} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Manage Posts</Text>
-          <View style={{ width: 38 }} />
-        </View>
-      </SafeAreaView>
+      <ScreenHeader title="Manage Posts" />
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={GREEN} /></View>
@@ -174,20 +169,7 @@ export default function ManagePostsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  safeTop: { backgroundColor: BG },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.07)',
-  },
-  backBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#FFF' },
 
   list: { padding: 16, gap: 12, flexGrow: 1 },
 
@@ -197,6 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 14, padding: 10,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
   },
+  rowTapArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   thumb: { width: 56, height: 56, borderRadius: 10 },
   thumbPlaceholder: {
     backgroundColor: 'rgba(255,255,255,0.05)',

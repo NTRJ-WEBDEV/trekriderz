@@ -10,6 +10,7 @@ import Swiper from 'react-native-swiper';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -34,8 +35,8 @@ const slides = [
   },
 ];
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);

@@ -1,15 +1,18 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 
-// Lightweight global unread-notification count, scoped at the layout level
-// (not just inside notifications.tsx) so the Home screen's bell icon can
-// show a badge without needing that screen to be mounted. Populated once on
-// login, kept live via a Realtime subscription on notifications INSERT.
+// Global unread-notification count, scoped at the layout level (not just
+// inside notifications.tsx) so the Home screen's bell icon can show a badge
+// without needing that screen to be mounted. Populated once on login from
+// the real is_read=false count, then kept accurate via two Realtime
+// listeners: INSERT increments it, and UPDATE where is_read flips to true
+// decrements it — the latter means the count self-corrects no matter which
+// screen/action/device actually marked something read, instead of relying
+// on every read-path in the app to remember to call a decrement function.
 interface NotificationState {
   unreadCount: number;
   channel: ReturnType<typeof supabase.channel> | null;
   init: (userId: string) => Promise<void>;
-  reset: () => void;
   cleanup: () => void;
 }
 
@@ -38,12 +41,19 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         () => set((state) => ({ unreadCount: state.unreadCount + 1 }))
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          if (payload.old?.is_read === false && payload.new?.is_read === true) {
+            set((state) => ({ unreadCount: Math.max(0, state.unreadCount - 1) }));
+          }
+        }
+      )
       .subscribe();
 
     set({ channel });
   },
-
-  reset: () => set({ unreadCount: 0 }),
 
   cleanup: () => {
     const { channel } = get();

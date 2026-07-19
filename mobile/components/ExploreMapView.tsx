@@ -2,15 +2,19 @@ import { useRef, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-export type MarkerKind = 'homestay' | 'guide' | 'expedition' | 'member' | 'destination' | 'poi';
+export type MarkerKind = 'homestay' | 'guide' | 'expedition' | 'member' | 'destination' | 'poi' | 'trip_point';
 
 // Points-of-interest (waterfalls, viewpoints, peaks, etc.) all share the
 // single 'poi' MarkerKind above — the specific category (and its emoji/color)
 // is carried in `extra.category` instead of growing MarkerKind by one value
 // per category. Keep this list in sync with the `pois.category` CHECK
-// constraint in the DB migration.
+// constraint in the DB migration. 'trip_point' markers (a trip's saved
+// points/stops) reuse this same category set, plus 'custom' for a pin with
+// no catalog match — kept in sync with trip_points' CHECK constraint.
 export const POI_CATEGORIES = ['waterfall', 'viewpoint', 'peak', 'campsite', 'temple', 'other'] as const;
 export type PoiCategory = typeof POI_CATEGORIES[number];
+export const TRIP_POINT_CATEGORIES = [...POI_CATEGORIES, 'custom'] as const;
+export type TripPointCategory = typeof TRIP_POINT_CATEGORIES[number];
 
 export interface MapMarker {
   id: string;
@@ -30,6 +34,9 @@ interface Props {
   userLat?: number | null;
   userLng?: number | null;
   onMarkerTap?: (marker: MapMarker) => void;
+  // Opt-in only — omitted by callers (e.g. the Explore tab) that don't want
+  // long-press-to-drop-a-pin behavior on their map.
+  onMapLongPress?: (lat: number, lng: number) => void;
   centerLat?: number;
   centerLng?: number;
   zoom?: number;
@@ -82,6 +89,7 @@ function buildMapHtml(
   .poi-campsite  { background:#16A34A; }
   .poi-temple    { background:#DC2626; }
   .poi-other     { background:#6B7280; }
+  .poi-custom    { background:#8CC63F; }
 
   @keyframes pulse {
     0%  { box-shadow:0 0 0 0   rgba(59,130,246,0.4); }
@@ -122,6 +130,7 @@ function buildMapHtml(
   .kind-poi-campsite  { color:#16A34A; }
   .kind-poi-temple    { color:#DC2626; }
   .kind-poi-other     { color:#6B7280; }
+  .kind-poi-custom    { color:#8CC63F; }
 </style>
 </head>
 <body>
@@ -152,19 +161,19 @@ function buildMapHtml(
 
   // POI category -> emoji/label, keyed off m.extra.category rather than m.kind
   // (m.kind is just 'poi' for all of these).
-  var POI_EMOJI = { waterfall:'💧', viewpoint:'🌄', peak:'⛰️', campsite:'⛺', temple:'🛕', other:'📍' };
-  var POI_LABEL = { waterfall:'Waterfall', viewpoint:'Viewpoint', peak:'Peak', campsite:'Campsite', temple:'Temple', other:'Place' };
+  var POI_EMOJI = { waterfall:'💧', viewpoint:'🌄', peak:'⛰️', campsite:'⛺', temple:'🛕', other:'📍', custom:'📌' };
+  var POI_LABEL = { waterfall:'Waterfall', viewpoint:'Viewpoint', peak:'Peak', campsite:'Campsite', temple:'Temple', other:'Place', custom:'Custom Pin' };
 
   MARKERS.forEach(function(m, idx) {
     if (!m.lat || !m.lng) return;
 
     var emoji, mkClass, popupKindClass, kindLabelText;
-    if (m.kind === 'poi') {
+    if (m.kind === 'poi' || m.kind === 'trip_point') {
       var cat = (m.extra && m.extra.category) || 'other';
       emoji = POI_EMOJI[cat] || '📍';
       mkClass = 'poi-' + cat;
       popupKindClass = 'kind-poi-' + cat;
-      kindLabelText = POI_LABEL[cat] || 'Place';
+      kindLabelText = m.kind === 'trip_point' ? 'On this trip' : (POI_LABEL[cat] || 'Place');
     } else {
       emoji = EMOJI[m.kind] || '📍';
       mkClass = 'mk-' + m.kind;
@@ -208,6 +217,15 @@ function buildMapHtml(
     window.ReactNativeWebView.postMessage(JSON.stringify({ type:'markerTap', marker:m }));
   };
 
+  // Leaflet fires 'contextmenu' both for a desktop right-click and for a
+  // long-press on touch devices (its built-in touch handling simulates it) —
+  // one listener covers dropping a pin on mobile and testing on web/desktop.
+  map.on('contextmenu', function(e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type:'mapLongPress', lat:e.latlng.lat, lng:e.latlng.lng
+    }));
+  });
+
   // Fit bounds if there are markers
   if (MARKERS.length > 0) {
     var latlngs = MARKERS.filter(function(m){ return m.lat && m.lng; }).map(function(m){ return [m.lat, m.lng]; });
@@ -227,6 +245,7 @@ export default function ExploreMapView({
   userLat,
   userLng,
   onMarkerTap,
+  onMapLongPress,
   centerLat,
   centerLng,
   zoom = 6,
@@ -251,6 +270,8 @@ export default function ExploreMapView({
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'markerTap' && onMarkerTap) {
         onMarkerTap(msg.marker as MapMarker);
+      } else if (msg.type === 'mapLongPress' && onMapLongPress) {
+        onMapLongPress(msg.lat, msg.lng);
       }
     } catch {}
   };

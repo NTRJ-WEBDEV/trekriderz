@@ -12,9 +12,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadImage } from '@/lib/storage';
 import { haptic } from '@/lib/haptics';
+import { AppColors } from '@/constants/theme';
 
 const ACCENT = '#EC4899';
-const BG = '#080C14';
+const BG = AppColors.background;
 
 const TAGS = [
   'Trek', 'Bike Ride', 'Road Trip', 'Wildlife', 'Spiritual',
@@ -101,15 +102,15 @@ export default function CreateStoryScreen() {
 
   const handlePublish = async () => {
     if (!title.trim()) {
-      Alert.alert('Title required', 'Give your story a headline.');
+      Alert.alert('Title required', 'Give your article a headline.');
       return;
     }
     if (!content.trim() || content.trim().length < 50) {
-      Alert.alert('Story too short', 'Write at least 50 characters so readers can enjoy your story.');
+      Alert.alert('Article too short', 'Write at least 50 characters so readers can enjoy your article.');
       return;
     }
     if (photos.length === 0) {
-      Alert.alert('Cover photo required', 'Add at least one photo to your story.');
+      Alert.alert('Cover photo required', 'Add at least one photo to your article.');
       return;
     }
     if (!user?.id) { Alert.alert('Not logged in'); return; }
@@ -150,7 +151,7 @@ export default function CreateStoryScreen() {
 
       haptic.success();
       if (isEditing) {
-        if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+        if (router.canGoBack()) router.back(); else router.replace('/(tabs)/explore');
       } else {
         Alert.alert(
           'Story Published! 🎉',
@@ -181,10 +182,10 @@ export default function CreateStoryScreen() {
     <View style={styles.container}>
       <SafeAreaView edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} disabled={loading}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))} disabled={loading}>
             <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit Story' : 'Write a Story'}</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Article' : 'Write an Article'}</Text>
           <TouchableOpacity
             style={[styles.publishBtn, (!title.trim() || !content.trim() || loading) && styles.publishBtnDisabled]}
             onPress={handlePublish}
@@ -267,7 +268,7 @@ export default function CreateStoryScreen() {
           {/* Title */}
           <TextInput
             style={styles.titleInput}
-            placeholder="Your story headline…"
+            placeholder="Your article headline…"
             placeholderTextColor="rgba(255,255,255,0.2)"
             value={title}
             onChangeText={setTitle}
@@ -322,8 +323,8 @@ export default function CreateStoryScreen() {
             })}
           </View>
 
-          {/* Story content */}
-          <Text style={styles.fieldLabel}>Your Story</Text>
+          {/* Article content */}
+          <Text style={styles.fieldLabel}>Your Article</Text>
           <TextInput
             style={styles.contentInput}
             placeholder={`Share your experience in detail…\n\nWhat made this journey special? Describe the places, people, and moments that stayed with you.`}

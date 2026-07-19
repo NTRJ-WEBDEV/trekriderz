@@ -12,9 +12,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadMedia } from '@/lib/storage';
 import { moderationAgent } from '@/lib/moderation';
+import { AppColors } from '@/constants/theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const GREEN = '#8CC63F';
+const GREEN = AppColors.primary;
 const MAX_VIDEO_SECONDS = 30;
 
 type Picked = { uri: string; type: 'image' | 'video'; durationSeconds?: number };
@@ -87,7 +88,7 @@ export default function StoryCreateScreen() {
       });
 
       if (error) throw error;
-      if (router.canGoBack()) router.back(); else router.replace('/(tabs)');
+      if (router.canGoBack()) router.back(); else router.replace('/(tabs)/explore');
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Failed to post your story.');
@@ -99,7 +100,7 @@ export default function StoryCreateScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))}>
           <Ionicons name="close" size={28} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add to Story</Text>

@@ -10,22 +10,28 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   TextInput,
-  Modal,
   Alert,
   Animated,
-  useColorScheme,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
+// NOTE: the in-card comments modal (likes/replies/reactions) was moved to
+// the full-screen /post/[id] detail view — see mobile/hooks/useComments.ts.
+// The comment icon and "View all N comments" below now navigate there
+// instead of opening a local modal, consolidating to one comment UI.
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { usePostRealtime } from '@/hooks/usePostRealtime';
+import { AppColors, Radius, Spacing } from '@/constants/theme';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import BottomSheet from '@/components/ui/BottomSheet';
 import YouTubePlayer from './YouTubePlayer';
 import PostShareSheet from './PostShareSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_MARGIN = Spacing.md;
+const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN * 2;
 
 interface TripMeta {
   status: string;
@@ -63,13 +69,17 @@ interface PostCardProps {
   post: Post;
   onCommentPress?: (postId: string) => void;
   onDelete?: (postId: string) => void;
+  // True when PostCard is already being rendered as the header of /post/[id]
+  // itself — image/caption taps would otherwise push a redundant duplicate
+  // of the current screen onto the nav stack.
+  disableDetailNav?: boolean;
 }
 
 const TRIP_EMOJI: Record<string, string> = {
   trek: '⛰️', bike: '🏍️', temple: '🛕', backpacking: '🎒', weekend: '🌄',
 };
 
-function TripBanner({ trip, colors }: { trip: TripMeta; colors: any }) {
+function TripBanner({ trip }: { trip: TripMeta }) {
   const isCompleted = trip.status === 'completed';
   const emoji = TRIP_EMOJI[trip.trip_type] || '🗺️';
   const label = isCompleted
@@ -79,19 +89,13 @@ function TripBanner({ trip, colors }: { trip: TripMeta; colors: any }) {
   return (
     <View style={[
       tripBannerStyles.banner,
-      { backgroundColor: isCompleted ? 'rgba(140,198,63,0.1)' : 'rgba(56,151,240,0.08)' },
+      { backgroundColor: isCompleted ? 'rgba(140,198,63,0.12)' : 'rgba(140,198,63,0.06)' },
     ]}>
       <View style={{ flex: 1 }}>
-        <Text style={[tripBannerStyles.label, { color: isCompleted ? '#8CC63F' : '#3897F0' }]}>
-          {label}
-        </Text>
-        <Text style={[tripBannerStyles.dest, { color: colors.subtext }]} numberOfLines={1}>
-          📍 {trip.destination}
-        </Text>
+        <Text style={[tripBannerStyles.label, { color: AppColors.primary }]}>{label}</Text>
+        <Text style={tripBannerStyles.dest} numberOfLines={1}>📍 {trip.destination}</Text>
       </View>
-      {isCompleted && (
-        <Ionicons name="checkmark-circle" size={20} color="#8CC63F" />
-      )}
+      {isCompleted && <Ionicons name="checkmark-circle" size={20} color={AppColors.primary} />}
     </View>
   );
 }
@@ -100,49 +104,51 @@ const tripBannerStyles = StyleSheet.create({
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  dest: {
-    fontSize: 11,
-  },
+  label: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  dest: { fontSize: 11, color: AppColors.subtext },
 });
 
-export default function PostCard({ post, onCommentPress, onDelete }: PostCardProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const colors = {
-    bg: isDark ? '#000' : '#fff',
-    text: isDark ? '#fff' : '#000',
-    subtext: isDark ? '#A8A8A8' : '#737373',
-    border: isDark ? '#262626' : '#DBDBDB',
-    input: isDark ? '#1C1C1C' : '#FAFAFA',
-  };
+// Splits a caption on #hashtags and colors them, leaving everything else as
+// plain caption text — purely a render-time split, doesn't touch post.content.
+function renderCaptionWithHashtags(text: string) {
+  const parts = text.split(/(#[a-zA-Z0-9_]+)/g);
+  return parts.map((part, i) =>
+    part.startsWith('#') ? (
+      <Text key={i} style={{ color: AppColors.primary, fontWeight: '700' }}>{part}</Text>
+    ) : (
+      part
+    )
+  );
+}
 
+export default function PostCard({ post, onCommentPress, onDelete, disableDetailNav }: PostCardProps) {
   const { user } = useAuthStore();
   const { likesCount, setLikesCount, commentsCount } = usePostRealtime(post.id, post.likes_count, post.comments_count);
 
   const [liked, setLiked] = useState(post.liked ?? false);
   const [saved, setSaved] = useState(post.saved ?? false);
   const [currentImage, setCurrentImage] = useState(0);
-  const [commentVisible, setCommentVisible] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const [comments, setComments] = useState<any[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
   const [caption, setCaption] = useState(post.content);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editCaption, setEditCaption] = useState('');
   const [reportVisible, setReportVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const likeScale = useRef(new Animated.Value(1)).current;
+  const saveScale = useRef(new Animated.Value(1)).current;
+
+  const pop = (anim: Animated.Value) => {
+    Animated.sequence([
+      Animated.timing(anim, { toValue: 1.25, duration: 100, useNativeDriver: true }),
+      Animated.spring(anim, { toValue: 1, friction: 3, useNativeDriver: true }),
+    ]).start();
+  };
 
   const handleSave = async () => {
+    pop(saveScale);
     const newSaved = !saved;
     setSaved(newSaved);
     try {
@@ -179,12 +185,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
   };
 
   const handleLike = async () => {
-    // Heart pop animation
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-
+    pop(likeScale);
     const newLiked = !liked;
     setLiked(newLiked);
     setLikesCount(prev => newLiked ? prev + 1 : prev - 1);
@@ -199,39 +200,6 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
       // Revert on error
       setLiked(!newLiked);
       setLikesCount(prev => newLiked ? prev - 1 : prev + 1);
-    }
-  };
-
-  const openComments = async () => {
-    setCommentVisible(true);
-    setLoadingComments(true);
-    try {
-      // Fetch comments — is_hidden may be NULL on older rows, neq(true) handles both false and null
-      const { data: commentRows, error } = await supabase
-        .from('post_comments')
-        .select('*')
-        .eq('post_id', post.id)
-        .neq('is_hidden', true)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-
-      if (commentRows && commentRows.length > 0) {
-        // post_comments.user_id → auth.users (not public.users), so fetch profiles separately
-        const userIds = [...new Set(commentRows.map((c: any) => c.user_id))];
-        const { data: profileRows } = await supabase
-          .from('users')
-          .select('id, full_name, avatar_url')
-          .in('id', userIds);
-        const profileMap: Record<string, any> = {};
-        (profileRows || []).forEach((u: any) => { profileMap[u.id] = u; });
-        setComments(commentRows.map((c: any) => ({ ...c, users: profileMap[c.user_id] || null })));
-      } else {
-        setComments([]);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingComments(false);
     }
   };
 
@@ -279,38 +247,16 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
     ]);
   };
 
-  const submitComment = async () => {
-    if (!newComment.trim() || !user?.id) return;
-    const text = newComment.trim();
-    setNewComment('');
-    try {
-      const { data, error } = await supabase
-        .from('post_comments')
-        .insert({ post_id: post.id, user_id: user.id, content: text })
-        .select('*')
-        .single();
-      if (error) throw error;
-      // Attach current user's profile manually (FK is to auth.users, not public.users)
-      setComments(prev => [...prev, {
-        ...data,
-        users: {
-          full_name: user.user_metadata?.full_name || 'You',
-          avatar_url: user.user_metadata?.avatar_url || null,
-        },
-      }]);
-    } catch (e: any) {
-      setNewComment(text); // restore on error
-      Alert.alert('Error', e?.message || 'Could not post comment');
-    }
-  };
-
   const onScrollImage = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const index = Math.round(e.nativeEvent.contentOffset.x / CARD_WIDTH);
     setCurrentImage(index);
   };
 
+  const goToDetail = () => { if (!disableDetailNav) router.push(`/post/${post.id}` as any); };
+  const goToComments = () => { onCommentPress ? onCommentPress(post.id) : router.push(`/post/${post.id}` as any); };
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
+    <Card padded={false} elevated style={styles.card}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -323,23 +269,26 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
             style={styles.avatar}
           />
           <View style={styles.userInfo}>
-            <Text style={[styles.userName, { color: colors.text }]}>{post.user.name}</Text>
+            <Text style={styles.userName}>{post.user.name}</Text>
             {post.location && (
-              <Text style={[styles.location, { color: colors.subtext }]}>{post.location}</Text>
+              <View style={styles.locationRow}>
+                <Ionicons name="location-sharp" size={10} color={AppColors.subtext} />
+                <Text style={styles.location}>{post.location}</Text>
+              </View>
             )}
           </View>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleOptions}>
-          <Ionicons name="ellipsis-horizontal" size={20} color={colors.subtext} />
+        <TouchableOpacity onPress={handleOptions} hitSlop={8}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={AppColors.subtext} />
         </TouchableOpacity>
       </View>
 
       {/* Trip Banner */}
-      {post.trip && <TripBanner trip={post.trip} colors={colors} />}
+      {post.trip && <TripBanner trip={post.trip} />}
 
       {/* Image Carousel */}
       {post.images.length > 0 && (
-        <View>
+        <View style={styles.mediaWrap}>
           <FlatList
             data={post.images}
             keyExtractor={(_, i) => String(i)}
@@ -349,23 +298,16 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
             onScroll={onScrollImage}
             scrollEventThrottle={16}
             renderItem={({ item }) => (
-              <TouchableOpacity activeOpacity={1} onPress={() => router.push(`/post/${post.id}` as any)}>
+              <TouchableOpacity activeOpacity={1} onPress={goToDetail}>
                 <Image source={{ uri: item }} style={styles.postImage} />
               </TouchableOpacity>
             )}
           />
-          {/* Dot Indicators */}
+          {/* Multi-image counter, e.g. "2/5" — replaces dot indicators with a
+              more information-dense overlay */}
           {post.images.length > 1 && (
-            <View style={styles.dotsContainer}>
-              {post.images.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.dot,
-                    { backgroundColor: i === currentImage ? '#3897F0' : 'rgba(0,0,0,0.2)' }
-                  ]}
-                />
-              ))}
+            <View style={styles.counterPill}>
+              <Text style={styles.counterText}>{currentImage + 1}/{post.images.length}</Text>
             </View>
           )}
         </View>
@@ -373,7 +315,7 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
 
       {/* YouTube inline player */}
       {post.youtube_url && (
-        <View style={{ paddingHorizontal: 12 }}>
+        <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm }}>
           <YouTubePlayer url={post.youtube_url} height={210} />
         </View>
       )}
@@ -381,414 +323,201 @@ export default function PostCard({ post, onCommentPress, onDelete }: PostCardPro
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.leftActions}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionBtn}>
-            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-              <Ionicons
-                name={liked ? 'heart' : 'heart-outline'}
-                size={26}
-                color={liked ? '#ED4956' : colors.text}
-              />
-            </Animated.View>
+          <View style={styles.actionGroup}>
+            <TouchableOpacity onPress={handleLike} hitSlop={6}>
+              <Animated.View style={{ transform: [{ scale: likeScale }] }}>
+                <Ionicons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={26}
+                  color={liked ? '#ED4956' : AppColors.text}
+                />
+              </Animated.View>
+            </TouchableOpacity>
+            {likesCount > 0 && (
+              <TouchableOpacity onPress={() => router.push(`/post/likes/${post.id}` as any)} hitSlop={6}>
+                <Text style={styles.actionCount}>{likesCount}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity onPress={goToComments} style={styles.actionGroup} hitSlop={6}>
+            <Ionicons name="chatbubble-outline" size={23} color={AppColors.text} />
+            {commentsCount > 0 && <Text style={styles.actionCount}>{commentsCount}</Text>}
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { onCommentPress ? onCommentPress(post.id) : openComments(); }}
-            style={styles.actionBtn}
-          >
-            <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShareVisible(true)} style={styles.actionBtn}>
-            <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
+          <TouchableOpacity onPress={() => setShareVisible(true)} style={styles.actionGroup} hitSlop={6}>
+            <Ionicons name="paper-plane-outline" size={23} color={AppColors.text} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleSave}>
-          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={24} color={saved ? '#8CC63F' : colors.text} />
+        <TouchableOpacity onPress={handleSave} hitSlop={6}>
+          <Animated.View style={{ transform: [{ scale: saveScale }] }}>
+            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={23} color={saved ? AppColors.primary : AppColors.text} />
+          </Animated.View>
         </TouchableOpacity>
       </View>
 
-      {/* Likes Count */}
       <View style={styles.metaSection}>
-        <TouchableOpacity onPress={() => router.push(`/post/likes/${post.id}` as any)}>
-          <Text style={[styles.likesText, { color: colors.text }]}>
-            {likesCount} {likesCount === 1 ? 'like' : 'likes'}
-          </Text>
-        </TouchableOpacity>
-
         {/* Caption */}
         {caption ? (
-          <Text
-            style={[styles.caption, { color: colors.text }]}
-            onPress={() => router.push(`/post/${post.id}` as any)}
-          >
+          <Text style={styles.caption} onPress={goToDetail}>
             <Text style={styles.captionUser} onPress={() => router.push(`/user/${post.user.id}` as any)}>{post.user.name} </Text>
-            {caption}
+            {renderCaptionWithHashtags(caption)}
           </Text>
         ) : null}
 
         {/* Comments count */}
         {commentsCount > 0 && (
-          <TouchableOpacity onPress={() => { onCommentPress ? onCommentPress(post.id) : openComments(); }}>
-            <Text style={[styles.viewComments, { color: colors.subtext }]}>
-              View all {commentsCount} comments
-            </Text>
+          <TouchableOpacity onPress={goToComments}>
+            <Text style={styles.viewComments}>View all {commentsCount} comments</Text>
           </TouchableOpacity>
         )}
 
         {/* Timestamp */}
-        <Text style={[styles.timestamp, { color: colors.subtext }]}>{post.timestamp}</Text>
+        <Text style={styles.timestamp}>{post.timestamp}</Text>
       </View>
 
-      {/* Comments Modal */}
-      <Modal
-        visible={commentVisible}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setCommentVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={[styles.commentsModal, { backgroundColor: colors.bg }]}>
-            <View style={styles.commentsHeader}>
-              <Text style={[styles.commentsTitle, { color: colors.text }]}>Comments</Text>
-              <TouchableOpacity onPress={() => setCommentVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            {loadingComments ? (
-              <Text style={[styles.loadingText, { color: colors.subtext }]}>Loading...</Text>
-            ) : (
-              <FlatList
-                data={comments}
-                keyExtractor={(item) => item.id}
-                style={styles.commentsList}
-                ListEmptyComponent={
-                  <Text style={[styles.loadingText, { color: colors.subtext }]}>No comments yet. Be first!</Text>
-                }
-                renderItem={({ item }) => (
-                  <View style={styles.commentRow}>
-                    <TouchableOpacity onPress={() => router.push(`/user/${item.user_id}` as any)}>
-                      <Image
-                        source={{ uri: item.users?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.user_id}` }}
-                        style={styles.commentAvatar}
-                      />
-                    </TouchableOpacity>
-                    <View style={styles.commentContent}>
-                      <TouchableOpacity onPress={() => router.push(`/user/${item.user_id}` as any)}>
-                        <Text style={[styles.commentUser, { color: colors.text }]}>
-                          {item.users?.full_name ?? 'User'}
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={[styles.commentText, { color: colors.text }]}>{item.content}</Text>
-                    </View>
-                  </View>
-                )}
-              />
-            )}
-
-            {/* Comment Input */}
-            <View style={[styles.commentInputRow, { borderTopColor: colors.border, backgroundColor: colors.bg }]}>
-              <TextInput
-                style={[styles.commentInput, { color: colors.text, backgroundColor: colors.input }]}
-                placeholder="Add a comment..."
-                placeholderTextColor={colors.subtext}
-                value={newComment}
-                onChangeText={setNewComment}
-                multiline
-              />
-              <TouchableOpacity onPress={submitComment} disabled={!newComment.trim()}>
-                <Text style={[styles.postBtn, { opacity: newComment.trim() ? 1 : 0.4 }]}>Post</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Edit Caption Modal */}
-      <Modal
-        visible={editModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.editOverlay}>
-            <View style={[styles.editSheet, { backgroundColor: colors.bg }]}>
-              <View style={styles.commentsHeader}>
-                <Text style={[styles.commentsTitle, { color: colors.text }]}>Edit Caption</Text>
-                <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={[styles.editInput, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border }]}
-                value={editCaption}
-                onChangeText={setEditCaption}
-                multiline
-                autoFocus
-                placeholder="Write a caption..."
-                placeholderTextColor={colors.subtext}
-              />
-              <TouchableOpacity
-                style={[styles.editSaveBtn, { opacity: editCaption.trim() ? 1 : 0.5 }]}
-                onPress={handleEditSave}
-                disabled={!editCaption.trim()}
-              >
-                <Text style={styles.editSaveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Report Reasons Modal */}
-      <Modal
-        visible={reportVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setReportVisible(false)}
-      >
-        <View style={styles.editOverlay}>
-          <View style={[styles.editSheet, { backgroundColor: colors.bg }]}>
-            <View style={styles.commentsHeader}>
-              <Text style={[styles.commentsTitle, { color: colors.text }]}>Report Post</Text>
-              <TouchableOpacity onPress={() => setReportVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            {REPORT_REASONS.map((reason) => (
-              <TouchableOpacity
-                key={reason}
-                style={[styles.reportReasonRow, { borderBottomColor: colors.border }]}
-                onPress={() => submitReport(reason)}
-              >
-                <Text style={[styles.reportReasonText, { color: colors.text }]}>{reason}</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.subtext} />
-              </TouchableOpacity>
-            ))}
-          </View>
+      {/* Edit Caption */}
+      <BottomSheet visible={editModalVisible} onClose={() => setEditModalVisible(false)} avoidKeyboard>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Edit Caption</Text>
+          <TouchableOpacity onPress={() => setEditModalVisible(false)} hitSlop={8}>
+            <Ionicons name="close" size={22} color={AppColors.text} />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        <TextInput
+          style={styles.editInput}
+          value={editCaption}
+          onChangeText={setEditCaption}
+          multiline
+          autoFocus
+          placeholder="Write a caption..."
+          placeholderTextColor={AppColors.subtext}
+        />
+        <Button label="Save" onPress={handleEditSave} disabled={!editCaption.trim()} fullWidth />
+      </BottomSheet>
+
+      {/* Report Reasons */}
+      <BottomSheet visible={reportVisible} onClose={() => setReportVisible(false)}>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Report Post</Text>
+          <TouchableOpacity onPress={() => setReportVisible(false)} hitSlop={8}>
+            <Ionicons name="close" size={22} color={AppColors.text} />
+          </TouchableOpacity>
+        </View>
+        {REPORT_REASONS.map((reason) => (
+          <TouchableOpacity key={reason} style={styles.reportReasonRow} onPress={() => submitReport(reason)}>
+            <Text style={styles.reportReasonText}>{reason}</Text>
+            <Ionicons name="chevron-forward" size={18} color={AppColors.subtext} />
+          </TouchableOpacity>
+        ))}
+      </BottomSheet>
 
       {/* Share Sheet */}
-      <Modal
-        visible={shareVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <View style={styles.editOverlay}>
-          <PostShareSheet postId={post.id} content={caption} onClose={() => setShareVisible(false)} />
-        </View>
-      </Modal>
-    </View>
+      <BottomSheet visible={shareVisible} onClose={() => setShareVisible(false)}>
+        <PostShareSheet postId={post.id} content={caption} onClose={() => setShareVisible(false)} />
+      </BottomSheet>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
+    marginHorizontal: CARD_MARGIN,
+    marginBottom: Spacing.lg,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
   },
   headerUserRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.md,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: 'rgba(140,198,63,0.35)',
   },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontWeight: '600',
-    fontSize: 13.5,
-  },
-  location: {
-    fontSize: 11,
-    marginTop: 1,
-  },
+  userInfo: { flex: 1 },
+  userName: { fontWeight: '700', fontSize: 14.5, color: AppColors.text },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  location: { fontSize: 11.5, color: AppColors.subtext },
+  mediaWrap: { position: 'relative' },
   postImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.15,
     resizeMode: 'cover',
   },
-  dotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    gap: 4,
+  counterPill: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
+  counterText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs,
   },
-  leftActions: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  actionBtn: {
-    padding: 2,
-  },
+  leftActions: { flexDirection: 'row', gap: Spacing.lg },
+  actionGroup: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 2 },
+  actionCount: { fontSize: 13.5, fontWeight: '700', color: AppColors.text },
   metaSection: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    gap: 4,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
+    gap: 5,
   },
-  likesText: {
-    fontWeight: '600',
-    fontSize: 13.5,
-  },
-  caption: {
-    fontSize: 13.5,
-    lineHeight: 18,
-  },
-  captionUser: {
-    fontWeight: '600',
-  },
-  viewComments: {
-    fontSize: 13,
-    marginTop: 2,
-  },
+  caption: { fontSize: 14, lineHeight: 20, color: AppColors.text },
+  captionUser: { fontWeight: '700' },
+  viewComments: { fontSize: 13, marginTop: 1, color: AppColors.subtext },
   timestamp: {
-    fontSize: 10,
+    fontSize: 10.5,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginTop: 4,
+    letterSpacing: 0.4,
+    marginTop: 3,
+    color: AppColors.subtext,
   },
-  commentsModal: {
-    flex: 1,
-    paddingTop: 48,
-  },
-  commentsHeader: {
+  sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: Spacing.lg,
   },
-  commentsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 14,
-  },
-  commentsList: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-  },
-  commentRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 8,
-  },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  commentContent: {
-    flex: 1,
-  },
-  commentUser: {
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  commentText: {
-    fontSize: 13,
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  commentInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  commentInput: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    fontSize: 13.5,
-    maxHeight: 80,
-  },
-  postBtn: {
-    color: '#3897F0',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  editOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  editSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    paddingBottom: 32,
-  },
+  sheetTitle: { fontSize: 16, fontWeight: '700', color: AppColors.text },
   editInput: {
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    backgroundColor: AppColors.surface,
+    color: AppColors.text,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     fontSize: 14,
     minHeight: 100,
     maxHeight: 200,
     textAlignVertical: 'top',
-    marginBottom: 14,
-  },
-  editSaveBtn: {
-    backgroundColor: '#3897F0',
-    borderRadius: 20,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  editSaveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
+    marginBottom: Spacing.lg,
   },
   reportReasonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: AppColors.border,
   },
-  reportReasonText: {
-    fontSize: 14.5,
-  },
+  reportReasonText: { fontSize: 14.5, color: AppColors.text },
 });

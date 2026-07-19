@@ -16,9 +16,10 @@ import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
 import LocationPicker, { getStateCenter } from '@/components/LocationPicker';
 import PhoneInput from '@/components/PhoneInput';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

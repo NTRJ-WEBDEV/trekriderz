@@ -9,11 +9,12 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
-const CARD = 'rgba(255,255,255,0.05)';
-const BORDER = 'rgba(255,255,255,0.07)';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
+const CARD = AppColors.card;
+const BORDER = AppColors.border;
 
 type Section = 'trips' | 'guides' | 'homestays' | 'vehicles';
 

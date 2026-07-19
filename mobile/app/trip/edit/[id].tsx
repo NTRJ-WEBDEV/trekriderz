@@ -9,9 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Calendar } from 'react-native-calendars';
 import { supabase } from '@/lib/supabase';
 import { haptic } from '@/lib/haptics';
+import { AppColors } from '@/constants/theme';
 
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 // Focused edit screen — covers the fields organizers actually change after
 // creation (title, description, dates, group size, budget, meeting point,

@@ -9,6 +9,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { AppColors } from '@/constants/theme';
 
 const TYPE_EMOJI: Record<string, string> = {
   bike: '🏍️', car: '🚗', jeep: '🚙', tempo: '🚐', auto: '🛺', bus: '🚌',
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
   callBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   waBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#25D366', borderRadius: 14, paddingVertical: 14,
+    backgroundColor: AppColors.whatsapp, borderRadius: 14, paddingVertical: 14,
   },
   waBtnText: { fontSize: 15, fontWeight: '800', color: '#FFF' },
 });

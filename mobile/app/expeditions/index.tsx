@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useExpeditionStore } from '@/stores/expeditionStore';
 import ExpeditionCard from '@/components/ExpeditionCard';
+import EmptyState from '@/components/EmptyState';
 
 const DIFFICULTY_FILTERS = [
   { label: 'All', value: null },
@@ -117,23 +118,15 @@ export default function BrowseExpeditionsScreen() {
             }
           >
             {expeditions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="map-outline" size={72} color="rgba(255,255,255,0.07)" />
-                <Text style={styles.emptyTitle}>No expeditions found</Text>
-                <Text style={styles.emptySubtitle}>
-                  {activeDifficulty
-                    ? `No ${activeDifficulty} expeditions available right now.`
-                    : 'Check back soon — new adventures are added regularly!'}
-                </Text>
-                {activeDifficulty && (
-                  <TouchableOpacity
-                    style={styles.clearFilterBtn}
-                    onPress={() => handleDifficultyFilter(null)}
-                  >
-                    <Text style={styles.clearFilterBtnText}>Clear Filter</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <EmptyState
+                icon="map-outline"
+                title="No expeditions found"
+                subtitle={activeDifficulty
+                  ? `No ${activeDifficulty} expeditions available right now.`
+                  : 'Check back soon — new adventures are added regularly!'}
+                actionLabel={activeDifficulty ? 'Clear Filter' : undefined}
+                onAction={activeDifficulty ? () => handleDifficultyFilter(null) : undefined}
+              />
             ) : (
               <View style={styles.cardList}>
                 {expeditions.map((expedition) => (
@@ -261,37 +254,5 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: 16,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyTitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  emptySubtitle: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 14,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-    lineHeight: 20,
-  },
-  clearFilterBtn: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#8CC63F',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  clearFilterBtnText: {
-    color: '#8CC63F',
-    fontWeight: '700',
-    fontSize: 14,
   },
 });

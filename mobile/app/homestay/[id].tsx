@@ -13,9 +13,10 @@ import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { cacheHomestayRoute } from '@/lib/offline-safety';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
-const GREEN = '#8CC63F';
+const GREEN = AppColors.primary;
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   private_room: 'Private Room', entire_home: 'Entire Home', villa: 'Villa / Bungalow',

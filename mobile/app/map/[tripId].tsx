@@ -1,17 +1,49 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, Modal, TextInput, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces } from '@/lib/geocoding';
 import { fetchWeatherOpenMeteo, formatWeatherAge, WeatherData } from '@/lib/weather';
 import { Ionicons } from '@expo/vector-icons';
-import ExploreMapView, { MapMarker } from '@/components/ExploreMapView';
+import ExploreMapView, { MapMarker, TripPointCategory, TRIP_POINT_CATEGORIES } from '@/components/ExploreMapView';
 import { setActiveTrailTripId, primeTrailCache } from '@/lib/offline-safety';
 import { startLocationSharing } from '@/lib/location-service';
+
+// Kept in sync with ExploreMapView's POI_EMOJI (the Leaflet-side map) —
+// used here for the category picker and the Points & Stops list chips.
+const CATEGORY_META: Record<TripPointCategory, { emoji: string; label: string }> = {
+  waterfall: { emoji: '💧', label: 'Waterfall' },
+  viewpoint: { emoji: '🌄', label: 'Viewpoint' },
+  peak: { emoji: '⛰️', label: 'Peak' },
+  campsite: { emoji: '⛺', label: 'Campsite' },
+  temple: { emoji: '🛕', label: 'Temple' },
+  other: { emoji: '📍', label: 'Place' },
+  custom: { emoji: '📌', label: 'Custom Pin' },
+};
+
+interface TripPoint {
+  id: string;
+  poi_id: string | null;
+  label: string;
+  category: TripPointCategory;
+  lat: number;
+  lng: number;
+  notes: string | null;
+  added_by: string;
+}
+
+interface NearbyPoi {
+  id: string;
+  name: string;
+  category: string;
+  lat: number;
+  lng: number;
+}
 
 const WEATHER_EMOJI: Record<string, string> = {
   sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
@@ -29,12 +61,22 @@ interface Member {
 
 export default function TripMapScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
+  const { user } = useAuthStore();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
   const [destLat, setDestLat] = useState<number | null>(null);
   const [destLng, setDestLng] = useState<number | null>(null);
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [points, setPoints] = useState<TripPoint[]>([]);
+  const [nearbyPois, setNearbyPois] = useState<NearbyPoi[]>([]);
+  const [focusPoint, setFocusPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [addModal, setAddModal] = useState<{ lat: number; lng: number } | null>(null);
+  const [newLabel, setNewLabel] = useState('');
+  const [newCategory, setNewCategory] = useState<TripPointCategory>('custom');
+  const [saving, setSaving] = useState(false);
+
+  const isOrganizer = trip?.created_by === user?.id;
 
   const loadData = useCallback(async () => {
     try {
@@ -62,6 +104,17 @@ export default function TripMapScreen() {
           setDestLng(dlng);
           const w = await fetchWeatherOpenMeteo(dlat, dlng).catch(() => null);
           if (w) setWeather(w);
+
+          // Rough ±0.5° bounding box (~55km) around the destination — enough
+          // to surface nearby catalog POIs without a PostGIS radius query.
+          const { data: poiRows } = await supabase
+            .from('pois')
+            .select('id, name, category, lat, lng')
+            .eq('status', 'approved')
+            .gte('lat', dlat - 0.5).lte('lat', dlat + 0.5)
+            .gte('lng', dlng - 0.5).lte('lng', dlng + 0.5)
+            .limit(50);
+          setNearbyPois(poiRows || []);
         }
 
         // Trail recording is active only while today falls within the trip's
@@ -90,6 +143,13 @@ export default function TripMapScreen() {
         .select('user_id, users:user_id(id, full_name, avatar_url, last_latitude, last_longitude, last_location_update)')
         .eq('trip_id', tripId)
         .eq('status', 'accepted');
+
+      const { data: pointRows } = await supabase
+        .from('trip_points')
+        .select('*')
+        .eq('trip_id', tripId)
+        .order('created_at', { ascending: true });
+      setPoints(pointRows || []);
 
       const active: Member[] = (membersData || []).map((m: any) => ({
         id: m.users?.id,
@@ -147,8 +207,123 @@ export default function TripMapScreen() {
     });
   }
 
+  // Saved trip points
+  for (const p of points) {
+    mapMarkers.push({
+      id: `point-${p.id}`,
+      kind: 'trip_point',
+      name: p.label,
+      lat: p.lat,
+      lng: p.lng,
+      sublabel: p.notes || undefined,
+      extra: { category: p.category, pointId: p.id, addedBy: p.added_by },
+    });
+  }
+
+  // Nearby catalog POIs not already added to this trip
+  const addedPoiIds = new Set(points.map((p) => p.poi_id).filter(Boolean));
+  for (const poi of nearbyPois) {
+    if (addedPoiIds.has(poi.id)) continue;
+    mapMarkers.push({
+      id: `poi-${poi.id}`,
+      kind: 'poi',
+      name: poi.name,
+      lat: poi.lat,
+      lng: poi.lng,
+      extra: { category: poi.category, poiId: poi.id },
+    });
+  }
+
   const membersWithLocation = members.filter((m) => m.latitude && m.longitude);
   const membersNoLocation = members.filter((m) => !m.latitude || !m.longitude);
+
+  const handleMarkerTap = (marker: MapMarker) => {
+    if (marker.kind === 'poi') {
+      const category = (marker.extra?.category as string) || 'other';
+      const poiId = (marker.extra?.poiId as string) || marker.id.replace(/^poi-/, '');
+      Alert.alert('Add to Trip', `Add "${marker.name}" as a stop on this trip?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add', onPress: async () => {
+            try {
+              const { error } = await supabase.from('trip_points').insert({
+                trip_id: tripId,
+                poi_id: poiId,
+                label: marker.name,
+                category,
+                lat: marker.lat,
+                lng: marker.lng,
+                added_by: user?.id,
+              });
+              if (error) throw error;
+              loadData();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Could not add point');
+            }
+          },
+        },
+      ]);
+    } else if (marker.kind === 'trip_point') {
+      const pointId = (marker.extra?.pointId as string) || marker.id.replace(/^point-/, '');
+      const addedBy = marker.extra?.addedBy as string | undefined;
+      if (!isOrganizer && addedBy !== user?.id) return;
+      Alert.alert(marker.name, 'Remove this point from the trip?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove', style: 'destructive', onPress: async () => {
+            try {
+              const { error } = await supabase.from('trip_points').delete().eq('id', pointId);
+              if (error) throw error;
+              loadData();
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Could not remove point');
+            }
+          },
+        },
+      ]);
+    }
+  };
+
+  const removePoint = (point: TripPoint) => {
+    Alert.alert(point.label, 'Remove this point from the trip?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            const { error } = await supabase.from('trip_points').delete().eq('id', point.id);
+            if (error) throw error;
+            loadData();
+          } catch (e: any) {
+            Alert.alert('Error', e.message || 'Could not remove point');
+          }
+        },
+      },
+    ]);
+  };
+
+  const saveCustomPoint = async () => {
+    if (!addModal || !newLabel.trim() || !user?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('trip_points').insert({
+        trip_id: tripId,
+        label: newLabel.trim(),
+        category: newCategory,
+        lat: addModal.lat,
+        lng: addModal.lng,
+        added_by: user.id,
+      });
+      if (error) throw error;
+      setAddModal(null);
+      setNewLabel('');
+      setNewCategory('custom');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not add point');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -203,10 +378,11 @@ export default function TripMapScreen() {
       {/* Map */}
       <ExploreMapView
         markers={mapMarkers}
-        centerLat={destLat ?? undefined}
-        centerLng={destLng ?? undefined}
-        zoom={destLat ? 10 : 5}
-        onMarkerTap={() => {}}
+        centerLat={focusPoint?.lat ?? destLat ?? undefined}
+        centerLng={focusPoint?.lng ?? destLng ?? undefined}
+        zoom={focusPoint ? 14 : destLat ? 10 : 5}
+        onMarkerTap={handleMarkerTap}
+        onMapLongPress={(lat, lng) => setAddModal({ lat, lng })}
       />
 
       {/* Members panel */}
@@ -241,6 +417,42 @@ export default function TripMapScreen() {
         )}
       </View>
 
+      {/* Points & Stops panel */}
+      <View style={styles.membersPanel}>
+        <View style={styles.membersPanelHeader}>
+          <Text style={styles.membersPanelTitle}>
+            {points.length} Point{points.length !== 1 ? 's' : ''} & Stops
+          </Text>
+          <Text style={styles.pointsHint}>Long-press map to add</Text>
+        </View>
+
+        {points.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.membersScroll}>
+            {points.map((p) => {
+              const meta = CATEGORY_META[p.category] || CATEGORY_META.custom;
+              const canRemove = isOrganizer || p.added_by === user?.id;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.pointChip}
+                  onPress={() => setFocusPoint({ lat: p.lat, lng: p.lng })}
+                >
+                  <Text style={styles.pointEmoji}>{meta.emoji}</Text>
+                  <Text style={styles.memberName} numberOfLines={1}>{p.label}</Text>
+                  {canRemove && (
+                    <TouchableOpacity onPress={() => removePoint(p)} hitSlop={8}>
+                      <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.35)" />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <Text style={styles.noLocHint}>No points added yet — long-press anywhere on the map to drop a pin.</Text>
+        )}
+      </View>
+
       {/* Destination card */}
       {trip && (
         <View style={styles.destCard}>
@@ -261,6 +473,53 @@ export default function TripMapScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Add custom point modal */}
+      <Modal visible={!!addModal} animationType="slide" transparent onRequestClose={() => setAddModal(null)}>
+        <View style={styles.editOverlay}>
+          <View style={styles.editSheet}>
+            <View style={styles.editHeader}>
+              <Text style={styles.editTitle}>Add a Point</Text>
+              <TouchableOpacity onPress={() => setAddModal(null)}>
+                <Ionicons name="close" size={24} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.editInput}
+              value={newLabel}
+              onChangeText={setNewLabel}
+              placeholder="What's here? (e.g. Sunset viewpoint)"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              autoFocus
+            />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 14 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {TRIP_POINT_CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.categoryChip, newCategory === cat && styles.categoryChipActive]}
+                    onPress={() => setNewCategory(cat)}
+                  >
+                    <Text style={styles.categoryChipText}>
+                      {CATEGORY_META[cat].emoji} {CATEGORY_META[cat].label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.editSaveBtn, { opacity: newLabel.trim() && !saving ? 1 : 0.5 }]}
+              onPress={saveCustomPoint}
+              disabled={!newLabel.trim() || saving}
+            >
+              {saving ? <ActivityIndicator size="small" color="#080C14" /> : <Text style={styles.editSaveBtnText}>Add to Trip</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -351,4 +610,34 @@ const styles = StyleSheet.create({
     width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(140,198,63,0.1)', borderRadius: 18,
   },
+
+  pointsHint: { color: 'rgba(255,255,255,0.3)', fontSize: 11 },
+  pointChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 10,
+    paddingVertical: 5, borderRadius: 14, maxWidth: 160,
+  },
+  pointEmoji: { fontSize: 13 },
+
+  editOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  editSheet: { backgroundColor: '#080C14', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  editHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  editTitle: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  editInput: {
+    color: '#FFF', backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    padding: 14, fontSize: 14,
+  },
+  editSaveBtn: {
+    backgroundColor: '#8CC63F', borderRadius: 24,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  editSaveBtnText: { color: '#080C14', fontWeight: '800', fontSize: 15 },
+  categoryChip: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  categoryChipActive: { backgroundColor: 'rgba(140,198,63,0.15)', borderColor: '#8CC63F' },
+  categoryChipText: { color: '#FFF', fontSize: 12.5, fontWeight: '600' },
 });

@@ -5,9 +5,14 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
+import { AppColors } from '@/constants/theme';
+import EmptyState from '@/components/EmptyState';
+import AppHeader from '@/components/ui/AppHeader';
 
-const BG = '#080C14';
-const GREEN = '#8CC63F';
+const BG = AppColors.background;
+const GREEN = AppColors.primary;
 
 interface Conversation {
   partnerId: string;
@@ -20,9 +25,15 @@ interface Conversation {
 
 export default function ChatsScreen() {
   const { user } = useAuthStore();
+  const unreadNotifications = useNotificationStore((s) => s.unreadCount);
+  const unreadChats = useUnreadChatCount();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  const myName = (user as any)?.user_metadata?.full_name?.split(' ')[0] || 'You';
+  const myAvatar = (user as any)?.user_metadata?.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(myName)}&background=8CC63F&color=fff`;
 
   useFocusEffect(useCallback(() => {
     fetchConversations();
@@ -92,11 +103,8 @@ export default function ChatsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Chats</Text>
-        <Text style={styles.subtitle}>Travel conversations only</Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <AppHeader avatarUrl={myAvatar} notificationCount={unreadNotifications} chatCount={unreadChats} />
 
       <View style={styles.searchRow}>
         <Ionicons name="search-outline" size={18} color="rgba(255,255,255,0.4)" style={styles.searchIcon} />
@@ -112,13 +120,12 @@ export default function ChatsScreen() {
       {loading ? (
         <ActivityIndicator color={GREEN} style={{ marginTop: 60 }} />
       ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="chatbubbles-outline" size={56} color="rgba(255,255,255,0.1)" />
-          <Text style={styles.emptyTitle}>No conversations yet</Text>
-          <Text style={styles.emptyDesc}>
-            Connect with guides, fellow trekkers, and homestay owners to start chatting about your next adventure.
-          </Text>
-        </View>
+        <EmptyState
+          icon="chatbubbles-outline"
+          title="No conversations yet"
+          subtitle="Connect with guides, fellow trekkers, and homestay owners to start chatting about your next adventure."
+          fillScreen
+        />
       ) : (
         <FlatList
           data={filtered}
@@ -168,9 +175,6 @@ export default function ChatsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-  title: { color: '#FFF', fontSize: 26, fontWeight: '900' },
-  subtitle: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 },
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
     marginHorizontal: 16, marginVertical: 12,
@@ -200,7 +204,4 @@ const styles = StyleSheet.create({
   badge: { backgroundColor: GREEN, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8 },
   badgeText: { color: '#000', fontSize: 11, fontWeight: '800' },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.06)', marginLeft: 82 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, gap: 12 },
-  emptyTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  emptyDesc: { color: 'rgba(255,255,255,0.4)', fontSize: 14, textAlign: 'center', lineHeight: 21 },
 });

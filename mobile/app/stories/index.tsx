@@ -9,10 +9,11 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { haptic } from '@/lib/haptics';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const ACCENT = '#EC4899';
-const BG = '#080C14';
+const BG = AppColors.background;
 
 type Story = {
   id: string;
@@ -155,12 +156,12 @@ export default function StoriesScreen({ embedded }: { embedded?: boolean } = {})
   const HeaderInner = (
     <View style={styles.header}>
       {!embedded && (
-        <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/explore'))}>
           <Ionicons name="arrow-back" size={22} color="#FFF" />
         </TouchableOpacity>
       )}
       <View>
-        <Text style={styles.headerTitle}>Stories</Text>
+        <Text style={styles.headerTitle}>Articles</Text>
         <Text style={styles.headerSub}>Trek & travel journeys</Text>
       </View>
       <TouchableOpacity
@@ -197,7 +198,7 @@ export default function StoriesScreen({ embedded }: { embedded?: boolean } = {})
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>📖</Text>
-            <Text style={styles.emptyTitle}>No Stories Yet</Text>
+            <Text style={styles.emptyTitle}>No Articles Yet</Text>
             <Text style={styles.emptySub}>
               Be the first to share your trekking journey or travel experience.
             </Text>
@@ -205,7 +206,7 @@ export default function StoriesScreen({ embedded }: { embedded?: boolean } = {})
               style={styles.emptyBtn}
               onPress={() => { haptic.medium(); router.push('/stories/create' as any); }}
             >
-              <Text style={styles.emptyBtnText}>Write Your Story</Text>
+              <Text style={styles.emptyBtnText}>Write Your Article</Text>
             </TouchableOpacity>
           </View>
         }

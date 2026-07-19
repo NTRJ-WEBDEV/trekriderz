@@ -11,10 +11,11 @@ import { Image } from 'expo-image';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { haptic } from '@/lib/haptics';
+import { AppColors } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
-const GREEN = '#8CC63F';
-const BG = '#080C14';
+const GREEN = AppColors.primary;
+const BG = AppColors.background;
 
 const TRIP_TYPES = [
   { id: 'trek',       emoji: '🏔️', label: 'Trek',          desc: 'Mountain & trail adventure' },
@@ -901,7 +902,7 @@ const s = StyleSheet.create({
 
   bookBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: '#25D366', borderRadius: 16, paddingVertical: 18, marginTop: 12,
+    backgroundColor: AppColors.whatsapp, borderRadius: 16, paddingVertical: 18, marginTop: 12,
   },
   bookBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
 

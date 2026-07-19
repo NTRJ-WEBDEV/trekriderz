@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, RefreshControl, StatusBar, Image, ScrollView,
+  RefreshControl, StatusBar, Image, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import * as Location from 'expo-location';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchWeatherOpenMeteo, formatWeatherAge } from '@/lib/weather';
-import { searchPlaces, reverseGeocode } from '@/lib/geocoding';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useUnreadChatCount } from '@/hooks/useUnreadChatCount';
+import { formatPostTime } from '@/lib/format';
+import { AppColors, Spacing } from '@/constants/theme';
+import AppHeader from '@/components/ui/AppHeader';
 import PostCard from '@/components/PostCard';
-
-type FeedTab = 'following' | 'explore';
 
 interface StoryCircle {
   userId: string;
@@ -22,192 +23,52 @@ interface StoryCircle {
   hasUnseen: boolean;
 }
 
-const TRIP_EMOJI: Record<string, string> = {
-  trek: '⛰️', bike: '🏍️', temple: '🛕', backpacking: '🎒', weekend: '🌄',
-};
+// ── Composer teaser — Facebook-inspired "what's on your mind" bar. Always
+// navigates out to the real create screens rather than expanding inline. ──
 
-const WEATHER_ICON_EMOJI: Record<string, string> = {
-  sunny: '☀️', 'partly-sunny': '⛅', cloudy: '☁️', 'cloud-outline': '🌫️',
-  rainy: '🌧️', snow: '❄️', thunderstorm: '⛈️', moon: '🌙',
-};
-
-interface WeatherCardData {
-  id: string;
-  label: string;
-  sublabel?: string;
-  temp: number;
-  condition: string;
-  icon: string;
-  isCurrentLocation?: boolean;
-  tripEmoji?: string;
-  isStale?: boolean;
-  fetchedAt?: number;
-}
-
-function WeatherCard({ card, colors }: { card: WeatherCardData; colors: any }) {
-  const emoji = WEATHER_ICON_EMOJI[card.icon] || '🌤️';
+function QuickAction({ icon, label, color, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string; onPress: () => void }) {
   return (
-    <View style={[weatherStyles.card, { backgroundColor: colors.weatherCard, borderColor: colors.weatherBorder }]}>
-      <View style={weatherStyles.cardTop}>
-        {card.isCurrentLocation ? (
-          <Ionicons name="location" size={11} color="#8CC63F" />
-        ) : (
-          <Text style={{ fontSize: 11 }}>{card.tripEmoji || '📍'}</Text>
-        )}
-        <Text style={[weatherStyles.cardLabel, { color: colors.subtext }]} numberOfLines={1}>
-          {card.label}
-        </Text>
+    <TouchableOpacity style={styles.quickAction} onPress={onPress}>
+      <View style={[styles.quickActionIcon, { backgroundColor: color + '1A' }]}>
+        <Ionicons name={icon} size={18} color={color} />
       </View>
-      <Text style={weatherStyles.emoji}>{emoji}</Text>
-      <Text style={[weatherStyles.temp, { color: colors.text }]}>{card.temp}°C</Text>
-      <Text style={[weatherStyles.condition, { color: colors.subtext }]} numberOfLines={1}>
-        {card.condition}
-      </Text>
-      {card.sublabel && (
-        <Text style={[weatherStyles.sublabel, { color: colors.subtext }]} numberOfLines={1}>
-          {card.sublabel}
-        </Text>
-      )}
-      {card.isStale && card.fetchedAt && (
-        <Text style={weatherStyles.staleText} numberOfLines={1}>
-          {formatWeatherAge(card.fetchedAt)}
-        </Text>
-      )}
-    </View>
+      <Text style={styles.quickActionLabel}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
-function WeatherStrip({ userId, colors }: { userId?: string; colors: any }) {
-  const [cards, setCards] = useState<WeatherCardData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [attempted, setAttempted] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      const result: WeatherCardData[] = [];
-      let attemptedAny = false;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          attemptedAny = true;
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          const [w, placeName] = await Promise.all([
-            fetchWeatherOpenMeteo(loc.coords.latitude, loc.coords.longitude),
-            reverseGeocode(loc.coords.longitude, loc.coords.latitude),
-          ]);
-          if (w && active) {
-            result.push({
-              id: 'current',
-              label: placeName?.split(',')[0] || 'My Location',
-              temp: w.currentTemp, condition: w.condition, icon: w.icon, isCurrentLocation: true,
-              isStale: w.isStale, fetchedAt: w.fetchedAt,
-            });
-          }
-        }
-      } catch (_) {}
-
-      if (userId) {
-        try {
-          const today = new Date().toISOString().split('T')[0];
-          const { data: trips } = await supabase
-            .from('trips')
-            .select('id, title, destination, trip_type, start_date')
-            .eq('created_by', userId)
-            .in('status', ['planning', 'confirmed'])
-            .gte('end_date', today)
-            .order('start_date', { ascending: true })
-            .limit(4);
-
-          if (trips && trips.length > 0) attemptedAny = true;
-
-          for (const trip of trips || []) {
-            try {
-              const places = await searchPlaces(trip.destination);
-              if (places.length > 0) {
-                const [lng, lat] = places[0].center;
-                const w = await fetchWeatherOpenMeteo(lat, lng);
-                if (w && active) {
-                  result.push({
-                    id: trip.id, label: trip.destination.split(',')[0], sublabel: trip.title,
-                    temp: w.currentTemp, condition: w.condition, icon: w.icon,
-                    tripEmoji: TRIP_EMOJI[trip.trip_type] || '🗺️',
-                    isStale: w.isStale, fetchedAt: w.fetchedAt,
-                  });
-                }
-              }
-            } catch (_) {}
-          }
-        } catch (_) {}
-      }
-
-      if (active) { setCards(result); setAttempted(attemptedAny); setLoading(false); }
-    }
-    load();
-    return () => { active = false; };
-  }, [userId]);
-
-  if (loading) {
-    return (
-      <View style={[weatherStyles.strip, { borderBottomColor: colors.border }]}>
-        <View style={weatherStyles.stripHeader}>
-          <Ionicons name="partly-sunny-outline" size={14} color={colors.subtext} />
-          <Text style={[weatherStyles.stripTitle, { color: colors.subtext }]}>Live Weather</Text>
+function ComposerTeaser({ avatarUrl }: { avatarUrl: string }) {
+  return (
+    <View style={styles.composer}>
+      <TouchableOpacity style={styles.composerRow} activeOpacity={0.8} onPress={() => router.push('/post/create' as any)}>
+        <Image source={{ uri: avatarUrl }} style={styles.composerAvatar} />
+        <View style={styles.composerTextBlock}>
+          <Text style={styles.composerPrompt} numberOfLines={1}>Share your adventure 🏔️</Text>
+          <View style={styles.composerSubRow}>
+            <Ionicons name="location-outline" size={12} color={AppColors.subtext} style={{ marginTop: 2 }} />
+            <Text style={styles.composerSub} numberOfLines={2}>Where did your adventure take you today?</Text>
+          </View>
         </View>
-        <ActivityIndicator size="small" color="#8CC63F" style={{ marginLeft: 12, marginBottom: 12 }} />
+        <View style={styles.composerPhotoBtn}>
+          <Ionicons name="image-outline" size={20} color={AppColors.primary} />
+        </View>
+      </TouchableOpacity>
+      <View style={styles.quickActionsRow}>
+        <QuickAction icon="camera-outline" label="Photo" color={AppColors.primary} onPress={() => router.push('/post/create' as any)} />
+        <QuickAction icon="videocam-outline" label="Reel" color="#F43F5E" onPress={() => Alert.alert('Coming Soon', 'Reels are on their way — stay tuned!')} />
+        <QuickAction icon="location-outline" label="Check-in" color="#F97316" onPress={() => router.push({ pathname: '/post/create', params: { focus: 'location' } } as any)} />
+        <QuickAction icon="book-outline" label="Article" color={AppColors.primary} onPress={() => router.push('/stories/create' as any)} />
       </View>
-    );
-  }
-
-  if (cards.length === 0 && !attempted) return null;
-
-  return (
-    <View style={[weatherStyles.strip, { borderBottomColor: colors.border }]}>
-      <View style={weatherStyles.stripHeader}>
-        <Ionicons name="partly-sunny-outline" size={14} color={colors.subtext} />
-        <Text style={[weatherStyles.stripTitle, { color: colors.subtext }]}>Live Weather</Text>
-      </View>
-      {cards.length === 0 ? (
-        <Text style={[weatherStyles.noDataText, { color: colors.subtext }]}>No weather data available</Text>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={weatherStyles.scrollRow}>
-          {cards.map((card) => <WeatherCard key={card.id} card={card} colors={colors} />)}
-        </ScrollView>
-      )}
     </View>
   );
 }
-
-const weatherStyles = StyleSheet.create({
-  strip: { paddingTop: 12, paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth },
-  stripHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, marginBottom: 10 },
-  stripTitle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
-  scrollRow: { paddingHorizontal: 12, paddingBottom: 12, gap: 10 },
-  card: { width: 100, borderRadius: 14, padding: 10, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, gap: 2 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 3, width: '100%', marginBottom: 4 },
-  cardLabel: { fontSize: 10, fontWeight: '600', flex: 1 },
-  emoji: { fontSize: 28, marginVertical: 2 },
-  temp: { fontSize: 18, fontWeight: '800' },
-  condition: { fontSize: 10, textAlign: 'center' },
-  sublabel: { fontSize: 9, marginTop: 2, textAlign: 'center', fontStyle: 'italic' },
-  staleText: { fontSize: 8.5, marginTop: 3, textAlign: 'center', fontWeight: '700', color: '#F59E0B' },
-  noDataText: { fontSize: 12, paddingHorizontal: 14, paddingBottom: 14 },
-});
 
 export default function ExploreScreen() {
-  const colors = {
-    bg: '#000',
-    text: '#fff',
-    subtext: '#A8A8A8',
-    border: '#262626',
-    weatherCard: 'rgba(255,255,255,0.06)',
-    weatherBorder: 'rgba(255,255,255,0.1)',
-  };
-
   const { user } = useAuthStore();
-  const [tab, setTab] = useState<FeedTab>('following');
+  const unreadNotifications = useNotificationStore((s) => s.unreadCount);
+  const unreadChats = useUnreadChatCount();
+
   const [posts, setPosts] = useState<any[]>([]);
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [storyCircles, setStoryCircles] = useState<StoryCircle[]>([]);
   const [myHasStory, setMyHasStory] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -220,25 +81,18 @@ export default function ExploreScreen() {
       .eq('follower_id', user.id)
       .eq('status', 'accepted');
     const ids = (data || []).map((f: any) => f.following_id);
-    setFollowingIds(ids);
     return ids;
   }, [user?.id]);
 
-  const fetchPosts = useCallback(async (feedTab: FeedTab, following: string[]) => {
+  const fetchPosts = useCallback(async () => {
     try {
-      let query = supabase
+      const query = supabase
         .from('posts')
         .select('*, users:user_id(id, full_name, avatar_url, email)')
         .eq('visibility', 'public')
         .or('post_type.is.null,post_type.neq.trip_story')
         .order('created_at', { ascending: false })
         .limit(30);
-
-      if (feedTab === 'following') {
-        const authorIds = [...following, user?.id].filter(Boolean) as string[];
-        if (authorIds.length === 0) { setPosts([]); return; }
-        query = query.in('user_id', authorIds);
-      }
 
       const { data, error } = await query;
       if (error) throw error;
@@ -272,7 +126,7 @@ export default function ExploreScreen() {
         youtube_url: p.youtube_url,
         likes_count: p.likes_count || 0,
         comments_count: p.comments_count || 0,
-        timestamp: new Date(p.created_at).toLocaleDateString(),
+        timestamp: formatPostTime(p.created_at),
         location: p.location,
         liked: likedIds.has(p.id),
         saved: savedIds.has(p.id),
@@ -330,16 +184,25 @@ export default function ExploreScreen() {
     } catch (_) {}
   }, [user?.id]);
 
-  const loadAll = useCallback(async (feedTab: FeedTab) => {
+  const loadAll = useCallback(async () => {
     const following = await fetchFollowing();
-    await Promise.all([fetchPosts(feedTab, following), fetchStoryCircles(following)]);
+    await Promise.all([fetchPosts(), fetchStoryCircles(following)]);
   }, [fetchFollowing, fetchPosts, fetchStoryCircles]);
 
-  useEffect(() => { loadAll(tab); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Refetch on every focus (e.g. returning from a post's comment screen) —
+  // the realtime subscription in PostCard isn't a reliable enough guarantee
+  // on its own that counts updated elsewhere show up immediately here.
+  useFocusEffect(
+    useCallback(() => {
+      fetchPosts();
+    }, [fetchPosts])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadAll(tab);
+    await loadAll();
     setRefreshing(false);
   };
 
@@ -353,24 +216,24 @@ export default function ExploreScreen() {
 
   const HeaderComponent = () => (
     <>
-      <WeatherStrip userId={user?.id} colors={colors} />
-      <View style={[styles.storiesSection, { borderBottomColor: colors.border }]}>
+      {/* Stories */}
+      <View style={styles.storiesSection}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesList}>
           {/* "Your Story" — view own active story, or create a new one */}
           <TouchableOpacity
             style={styles.storyItem}
             onPress={() => myHasStory ? openStory(user!.id, 'Your Story', myAvatar) : router.push('/story/create' as any)}
           >
-            <View style={[styles.storyRing, myHasStory && styles.storyRingActive]}>
+            <View style={[styles.storyRing, myHasStory && styles.storyRingOwn]}>
               <Image source={{ uri: myAvatar }} style={styles.storyAvatar} />
               <TouchableOpacity
                 style={styles.addBadge}
                 onPress={(e) => { e.stopPropagation(); router.push('/story/create' as any); }}
               >
-                <Ionicons name="add" size={12} color="#FFF" />
+                <Ionicons name="add" size={13} color="#FFF" />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>Your Story</Text>
+            <Text style={styles.storyName} numberOfLines={1}>Your Story</Text>
           </TouchableOpacity>
 
           {/* 24hr story circles — followed users with an active story */}
@@ -380,59 +243,55 @@ export default function ExploreScreen() {
               style={styles.storyItem}
               onPress={() => openStory(item.userId, item.name, item.avatar)}
             >
-              <View style={[styles.storyRing, item.hasUnseen ? styles.storyRingActive : styles.storyRingSeen]}>
-                <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
-              </View>
-              <Text style={[styles.storyName, { color: colors.text }]} numberOfLines={1}>
-                {item.name.split(' ')[0]}
-              </Text>
+              {item.hasUnseen ? (
+                <LinearGradient
+                  colors={['#833AB4', '#FD1D1D', '#F77737']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.storyRingGradient}
+                >
+                  <View style={styles.storyRingGap}>
+                    <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
+                  </View>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.storyRing, styles.storyRingSeen]}>
+                  <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
+                </View>
+              )}
+              <Text style={styles.storyName} numberOfLines={1}>{item.name.split(' ')[0]}</Text>
             </TouchableOpacity>
           ))}
+
+          {/* See All — full stories list */}
+          {storyCircles.length > 0 && (
+            <TouchableOpacity style={styles.storyItem} onPress={() => router.push('/stories' as any)}>
+              <View style={styles.seeAllCircle}>
+                <Ionicons name="ellipsis-horizontal" size={22} color={AppColors.subtext} />
+              </View>
+              <Text style={styles.storyName} numberOfLines={1}>See All</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
 
-      <View style={[styles.tabRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab('following')}>
-          <Text style={[styles.tabLabel, { color: tab === 'following' ? colors.text : colors.subtext }]}>Following</Text>
-          {tab === 'following' && <View style={styles.tabUnderline} />}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabBtn} onPress={() => setTab('explore')}>
-          <Text style={[styles.tabLabel, { color: tab === 'explore' ? colors.text : colors.subtext }]}>Explore</Text>
-          {tab === 'explore' && <View style={styles.tabUnderline} />}
-        </TouchableOpacity>
-      </View>
+      {/* Create post teaser */}
+      <ComposerTeaser avatarUrl={myAvatar} />
 
-      {tab === 'following' && posts.length === 0 && (
+      {posts.length === 0 && (
         <View style={styles.emptyFollowing}>
-          <Ionicons name="people-outline" size={40} color={colors.subtext} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Follow some trekkers to see their posts here!</Text>
-          <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(tabs)/discover' as any)}>
-            <Text style={styles.emptyBtnText}>Explore Discover</Text>
-          </TouchableOpacity>
+          <Ionicons name="images-outline" size={40} color={AppColors.subtext} />
+          <Text style={styles.emptyTitle}>No posts yet — be the first to share your adventure!</Text>
         </View>
       )}
     </>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor={AppColors.background} />
 
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>TrekRiderz</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => router.push('/map' as any)}
-            style={styles.mapBtn}
-          >
-            <Ionicons name="map-outline" size={18} color="#8CC63F" />
-            <Text style={styles.mapBtnText}>Map</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/post/create' as any)}>
-            <Ionicons name="create-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader avatarUrl={myAvatar} notificationCount={unreadNotifications} chatCount={unreadChats} />
 
       <FlatList
         data={posts}
@@ -446,51 +305,76 @@ export default function ExploreScreen() {
           />
         )}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3897F0" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppColors.primary} />
         }
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 80, paddingTop: Spacing.md }}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5,
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  mapBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(140,198,63,0.12)', borderWidth: 1, borderColor: 'rgba(140,198,63,0.3)',
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16,
-  },
-  mapBtnText: { color: '#8CC63F', fontSize: 13, fontWeight: '700' },
-  headerTitle: { fontSize: 22, fontWeight: '700', fontStyle: 'italic' },
-  storiesSection: { paddingVertical: 12, borderBottomWidth: 0.5 },
-  storiesList: { paddingHorizontal: 12, gap: 12 },
-  storyItem: { alignItems: 'center', width: 68 },
+  container: { flex: 1, backgroundColor: AppColors.background },
+
+  storiesSection: { paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.border },
+  storiesList: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+  storyItem: { alignItems: 'center', width: 72 },
   storyRing: {
     width: 64, height: 64, borderRadius: 32, borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.15)', padding: 2, marginBottom: 5, position: 'relative',
+    borderColor: 'rgba(255,255,255,0.15)', padding: 2.5, marginBottom: 4, position: 'relative',
   },
-  storyRingActive: { borderColor: '#C13584' },
+  storyRingGradient: {
+    width: 64, height: 64, borderRadius: 32, padding: 2.5, marginBottom: 4, position: 'relative',
+  },
+  storyRingGap: {
+    flex: 1, borderRadius: 27, backgroundColor: AppColors.background,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  storyRingOwn: { borderColor: AppColors.primary },
   storyRingSeen: { borderColor: 'rgba(255,255,255,0.15)' },
-  storyAvatar: { width: 55, height: 55, borderRadius: 28 },
+  storyAvatar: { width: 54, height: 54, borderRadius: 27 },
   addBadge: {
     position: 'absolute', bottom: -2, right: -2,
     width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#3897F0', borderWidth: 1.5, borderColor: '#000',
+    backgroundColor: AppColors.primary, borderWidth: 2, borderColor: AppColors.background,
     alignItems: 'center', justifyContent: 'center',
   },
-  storyName: { fontSize: 11, textAlign: 'center' },
-  tabRow: { flexDirection: 'row', borderBottomWidth: 0.5 },
-  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabLabel: { fontSize: 13.5, fontWeight: '700' },
-  tabUnderline: { marginTop: 8, height: 2, width: 28, borderRadius: 1, backgroundColor: '#8CC63F' },
-  emptyFollowing: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32, gap: 12 },
-  emptyTitle: { fontSize: 14, textAlign: 'center', fontWeight: '600' },
-  emptyBtn: { backgroundColor: '#8CC63F', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, marginTop: 4 },
-  emptyBtnText: { color: '#000', fontWeight: '800', fontSize: 13 },
+  seeAllCircle: {
+    width: 64, height: 64, borderRadius: 32, marginBottom: 4,
+    backgroundColor: AppColors.card, borderWidth: 1, borderColor: AppColors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  storyName: { fontSize: 11, textAlign: 'center', color: AppColors.subtext },
+
+  composer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+  },
+  composerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  composerAvatar: { width: 42, height: 42, borderRadius: 21 },
+  composerTextBlock: { flex: 1, gap: 4 },
+  composerPrompt: { color: AppColors.text, fontSize: 15, fontWeight: '700' },
+  composerSubRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  composerSub: { flex: 1, color: AppColors.subtext, fontSize: 12 },
+  composerPhotoBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(140,198,63,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  quickActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: Spacing.md,
+  },
+  quickAction: { alignItems: 'center', gap: 5, flex: 1 },
+  quickActionIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  quickActionLabel: { fontSize: 11, fontWeight: '600', color: AppColors.subtext },
+
+  emptyFollowing: { alignItems: 'center', paddingTop: Spacing.xxl * 2, paddingHorizontal: Spacing.xxl, gap: Spacing.md },
+  emptyTitle: { fontSize: 14, textAlign: 'center', fontWeight: '600', color: AppColors.text },
 });

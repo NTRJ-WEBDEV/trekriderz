@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Text, View, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '../../stores/authStore';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const CREATE_ACTIONS = [
   { label: 'Create Post', icon: 'image-outline' as const, route: '/post/create' },
@@ -15,9 +15,13 @@ const CREATE_ACTIONS = [
 
 export default function TabsLayout() {
   const { bottom } = useSafeAreaInsets();
-  const { user } = useAuthStore();
   const router = useRouter();
-  const isAdmin = (user as any)?.role === 'admin';
+  // Reads the shared RBAC system (profiles.role_id via has_permission/
+  // my_permissions) — the same source Web Admin reads, replacing the
+  // earlier public.users.role='admin' check so both products gate on one
+  // permission layer instead of two divergent ones.
+  const { isStaff } = usePermissions();
+  const isAdmin = isStaff;
   const [actionSheetVisible, setActionSheetVisible] = useState(false);
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase";
+import { logAdminAction } from "@/lib/services/AuditService";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const BLANK = { title: "", destination: "", body: "", cover_image_url: "", status: "draft", is_featured: false };
@@ -57,6 +58,7 @@ export default function StoriesPage() {
 
   const updateStatus = async (id: string, status: string) => {
     await supabase.from("stories").update({ status }).eq("id", id);
+    await logAdminAction({ action: status === "approved" ? "story.approved" : "story.rejected", entityType: "story", entityId: id, newValue: { status } });
     load();
   };
 

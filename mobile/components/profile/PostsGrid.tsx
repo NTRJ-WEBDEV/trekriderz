@@ -17,11 +17,24 @@ interface GridItem {
 
 interface Props {
   userId: string;
-  variant: 'posts' | 'stories';
+  variant: 'posts' | 'stories' | 'reels';
 }
 
-// Instagram-style 3-column thumbnail grid — same shape for both the Posts
-// and Travel Stories profile tabs, just pointed at a different query/route.
+const EMPTY_ICON: Record<Props['variant'], keyof typeof Ionicons.glyphMap> = {
+  posts: 'images-outline',
+  stories: 'book-outline',
+  reels: 'film-outline',
+};
+const EMPTY_TEXT: Record<Props['variant'], string> = {
+  posts: 'No posts yet',
+  stories: 'No travel stories yet',
+  reels: 'No reels yet',
+};
+
+// Instagram-style 3-column thumbnail grid — same shape for the Posts,
+// Travel Stories, and Reels profile tabs, just pointed at a different
+// query/route. Reels open the full-screen viewer scoped to this profile
+// (same data source, different query param) rather than a separate screen.
 export default function PostsGrid({ userId, variant }: Props) {
   const [items, setItems] = useState<GridItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +51,9 @@ export default function PostsGrid({ userId, variant }: Props) {
 
       const { data } = variant === 'stories'
         ? await query.eq('post_type', 'trip_story')
-        : await query.or('post_type.is.null,post_type.neq.trip_story');
+        : variant === 'reels'
+        ? await query.eq('post_type', 'reel')
+        : await query.or('post_type.is.null,and(post_type.neq.trip_story,post_type.neq.reel)');
 
       if (cancelled) return;
       setItems((data || []).map((p: any) => ({
@@ -54,17 +69,17 @@ export default function PostsGrid({ userId, variant }: Props) {
   if (!loading && items.length === 0) {
     return (
       <View style={styles.empty}>
-        <Ionicons
-          name={variant === 'stories' ? 'book-outline' : 'images-outline'}
-          size={36}
-          color={AppColors.subtext}
-        />
-        <Text style={styles.emptyText}>
-          {variant === 'stories' ? 'No travel stories yet' : 'No posts yet'}
-        </Text>
+        <Ionicons name={EMPTY_ICON[variant]} size={36} color={AppColors.subtext} />
+        <Text style={styles.emptyText}>{EMPTY_TEXT[variant]}</Text>
       </View>
     );
   }
+
+  const routeFor = (id: string) => {
+    if (variant === 'stories') return `/stories/${id}`;
+    if (variant === 'reels') return `/reels?postId=${id}&userId=${userId}`;
+    return `/post/${id}`;
+  };
 
   return (
     <View style={styles.grid}>
@@ -73,13 +88,20 @@ export default function PostsGrid({ userId, variant }: Props) {
           key={item.id}
           style={styles.tile}
           activeOpacity={0.85}
-          onPress={() => router.push((variant === 'stories' ? `/stories/${item.id}` : `/post/${item.id}`) as any)}
+          onPress={() => router.push(routeFor(item.id) as any)}
         >
           {item.cover ? (
-            <Image source={{ uri: item.cover }} style={styles.thumb} contentFit="cover" />
+            variant === 'reels' ? (
+              <View style={styles.thumb}>
+                <Image source={{ uri: item.cover }} style={styles.thumb} contentFit="cover" />
+                <Ionicons name="play" size={16} color="#FFF" style={styles.reelPlayIcon} />
+              </View>
+            ) : (
+              <Image source={{ uri: item.cover }} style={styles.thumb} contentFit="cover" />
+            )
           ) : (
             <View style={[styles.thumb, styles.thumbPlaceholder]}>
-              <Ionicons name={variant === 'stories' ? 'book-outline' : 'document-text-outline'} size={22} color="rgba(255,255,255,0.25)" />
+              <Ionicons name={EMPTY_ICON[variant]} size={22} color="rgba(255,255,255,0.25)" />
             </View>
           )}
         </TouchableOpacity>
@@ -93,6 +115,7 @@ const styles = StyleSheet.create({
   tile: { width: TILE_SIZE, height: TILE_SIZE },
   thumb: { width: '100%', height: '100%' },
   thumbPlaceholder: { backgroundColor: AppColors.card, alignItems: 'center', justifyContent: 'center' },
+  reelPlayIcon: { position: 'absolute', top: 6, right: 6 },
   empty: { alignItems: 'center', paddingVertical: Spacing.xxl * 1.5, gap: Spacing.sm },
   emptyText: { color: AppColors.subtext, fontSize: 13.5, fontWeight: '600' },
 });

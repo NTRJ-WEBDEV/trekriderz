@@ -32,16 +32,24 @@ export default function TripEnquiryForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
+    const payload = {
+      trip_id: tripId,
+      trip_name: tripName,
+      ...form,
+      group_size: parseInt(form.group_size),
+      status: "new",
+    };
     try {
-      await supabase.from("enquiries").insert({
-        trip_id: tripId,
-        trip_name: tripName,
-        ...form,
-        group_size: parseInt(form.group_size),
-        status: "new",
-      });
+      const { data, error, status: httpStatus } = await supabase.from("enquiries").insert(payload).select();
+      // TEMPORARY — remove once the enquiries insert path is confirmed
+      // working end-to-end; this is what silently failed before (the
+      // returned `error` was never checked, so the form always showed
+      // "Enquiry sent!" regardless of whether the row was written).
+      console.log("[TripEnquiryForm] insert result", { payload, data, error, httpStatus });
+      if (error) throw error;
       setStatus("done");
-    } catch {
+    } catch (err) {
+      console.error("[TripEnquiryForm] insert failed", err);
       setStatus("error");
     }
   };

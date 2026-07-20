@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { uploadMedia } from '@/lib/storage';
+import { uploadHomestayPhoto } from '@/lib/services/MediaService';
 import { useAuthStore } from '@/stores/authStore';
 import { searchPlaces, GeocodeResult } from '@/lib/geocoding';
 import MapPickerModal from '@/components/MapPickerModal';
@@ -272,8 +273,7 @@ export default function CreatePropertyScreen() {
       for (let i = 0; i < uris.length; i++) {
         const uri = uris[i];
         const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-        const path = `properties/${user?.id}/${Date.now()}/photo_${startIdx + i}.${ext}`;
-        const url = await uploadMedia('homestays', path, uri, `image/${ext}`);
+        const url = await uploadHomestayPhoto(user?.id || '', uri, `image/${ext}`);
         if (!url) throw new Error('Failed to upload photo');
         setPhotoUrls(prev => {
           const next = [...prev];
@@ -408,8 +408,7 @@ export default function CreatePropertyScreen() {
         for (let i = 0; i < uris.length; i++) {
           const uri = uris[i];
           const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-          const path = `properties/${user?.id}/rooms/${draft.id}/photo_${startIdx + i}_${Date.now()}.${ext}`;
-          const url = await uploadMedia('homestays', path, uri, `image/${ext}`);
+          const url = await uploadHomestayPhoto(user?.id || '', uri, `image/${ext}`);
           if (!url) throw new Error('Failed to upload photo');
           setDraft(d => {
             const next = [...d.photoUrls];

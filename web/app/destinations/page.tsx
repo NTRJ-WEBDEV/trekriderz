@@ -79,20 +79,23 @@ const DESTINATIONS = [
   },
 ];
 
+// `trips` has no `country` column — counts are approximated by matching
+// the free-text `destination` field against each country/region name.
 async function getTripCountsByCountry() {
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
-    const { data } = await supabase
-      .from("trips")
-      .select("country")
-      .eq("status", "active");
+    const { data } = await supabase.from("trips").select("destination").eq("is_public", true);
     if (!data) return {};
     const counts: Record<string, number> = {};
-    data.forEach((t) => {
-      counts[t.country] = (counts[t.country] || 0) + 1;
+    data.forEach((t: any) => {
+      for (const country of DESTINATIONS.map((d) => d.country)) {
+        if ((t.destination || "").toLowerCase().includes(country.toLowerCase())) {
+          counts[country] = (counts[country] || 0) + 1;
+        }
+      }
     });
     return counts;
   } catch {
@@ -167,7 +170,7 @@ export default async function DestinationsPage() {
 
                   <div className="flex items-center gap-4">
                     <Link
-                      href={`/trips?country=${d.country}`}
+                      href={`/trips?destination=${d.country}`}
                       className="btn-accent px-6 py-2.5 rounded-full font-bold text-sm"
                     >
                       {tripCount > 0

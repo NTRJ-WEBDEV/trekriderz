@@ -9,7 +9,7 @@ type Tab = 'posts' | 'stories' | 'reels' | 'tagged';
 const TABS: { key: Tab; icon: keyof typeof Ionicons.glyphMap; enabled: boolean }[] = [
   { key: 'posts', icon: 'grid-outline', enabled: true },
   { key: 'stories', icon: 'book-outline', enabled: true },
-  { key: 'reels', icon: 'play-circle-outline', enabled: false },
+  { key: 'reels', icon: 'play-circle-outline', enabled: true },
   { key: 'tagged', icon: 'pricetag-outline', enabled: false },
 ];
 
@@ -17,8 +17,8 @@ interface Props {
   userId: string;
 }
 
-// Posts + Travel Stories are live today. Reels and Tagged are reserved
-// tab slots for features with no backend yet — visible (so the tab bar's
+// Posts + Travel Stories + Reels are live today. Tagged is a reserved
+// tab slot for a feature with no backend yet — visible (so the tab bar's
 // final shape is already in place) but disabled rather than hidden.
 export default function ProfileContentTabs({ userId }: Props) {
   const [active, setActive] = useState<Tab>('posts');
@@ -44,7 +44,7 @@ export default function ProfileContentTabs({ userId }: Props) {
       </View>
 
       <View style={styles.content}>
-        {(active === 'posts' || active === 'stories') && (
+        {(active === 'posts' || active === 'stories' || active === 'reels') && (
           <PostsGrid userId={userId} variant={active} />
         )}
       </View>

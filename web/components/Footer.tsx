@@ -3,20 +3,26 @@ import type { SiteSettings } from "@/lib/site-settings";
 
 const EXPLORE_LINKS = [
   ["Treks & Tours", "/trips"],
-  ["International Tours", "/trips?country=Nepal"],
+  ["Guides", "/guides"],
+  ["Homestays", "/homestays"],
+  ["Rentals", "/rentals"],
+  ["Travel Stories", "/stories"],
+  ["Community", "/community"],
   ["Special Packages", "/special"],
   ["Plan My Custom Trip", "/plan"],
   ["Watch Videos", "/videos"],
+  ["FAQ", "/faq"],
+  ["Contact", "/contact"],
   ["About TrekRiderz", "/about"],
 ];
 
 const DESTINATIONS = [
-  ["India — Western Ghats", "/trips?country=India"],
-  ["Nepal", "/trips?country=Nepal"],
-  ["Bhutan", "/trips?country=Bhutan"],
-  ["Philippines", "/trips?country=Philippines"],
-  ["Indonesia", "/trips?country=Indonesia"],
-  ["Cambodia", "/trips?country=Cambodia"],
+  ["India — Western Ghats", "/trips?destination=India"],
+  ["Nepal", "/trips?destination=Nepal"],
+  ["Bhutan", "/trips?destination=Bhutan"],
+  ["Philippines", "/trips?destination=Philippines"],
+  ["Indonesia", "/trips?destination=Indonesia"],
+  ["Cambodia", "/trips?destination=Cambodia"],
 ];
 
 interface FooterProps {

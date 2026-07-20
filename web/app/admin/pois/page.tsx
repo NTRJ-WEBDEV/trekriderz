@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { logAdminAction } from "@/lib/services/AuditService";
 
 interface Poi {
   id: string;
@@ -83,6 +84,7 @@ export default function PoiSubmissionsPage() {
     } else {
       setPois((prev) => prev.filter((p) => p.id !== poi.id));
       showToast(`"${poi.name}" approved — now live on the map`);
+      await logAdminAction({ action: "poi.approved", entityType: "poi", entityId: poi.id, newValue: { status: "approved" } });
     }
     setActioningId(null);
   };
@@ -105,6 +107,7 @@ export default function PoiSubmissionsPage() {
     } else {
       setPois((prev) => prev.filter((p) => p.id !== rejectTarget.id));
       showToast(`"${rejectTarget.name}" rejected`);
+      await logAdminAction({ action: "poi.rejected", entityType: "poi", entityId: rejectTarget.id, reason: rejectReason.trim(), newValue: { status: "rejected" } });
     }
     setActioningId(null);
     setRejectTarget(null);

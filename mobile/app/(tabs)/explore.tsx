@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  RefreshControl, StatusBar, Image, ScrollView, Alert,
+  RefreshControl, StatusBar, Image, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -55,7 +55,7 @@ function ComposerTeaser({ avatarUrl }: { avatarUrl: string }) {
       </TouchableOpacity>
       <View style={styles.quickActionsRow}>
         <QuickAction icon="camera-outline" label="Photo" color={AppColors.primary} onPress={() => router.push('/post/create' as any)} />
-        <QuickAction icon="videocam-outline" label="Reel" color="#F43F5E" onPress={() => Alert.alert('Coming Soon', 'Reels are on their way — stay tuned!')} />
+        <QuickAction icon="videocam-outline" label="Reel" color="#F43F5E" onPress={() => router.push('/post/create?mode=reel' as any)} />
         <QuickAction icon="location-outline" label="Check-in" color="#F97316" onPress={() => router.push({ pathname: '/post/create', params: { focus: 'location' } } as any)} />
         <QuickAction icon="book-outline" label="Article" color={AppColors.primary} onPress={() => router.push('/stories/create' as any)} />
       </View>
@@ -132,6 +132,7 @@ export default function ExploreScreen() {
         saved: savedIds.has(p.id),
         trip_id: p.trip_id,
         trip: p.trip_id ? tripsMap[p.trip_id] || undefined : undefined,
+        post_type: p.post_type,
       })));
     } catch (error) {
       console.error('Feed error:', error);

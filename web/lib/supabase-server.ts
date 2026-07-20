@@ -26,8 +26,15 @@ export async function getAdminSession() {
   if (!user) return null;
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, staff_role:roles(key, name)')
     .eq('id', user.id)
     .single();
-  return profile ? { user, profile } : null;
+  // `profiles` rows are auto-created for every auth.users signup (mobile app
+  // customers included) with the legacy `role` text column defaulting to
+  // 'moderator' — that text value is NOT proof of staff access. Only an
+  // explicitly-granted `role_id` (via the RBAC migration or Team screen) is.
+  if (!profile || !profile.role_id) return null;
+  const { data: permissionRows } = await supabase.rpc('my_permissions');
+  const permissions = (permissionRows || []).map((r: { permission_key: string }) => r.permission_key);
+  return { user, profile, permissions };
 }

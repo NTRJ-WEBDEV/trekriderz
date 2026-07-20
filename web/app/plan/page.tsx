@@ -42,11 +42,6 @@ const INITIAL: FormData = {
   preferred_month: "Flexible", name: "", whatsapp: "", email: "",
 };
 
-const SAMPLE_TRIPS: Trip[] = [
-  { id: "coorg-coffee-trail", name: "Coorg Coffee Trail Trek", type: "trek", country: "India", destination: "Coorg, Karnataka", duration_days: 3, price_inr: 4999, difficulty: "easy" },
-  { id: "nepal-abc", name: "Nepal Annapurna Base Camp", type: "trek", country: "Nepal", destination: "Annapurna, Nepal", duration_days: 12, price_inr: 28999, difficulty: "challenging" },
-];
-
 export default function PlanPage() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
@@ -81,13 +76,14 @@ export default function PlanPage() {
         status: "new",
       });
 
-      // Try to find matching trips
+      // Try to find matching trips — no `country` column exists on trips
+      // (that concept lives only in the custom_enquiries record just
+      // saved above), so matching here is on fitness/difficulty only.
       let query = supabase
         .from("trips")
-        .select("id,name,type,country,destination,duration_days,price_inr,difficulty,special_tag,cover_image")
-        .eq("status", "active");
+        .select("id,title,trip_type,destination,start_date,end_date,price_usd,difficulty,is_featured,cover_photo_url")
+        .eq("is_public", true);
 
-      if (form.countries.length > 0) query = query.in("country", form.countries);
       if (form.fitness !== "") query = query.eq("difficulty", form.fitness);
 
       const { data } = await query.limit(3);
@@ -96,18 +92,7 @@ export default function PlanPage() {
         setMatches(data as Trip[]);
         setStatus("done");
       } else {
-        // Show sample matches or no_match
-        const fallback = SAMPLE_TRIPS.filter(
-          (t) =>
-            (form.countries.length === 0 || form.countries.includes(t.country || "")) &&
-            (form.fitness === "" || t.difficulty === form.fitness)
-        );
-        if (fallback.length > 0) {
-          setMatches(fallback);
-          setStatus("done");
-        } else {
-          setStatus("no_match");
-        }
+        setStatus("no_match");
       }
     } catch {
       setStatus("no_match");

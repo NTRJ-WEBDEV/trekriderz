@@ -22,19 +22,26 @@ export default function SpecialEnquiryForm({ type }: { type: "birthday" | "anniv
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
+    const payload = {
+      trip_name: `${label} Trip`,
+      name: form.name,
+      email: form.email || null,
+      whatsapp: form.whatsapp,
+      group_size: parseInt(form.group_size),
+      preferred_date: form.preferred_date,
+      message: `[${label} Package] ${form.message}`,
+      status: "new",
+    };
     try {
-      await supabase.from("enquiries").insert({
-        trip_name: `${label} Trip`,
-        name: form.name,
-        email: form.email || null,
-        whatsapp: form.whatsapp,
-        group_size: parseInt(form.group_size),
-        preferred_date: form.preferred_date,
-        message: `[${label} Package] ${form.message}`,
-        status: "new",
-      });
+      const { data, error, status: httpStatus } = await supabase.from("enquiries").insert(payload).select();
+      // TEMPORARY — same silent-failure bug as TripEnquiryForm had:
+      // the returned error was never checked, so this always showed
+      // success regardless of whether the row was written.
+      console.log("[SpecialEnquiryForm] insert result", { payload, data, error, httpStatus });
+      if (error) throw error;
       setStatus("done");
-    } catch {
+    } catch (err) {
+      console.error("[SpecialEnquiryForm] insert failed", err);
       setStatus("error");
     }
   };

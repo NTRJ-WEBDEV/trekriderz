@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadImage } from '@/lib/storage';
+import { uploadProfilePhoto } from '@/lib/services/MediaService';
 import { Ionicons } from '@expo/vector-icons';
 import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 import { AppColors } from '@/constants/theme';
@@ -83,8 +83,7 @@ export default function EditProfileScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         setSaving(true);
         const localUri = result.assets[0].uri;
-        const path = `${user?.id}/avatar-${Date.now()}.jpg`;
-        const publicUrl = await uploadImage('avatars', path, localUri);
+        const publicUrl = await uploadProfilePhoto(user?.id || '', localUri);
         if (publicUrl) {
           setForm(prev => ({ ...prev, avatar_url: publicUrl }));
         } else {

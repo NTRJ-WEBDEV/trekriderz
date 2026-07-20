@@ -8,9 +8,10 @@ import { BUSINESS_WA } from "@/lib/constants";
 const NAV_LINKS = [
   { href: "/trips", label: "Treks & Tours" },
   { href: "/destinations", label: "Destinations" },
-  { href: "/special", label: "Special" },
-  { href: "/plan", label: "Plan My Trip" },
-  { href: "/videos", label: "Videos" },
+  { href: "/guides", label: "Guides" },
+  { href: "/homestays", label: "Homestays" },
+  { href: "/stories", label: "Stories" },
+  { href: "/community", label: "Community" },
   { href: "/about", label: "About" },
 ];
 
@@ -62,6 +63,11 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link href="/search" aria-label="Search" className="hidden lg:inline-flex p-2 text-white/70 hover:text-accent transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+          </Link>
           <Link
             href="/plan"
             className="hidden lg:inline-flex btn-accent px-5 py-2 rounded-full text-sm"

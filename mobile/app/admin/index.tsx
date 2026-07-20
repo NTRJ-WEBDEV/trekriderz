@@ -10,6 +10,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { AppColors, Radius } from '@/constants/theme';
+import { approveListing, rejectListing, ApprovalEntity } from '@/lib/services/ApprovalService';
+import { logAdminAction } from '@/lib/services/AuditService';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -30,6 +33,18 @@ interface Stats {
 
 export default function AdminDashboard() {
   const { user } = useAuthStore();
+  // The bottom-tab admin button already checks this, but the screen itself
+  // had no guard — reachable directly via deep link or router.push('/admin')
+  // by any signed-in user regardless of role. Reads the same shared RBAC
+  // system Web Admin uses (profiles.role_id), not public.users.role.
+  const { isStaff, loading: permissionsLoading, hasPermission } = usePermissions();
+  const roleChecked = !permissionsLoading;
+  const isAdmin = isStaff;
+  useEffect(() => {
+    if (!user?.id) { router.replace('/(tabs)/explore'); return; }
+    if (!permissionsLoading && !isStaff) router.replace('/(tabs)/explore');
+  }, [user?.id, permissionsLoading, isStaff]);
+
   const [tab, setTab] = useState<Tab>('homestays');
   const [stats, setStats] = useState<Stats>({ users: 0, pendingHomestays: 0, pendingGuides: 0, activeTrips: 0 });
   const [homestays, setHomestays] = useState<any[]>([]);
@@ -47,7 +62,7 @@ export default function AdminDashboard() {
 
   // Moderation state
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
-  const [rejectType, setRejectType] = useState<'homestays' | 'guides'>('homestays');
+  const [rejectType, setRejectType] = useState<ApprovalEntity>('homestays');
   const [roleModal, setRoleModal] = useState<{ userId: string; currentRole: string } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -136,46 +151,27 @@ export default function AdminDashboard() {
 
   // ── Moderation ────────────────────────────────────────────────────────────
 
-  const handleApprove = async (id: string, type: 'homestays' | 'guides') => {
+  const handleApprove = async (id: string, type: ApprovalEntity) => {
     setActionLoading(id);
     try {
-      const table = type === 'homestays' ? 'properties' : 'guides';
-      const { error } = await supabase
-        .from(table)
-        .update(
-          type === 'homestays'
-            ? { status: 'approved', approved_at: new Date().toISOString(), approved_by: user?.id }
-            : { status: 'approved', verified_at: new Date().toISOString(), verified_by: user?.id }
-        )
-        .eq('id', id);
-      if (error) throw error;
-
-      const item = type === 'homestays' ? homestays.find(h => h.id === id) : guides.find(g => g.id === id);
-      const recipientId = type === 'homestays' ? item?.owner_id : item?.user_id;
-      if (recipientId) {
-        // 'system' isn't a valid notifications.type value (see
-        // notifications_type_check) — this insert was failing the CHECK
-        // constraint on every homestay approval, silently, since the error
-        // was never checked. 'homestay_approved' was already the type this
-        // was meant to use, and is already in the constraint.
-        const { error: notifyError } = await supabase.from('notifications').insert({
-          user_id: recipientId,
-          type: type === 'homestays' ? 'homestay_approved' : 'guide_approved',
-          title: `${type === 'homestays' ? 'Property' : 'Guide profile'} Approved!`,
-          message: `Your ${type === 'homestays' ? 'property listing' : 'guide profile'} has been verified on TrekRiderz.`,
-          related_id: id,
-        });
-        if (notifyError) console.error('Failed to notify approval:', notifyError);
-      }
+      const item = type === 'homestays' ? homestays.find(h => h.id === id)
+        : type === 'guides' ? guides.find(g => g.id === id)
+        : vehicles.find(v => v.id === id);
+      const ownerId = type === 'guides' ? item?.user_id : item?.owner_id;
+      await approveListing(type, id, ownerId, user?.id || '');
 
       if (type === 'homestays') setHomestays(prev => prev.filter(h => h.id !== id));
-      else setGuides(prev => prev.filter(g => g.id !== id));
+      else if (type === 'guides') setGuides(prev => prev.filter(g => g.id !== id));
+      else setVehicles(prev => prev.map(v => v.id === id ? { ...v, status: 'approved' } : v));
+
       setStats(prev => ({
         ...prev,
         pendingHomestays: type === 'homestays' ? prev.pendingHomestays - 1 : prev.pendingHomestays,
         pendingGuides: type === 'guides' ? prev.pendingGuides - 1 : prev.pendingGuides,
       }));
-      Alert.alert('Approved', `${type === 'homestays' ? 'Homestay' : 'Guide'} has been verified successfully.`);
+      if (type !== 'vehicles') {
+        Alert.alert('Approved', `${type === 'homestays' ? 'Homestay' : 'Guide'} has been verified successfully.`);
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not approve. Try again.');
     } finally {
@@ -183,7 +179,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const openRejectModal = (id: string, type: 'homestays' | 'guides') => {
+  const openRejectModal = (id: string, type: ApprovalEntity) => {
     setRejectModalId(id);
     setRejectType(type);
     setRejectReason('');
@@ -197,29 +193,16 @@ export default function AdminDashboard() {
     }
     setActionLoading(rejectModalId);
     try {
-      const table = rejectType === 'homestays' ? 'properties' : 'guides';
-      const { error } = await supabase
-        .from(table)
-        .update({ status: 'rejected', rejection_reason: rejectReason.trim() })
-        .eq('id', rejectModalId);
-      if (error) throw error;
-
-      const item = rejectType === 'homestays'
-        ? homestays.find(h => h.id === rejectModalId)
-        : guides.find(g => g.id === rejectModalId);
-      const recipientId = rejectType === 'homestays' ? item?.owner_id : item?.user_id;
-      if (recipientId) {
-        await supabase.from('notifications').insert({
-          user_id: recipientId,
-          type: 'system',
-          title: `${rejectType === 'homestays' ? 'Property' : 'Guide profile'} Not Approved`,
-          message: rejectReason.trim(),
-          related_id: rejectModalId,
-        });
-      }
+      const item = rejectType === 'homestays' ? homestays.find(h => h.id === rejectModalId)
+        : rejectType === 'guides' ? guides.find(g => g.id === rejectModalId)
+        : vehicles.find(v => v.id === rejectModalId);
+      const ownerId = rejectType === 'guides' ? item?.user_id : item?.owner_id;
+      await rejectListing(rejectType, rejectModalId, ownerId, rejectReason.trim());
 
       if (rejectType === 'homestays') setHomestays(prev => prev.filter(h => h.id !== rejectModalId));
-      else setGuides(prev => prev.filter(g => g.id !== rejectModalId));
+      else if (rejectType === 'guides') setGuides(prev => prev.filter(g => g.id !== rejectModalId));
+      else setVehicles(prev => prev.filter(v => v.id !== rejectModalId));
+
       setStats(prev => ({
         ...prev,
         pendingHomestays: rejectType === 'homestays' ? prev.pendingHomestays - 1 : prev.pendingHomestays,
@@ -340,10 +323,11 @@ export default function AdminDashboard() {
 
   const selectRole = async (role: string) => {
     if (!roleModal) return;
-    const { userId } = roleModal;
+    const { userId, currentRole } = roleModal;
     try {
       await supabase.from('users').update({ role }).eq('id', userId);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u));
+      await logAdminAction({ action: 'user.role_changed', entityType: 'user', entityId: userId, previousValue: { role: currentRole }, newValue: { role } });
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not update role.');
     } finally {
@@ -370,6 +354,14 @@ export default function AdminDashboard() {
   // ── Tab content ───────────────────────────────────────────────────────────
 
   const pendingList = tab === 'homestays' ? homestays : guides;
+
+  if (!roleChecked || !isAdmin) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={GREEN} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -414,17 +406,20 @@ export default function AdminDashboard() {
             <StatCard icon="map-outline" label="Active Trips" value={stats.activeTrips} color={GREEN} />
           </View>
 
-          {/* Section Tabs — horizontal scroll */}
+          {/* Section Tabs — horizontal scroll, filtered by permission so a
+              narrowly-scoped role (e.g. Guide Manager) only sees the tabs
+              it can actually act on, instead of every tab being hardcoded
+              visible to any admin. */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.sectionTabs}>
             {([
-              { key: 'homestays', label: 'Homestays', icon: 'home-outline', badge: stats.pendingHomestays },
-              { key: 'guides', label: 'Guides', icon: 'ribbon-outline', badge: stats.pendingGuides },
-              { key: 'expeditions', label: 'Expeditions', icon: 'map-outline', badge: 0 },
-              { key: 'communities', label: 'Communities', icon: 'people-outline', badge: 0 },
-              { key: 'users', label: 'Users', icon: 'person-outline', badge: flaggedUsers.length },
-              { key: 'vehicles', label: 'Vehicles', icon: 'car-outline', badge: 0 },
-              { key: 'reports', label: 'Reports', icon: 'flag-outline', badge: reports.length + contentReports.length },
-            ] as const).map((t) => (
+              { key: 'homestays', label: 'Homestays', icon: 'home-outline', badge: stats.pendingHomestays, permission: 'homestays.approve' },
+              { key: 'guides', label: 'Guides', icon: 'ribbon-outline', badge: stats.pendingGuides, permission: 'guides.approve' },
+              { key: 'expeditions', label: 'Expeditions', icon: 'map-outline', badge: 0, permission: 'expeditions.manage' },
+              { key: 'communities', label: 'Communities', icon: 'people-outline', badge: 0, permission: 'communities.manage' },
+              { key: 'users', label: 'Users', icon: 'person-outline', badge: flaggedUsers.length, permission: 'users.ban' },
+              { key: 'vehicles', label: 'Vehicles', icon: 'car-outline', badge: 0, permission: 'rentals.approve' },
+              { key: 'reports', label: 'Reports', icon: 'flag-outline', badge: reports.length + contentReports.length, permission: 'reports.resolve' },
+            ] as const).filter(t => hasPermission(t.permission)).map((t) => (
               <TouchableOpacity
                 key={t.key}
                 style={[styles.sectionTab, tab === t.key && styles.sectionTabActive]}
@@ -548,6 +543,7 @@ export default function AdminDashboard() {
                       onUnflag={async () => {
                         await supabase.from('users').update({ is_flagged: false, flag_reason: null }).eq('id', u.id);
                         setFlaggedUsers(prev => prev.filter(x => x.id !== u.id));
+                        await logAdminAction({ action: 'user.unflagged', entityType: 'user', entityId: u.id });
                       }}
                       onBan={async () => {
                         Alert.alert('Ban User', `Ban ${u.full_name || u.email}? They will be blocked from posting.`, [
@@ -555,6 +551,7 @@ export default function AdminDashboard() {
                           { text: 'Ban', style: 'destructive', onPress: async () => {
                             await supabase.from('users').update({ is_banned: true, is_flagged: false }).eq('id', u.id);
                             setFlaggedUsers(prev => prev.filter(x => x.id !== u.id));
+                            await logAdminAction({ action: 'user.banned', entityType: 'user', entityId: u.id, newValue: { is_banned: true } });
                           }},
                         ]);
                       }}
@@ -583,13 +580,10 @@ export default function AdminDashboard() {
                   <Text style={styles.emptyText}>No vehicles yet</Text>
                 </View>
               ) : vehicles.map(v => (
-                <VehicleAdminRow key={v.id} item={v} onApprove={async () => {
-                  await supabase.from('rental_vehicles').update({ status: 'approved' }).eq('id', v.id);
-                  setVehicles(prev => prev.map(x => x.id === v.id ? { ...x, status: 'approved' } : x));
-                }} onReject={async () => {
-                  await supabase.from('rental_vehicles').update({ status: 'rejected' }).eq('id', v.id);
-                  setVehicles(prev => prev.filter(x => x.id !== v.id));
-                }} />
+                <VehicleAdminRow key={v.id} item={v}
+                  onApprove={() => handleApprove(v.id, 'vehicles')}
+                  onReject={() => openRejectModal(v.id, 'vehicles')}
+                />
               ))}
             </>
           )}
@@ -627,6 +621,7 @@ export default function AdminDashboard() {
                 <ReportRow key={r.id} item={r} onDismiss={async () => {
                   await supabase.from('post_reports').update({ status: 'dismissed' }).eq('id', r.id);
                   setReports(prev => prev.filter(x => x.id !== r.id));
+                  await logAdminAction({ action: 'report.dismissed', entityType: 'post_report', entityId: r.id });
                 }} onRemove={async () => {
                   Alert.alert('Remove Post', 'Delete the reported post?', [
                     { text: 'Cancel', style: 'cancel' },
@@ -635,6 +630,7 @@ export default function AdminDashboard() {
                       if (postId) await supabase.from('posts').delete().eq('id', postId);
                       await supabase.from('post_reports').update({ status: 'actioned' }).eq('id', r.id);
                       setReports(prev => prev.filter(x => x.id !== r.id));
+                      await logAdminAction({ action: 'report.actioned', entityType: 'post_report', entityId: r.id, metadata: { deleted_post_id: postId } });
                     }},
                   ]);
                 }} />
@@ -652,6 +648,7 @@ export default function AdminDashboard() {
                 <ContentReportRow key={r.id} item={r} onDismiss={async () => {
                   await supabase.from('content_reports').update({ status: 'dismissed' }).eq('id', r.id);
                   setContentReports(prev => prev.filter(x => x.id !== r.id));
+                  await logAdminAction({ action: 'report.dismissed', entityType: 'content_report', entityId: r.id });
                 }} onRemove={async () => {
                   const table = r.content_type === 'story' ? 'stories_24h' : 'community_posts';
                   Alert.alert('Remove Content', 'Hide this content permanently?', [
@@ -660,6 +657,7 @@ export default function AdminDashboard() {
                       await supabase.from(table).update({ is_hidden: true }).eq('id', r.content_id);
                       await supabase.from('content_reports').update({ status: 'actioned' }).eq('id', r.id);
                       setContentReports(prev => prev.filter(x => x.id !== r.id));
+                      await logAdminAction({ action: 'report.actioned', entityType: 'content_report', entityId: r.id, metadata: { content_table: table, content_id: r.content_id } });
                     }},
                   ]);
                 }} />

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useExpeditionStore } from '@/stores/expeditionStore';
 import { checkGuideIsPremium, getMyGuideProfile } from '@/lib/expeditions';
 import PremiumGuardBanner from '@/components/PremiumGuardBanner';
@@ -32,6 +33,7 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string }> = 
 
 export default function CreateExpeditionScreen() {
   const { user } = useAuthStore();
+  const { hasPermission } = usePermissions();
   const { createAndPublishExpedition } = useExpeditionStore();
 
   const [initLoading, setInitLoading] = useState(true);
@@ -88,7 +90,11 @@ export default function CreateExpeditionScreen() {
     );
   }
 
-  const isAdmin = (user as any)?.role === 'admin';
+  // Was `(user as any)?.role === 'admin'` — user comes from useAuthStore's
+  // raw Supabase Auth object, whose own `role` field is GoTrue's
+  // ("authenticated"), never the app's admin role. This silently made the
+  // admin bypass below unreachable; hasPermission() reads the real RBAC data.
+  const isAdmin = hasPermission('expeditions.manage');
 
   if ((!isPremium || !guideId) && !isAdmin) {
     return (

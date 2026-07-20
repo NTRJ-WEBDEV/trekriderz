@@ -6,5 +6,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // No redirect here — middleware.ts handles all /admin/* auth redirects.
   // If there's no session (e.g. /admin/login), just render children without the sidebar.
   if (!session) return <>{children}</>;
-  return <AdminShell profile={session.profile}>{children}</AdminShell>;
+  return <AdminShell profile={session.profile} permissions={session.permissions}>{children}</AdminShell>;
 }

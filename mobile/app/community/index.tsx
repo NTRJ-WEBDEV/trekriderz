@@ -8,6 +8,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { AppColors } from '@/constants/theme';
 
 const BG = AppColors.background;
@@ -39,6 +40,7 @@ interface CommunityItem {
 
 export default function CommunityListScreen({ embedded }: { embedded?: boolean } = {}) {
   const { user } = useAuthStore();
+  const { hasPermission } = usePermissions();
   const [communities, setCommunities] = useState<CommunityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
@@ -51,13 +53,11 @@ export default function CommunityListScreen({ embedded }: { embedded?: boolean }
     if (!user?.id) return;
     setLoading(true);
     try {
-      // Check creation eligibility: admin or premium approved guide
-      const [{ data: userData }, { data: guideData }] = await Promise.all([
-        supabase.from('users').select('role').eq('id', user.id).single(),
-        supabase.from('guides').select('is_premium, status').eq('user_id', user.id).maybeSingle(),
-      ]);
+      // Check creation eligibility: staff with communities.manage, or a premium approved guide
+      const { data: guideData } = await supabase
+        .from('guides').select('is_premium, status').eq('user_id', user.id).maybeSingle();
       setCanCreate(
-        userData?.role === 'admin' ||
+        hasPermission('communities.manage') ||
         (guideData?.status === 'approved' && guideData?.is_premium === true)
       );
 

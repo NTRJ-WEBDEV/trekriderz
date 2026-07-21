@@ -25,6 +25,7 @@ export interface KPI {
   value: number;
   delta: number | null; // vs. previous day; null when not tracked
   href?: string;
+  tracked?: boolean; // false = no real backing data yet (e.g. revenue while payments are mock); defaults to true
 }
 
 export interface ActivityLogRow {
@@ -426,7 +427,8 @@ export async function getSystemHealth(): Promise<SystemHealth> {
 // Component page; RewardEngineService itself stays browser-client-based
 // for the interactive /admin/community-champions page.
 export async function getChampionsPreview(
-  hasPermission: (key: string) => boolean
+  hasPermission: (key: string) => boolean,
+  limit = 5
 ): Promise<{ campaign: RewardCampaign | null; candidates: RewardCandidate[] }> {
   if (!hasPermission('reward_campaigns.view')) return { campaign: null, candidates: [] };
   const supabase = await createSupabaseServer();
@@ -447,7 +449,7 @@ export async function getChampionsPreview(
     .select('*, users:user_id(full_name, email, avatar_url)')
     .eq('campaign_id', campaign.id)
     .order('activity_score', { ascending: false })
-    .limit(5);
+    .limit(limit);
 
   const candidates = ((candidateRows as any[]) || []).map((r) => ({
     ...r,
@@ -458,4 +460,77 @@ export async function getChampionsPreview(
   })) as RewardCandidate[];
 
   return { campaign: campaign as RewardCampaign, candidates };
+}
+
+// Real booking-type breakdown from the existing generic `bookings` table
+// (resource_type: 'homestay' | 'guide' | 'gear') plus a real pending-
+// payments sum. Revenue/commission are NOT computed — Razorpay is in
+// offline/mock mode (see CLAUDE.md), so those stay `tracked: false`
+// rather than showing a number backed by fake payment data.
+export async function getBusinessKpis(hasPermission: (key: string) => boolean): Promise<KPI[]> {
+  if (!hasPermission('bookings.view')) return [];
+  const supabase = await createSupabaseServer();
+
+  const [tripBookings, rentalBookings, homestayBookings, pendingPaymentRows, appUsers] = await Promise.all([
+    headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'guide')),
+    headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'gear')),
+    headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'homestay')),
+    supabase.from('bookings').select('total_price').eq('payment_status', 'unpaid'),
+    hasPermission('users.view') ? headCount(supabase, 'users', (q) => q) : Promise.resolve(0),
+  ]);
+
+  const pendingTotal = ((pendingPaymentRows.data as any[]) || []).reduce((sum, r) => sum + (Number(r.total_price) || 0), 0);
+
+  const kpis: KPI[] = [
+    { key: 'trip_bookings', label: 'Trip Bookings', value: tripBookings, delta: null, href: '/admin/trips' },
+    { key: 'rental_bookings', label: 'Rental Bookings', value: rentalBookings, delta: null, href: '/admin/rentals' },
+    { key: 'homestay_bookings', label: 'Homestay Bookings', value: homestayBookings, delta: null, href: '/admin/homestays' },
+    { key: 'pending_payments', label: 'Pending Payments (Rs.)', value: Math.round(pendingTotal), delta: null, href: '/admin/trips' },
+    { key: 'revenue', label: 'Revenue', value: 0, delta: null, tracked: false },
+    { key: 'commission', label: 'Commission', value: 0, delta: null, tracked: false },
+  ];
+  if (hasPermission('users.view')) kpis.push({ key: 'app_users', label: 'App Users', value: appUsers, delta: null, href: '/admin/users' });
+  kpis.push({ key: 'website_visitors', label: 'Website Visitors', value: 0, delta: null, tracked: false });
+  return kpis;
+}
+
+// "Today's Operations" — same guided_expeditions data as
+// getUpcomingOperations, split into today vs. tomorrow rather than one
+// N-day-ahead list. No new table, no new query shape — just a tighter
+// date window for the Mission Control "what's running today" section.
+export async function getTodaysOperations(
+  hasPermission: (key: string) => boolean
+): Promise<{ today: UpcomingExpedition[]; tomorrow: UpcomingExpedition[] }> {
+  if (!hasPermission('expeditions.manage') && !hasPermission('trips.view')) return { today: [], tomorrow: [] };
+  const supabase = await createSupabaseServer();
+
+  const todayStart = startOfToday();
+  const tomorrowStart = new Date(todayStart.getTime() + 86400000);
+  const dayAfter = new Date(todayStart.getTime() + 2 * 86400000);
+
+  const { data } = await supabase
+    .from('guided_expeditions')
+    .select('id, title, start_date, end_date, max_seats, booked_seats, status, guide_id, guides:guide_id(full_name, name)')
+    .eq('status', 'published')
+    .gte('start_date', todayStart.toISOString())
+    .lt('start_date', dayAfter.toISOString())
+    .order('start_date', { ascending: true });
+
+  const rows = ((data as any[]) || []).map((e) => {
+    const warnings: string[] = [];
+    const seatsLeft = (e.max_seats || 0) - (e.booked_seats || 0);
+    if (seatsLeft <= 0) warnings.push('No seats left');
+    if (!e.guide_id) warnings.push('Guide not assigned');
+    return {
+      id: e.id, title: e.title, start_date: e.start_date, end_date: e.end_date,
+      max_seats: e.max_seats, booked_seats: e.booked_seats, status: e.status,
+      guide_name: e.guides?.full_name || e.guides?.name || null,
+      warnings,
+    } as UpcomingExpedition;
+  });
+
+  return {
+    today: rows.filter((r) => new Date(r.start_date) < tomorrowStart),
+    tomorrow: rows.filter((r) => new Date(r.start_date) >= tomorrowStart),
+  };
 }

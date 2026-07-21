@@ -1,8 +1,10 @@
+import pkg from "../../package.json";
 import { getAdminSession } from "@/lib/supabase-server";
 import {
-  getOperationsInbox, getTodayKpis, getRecentActivity, getUpcomingOperations,
-  getRecentEnquiries, getCommunityHealth, getSystemHealth, getChampionsPreview,
+  getOperationsInbox, getTodayKpis, getBusinessKpis, getRecentActivity, getUpcomingOperations,
+  getTodaysOperations, getRecentEnquiries, getCommunityHealth, getSystemHealth, getChampionsPreview,
 } from "@/lib/services/DashboardService";
+import MissionControlHeader from "@/components/admin/dashboard/MissionControlHeader";
 import DashboardSection from "@/components/admin/dashboard/DashboardSection";
 import AttentionCard from "@/components/admin/dashboard/AttentionCard";
 import KPIStatCard from "@/components/admin/dashboard/KPIStatCard";
@@ -12,14 +14,11 @@ import UpcomingTripOpsCard from "@/components/admin/dashboard/UpcomingTripOpsCar
 import SystemHealthCard from "@/components/admin/dashboard/SystemHealthCard";
 import QuickActionGrid from "@/components/admin/dashboard/QuickActionGrid";
 import DashboardDateFilter from "@/components/admin/dashboard/DashboardDateFilter";
+import PlaceholderStatCard from "@/components/admin/dashboard/PlaceholderStatCard";
+import DashboardFooter from "@/components/admin/dashboard/DashboardFooter";
 import StatusBadge from "@/components/admin/StatusBadge";
-
-function greeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
+import Link from "next/link";
+import { glassCard, HOVER_LIFT } from "@/lib/adminTheme";
 
 export default async function AdminDashboard({
   searchParams,
@@ -33,90 +32,45 @@ export default async function AdminDashboard({
   const hasPermission = (key: string) => permissions.includes(key);
   const horizonDays = Number((await searchParams).horizon) || 7;
 
-  const [inbox, kpis, activity, upcoming, enquiries, communityHealth, systemHealth, champions] = await Promise.all([
+  const [
+    inbox, kpis, businessKpis, activity, todaysOps, upcoming, enquiries, communityHealth, systemHealth, champions,
+  ] = await Promise.all([
     getOperationsInbox(hasPermission),
     getTodayKpis(hasPermission),
+    getBusinessKpis(hasPermission),
     getRecentActivity(hasPermission),
+    getTodaysOperations(hasPermission),
     getUpcomingOperations(hasPermission, horizonDays),
     getRecentEnquiries(hasPermission),
     getCommunityHealth(hasPermission),
     getSystemHealth(),
-    getChampionsPreview(hasPermission),
+    getChampionsPreview(hasPermission, 10),
   ]);
 
+  const kpiByKey = Object.fromEntries(kpis.map((k) => [k.key, k]));
+
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-white text-2xl font-bold">TrekRiderz Mission Control</h1>
-          <p className="text-white/40 text-sm mt-1">
-            {greeting()}, {profile?.name || profile?.email}. Here's what needs attention across TrekRiderz today.
-          </p>
-        </div>
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-2">
+        <MissionControlHeader name={profile?.name || profile?.email} hasPermission={hasPermission} />
+      </div>
+      <div className="flex justify-end -mt-6 mb-8">
         <DashboardDateFilter />
       </div>
 
-      {/* A. Operations Inbox */}
+      {/* Attention Required */}
       {inbox.length > 0 && (
-        <DashboardSection title="Operations Inbox" subtitle="What needs action right now.">
+        <DashboardSection title="Attention Required" subtitle="What needs action right now.">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {inbox.map((card) => <AttentionCard key={card.key} card={card} />)}
           </div>
         </DashboardSection>
       )}
 
-      {/* B. Today's KPIs */}
-      {kpis.length > 0 && (
-        <DashboardSection title="Today's KPIs">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {kpis.map((kpi) => <KPIStatCard key={kpi.key} kpi={kpi} />)}
-          </div>
-        </DashboardSection>
-      )}
-
-      {/* C. Community Champions */}
-      {champions.campaign && (
-        <DashboardSection
-          title="Community Champions"
-          subtitle={champions.campaign.name}
-          viewAllHref="/admin/community-champions"
-        >
-          <ChampionsLeaderboard rows={champions.candidates} />
-        </DashboardSection>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* D. Recent Activity Timeline */}
-        {hasPermission("activity_log.view") && (
-          <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-white font-semibold">Recent Activity</h2>
-              <span className="text-[11px] text-white/30">last {activity.length} actions</span>
-            </div>
-            <ActivityTimeline rows={activity} />
-          </div>
-        )}
-
-        {/* Quick Actions (H) shown alongside activity, matching the original two-column layout */}
-        <div className="rounded-2xl p-6 mb-8" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <h2 className="text-white font-semibold mb-4">Quick Actions</h2>
-          <QuickActionGrid hasPermission={hasPermission} />
-        </div>
-      </div>
-
-      {/* E. Upcoming Operations Calendar */}
-      {upcoming.length > 0 && (
-        <DashboardSection title="Upcoming Operations" subtitle={`Departing in the next ${horizonDays} days.`} viewAllHref="/admin/expeditions">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {upcoming.map((e) => <UpcomingTripOpsCard key={e.id} expedition={e} />)}
-          </div>
-        </DashboardSection>
-      )}
-
-      {/* Recent Enquiries */}
+      {/* Recent Enquiries — "whether customers need replies" */}
       {enquiries.length > 0 && (
         <DashboardSection title="Recent Enquiries" viewAllHref="/admin/enquiries">
-          <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className={`rounded-2xl overflow-hidden ${HOVER_LIFT}`} style={glassCard}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-white/40 text-xs uppercase tracking-wide" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
@@ -141,63 +95,119 @@ export default async function AdminDashboard({
         </DashboardSection>
       )}
 
-      {/* F. Community & Content Health */}
-      {communityHealth && (
-        <DashboardSection title="Community & Content Health">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <MiniStat label="Posts Today" value={communityHealth.postsToday} />
-            <MiniStat label="Reels Today" value={communityHealth.reelsToday} />
-            <MiniStat label="Comments Today" value={communityHealth.commentsToday} />
-            <MiniStat label="Reported Content" value={communityHealth.reportedContentCount} />
-            <MiniStat label="Hidden Content" value={communityHealth.hiddenContentCount} />
-            <MiniStat label="Banned Users" value={communityHealth.bannedUsersCount} />
-            <MiniStat label="Active Communities" value={communityHealth.activeCommunitiesCount} />
-          </div>
-          {communityHealth.topCreators.length > 0 && (
-            <div className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-              <h3 className="text-white font-semibold text-sm mb-3">Top Creators This Week</h3>
-              <div className="space-y-2">
-                {communityHealth.topCreators.map((c) => (
-                  <div key={c.user_id} className="flex items-center justify-between text-sm">
-                    <span className="text-white/70">{c.full_name || "Unnamed"}</span>
-                    <span className="text-white/40">{c.post_count} posts</span>
-                  </div>
-                ))}
+      {/* Today's Operations */}
+      {(todaysOps.today.length > 0 || todaysOps.tomorrow.length > 0) && (
+        <DashboardSection title="Today's Operations" subtitle="Trips departing today and tomorrow." viewAllHref="/admin/expeditions">
+          {todaysOps.today.length > 0 && (
+            <>
+              <div className="text-white/40 text-xs uppercase tracking-wide mb-2">Today</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                {todaysOps.today.map((e) => <UpcomingTripOpsCard key={e.id} expedition={e} />)}
               </div>
-            </div>
+            </>
           )}
+          {todaysOps.tomorrow.length > 0 && (
+            <>
+              <div className="text-white/40 text-xs uppercase tracking-wide mb-2">Tomorrow</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                {todaysOps.tomorrow.map((e) => <UpcomingTripOpsCard key={e.id} expedition={e} />)}
+              </div>
+            </>
+          )}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <PlaceholderStatCard label="Vehicles Assigned" />
+            <PlaceholderStatCard label="Packing Reminders Sent" />
+            <PlaceholderStatCard label="Weather Warnings" />
+          </div>
         </DashboardSection>
       )}
 
-      {/* G. System Health */}
-      <DashboardSection title="System Health">
+      {/* Business KPIs */}
+      {businessKpis.length > 0 && (
+        <DashboardSection title="Business KPIs">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {businessKpis.map((kpi) => <KPIStatCard key={kpi.key} kpi={kpi} showSparkline />)}
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* Community Health */}
+      {(communityHealth || kpiByKey["active_users"]) && (
+        <DashboardSection title="Community Health">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {kpiByKey["active_users"] && <KPIStatCard kpi={kpiByKey["active_users"]} />}
+            {kpiByKey["new_users"] && <KPIStatCard kpi={{ ...kpiByKey["new_users"], label: "New Members" }} />}
+            {kpiByKey["posts"] && <KPIStatCard kpi={kpiByKey["posts"]} />}
+            {kpiByKey["reels"] && <KPIStatCard kpi={kpiByKey["reels"]} />}
+            {kpiByKey["stories"] && <KPIStatCard kpi={{ ...kpiByKey["stories"], label: "Travel Stories" }} />}
+            {communityHealth && (
+              <KPIStatCard kpi={{ key: "comments", label: "Comments", value: communityHealth.commentsToday, delta: null }} />
+            )}
+            <PlaceholderStatCard label="Retention" />
+            <PlaceholderStatCard label="Avg. Session" />
+            <PlaceholderStatCard label="Most Active Category" />
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* Closed Beta Champions */}
+      {champions.campaign && (
+        <DashboardSection title="Closed Beta Champions" subtitle={champions.campaign.name}>
+          <ChampionsLeaderboard rows={champions.candidates} />
+          <div className="flex gap-2 mt-4">
+            <Link href="/admin/community-champions" className={`px-4 py-2 rounded-xl text-xs font-semibold ${HOVER_LIFT}`} style={{ background: "rgba(140,198,63,0.15)", color: "#8CC63F" }}>
+              Recalculate Scores
+            </Link>
+            <Link href="/admin/community-champions" className={`px-4 py-2 rounded-xl text-xs font-semibold text-white/70 ${HOVER_LIFT}`} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              Approve Rewards
+            </Link>
+            <Link href="/admin/community-champions" className={`px-4 py-2 rounded-xl text-xs font-semibold text-white/70 ${HOVER_LIFT}`} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              Export CSV
+            </Link>
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* Live Activity Timeline */}
+      {hasPermission("activity_log.view") && (
+        <DashboardSection title="Live Activity Timeline">
+          <div className={`rounded-2xl p-6 ${HOVER_LIFT}`} style={glassCard}>
+            <ActivityTimeline rows={activity} />
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* Upcoming Trips */}
+      {upcoming.length > 0 && (
+        <DashboardSection title="Upcoming Trips" subtitle={`Departing in the next ${horizonDays} days.`} viewAllHref="/admin/expeditions">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {upcoming.map((e) => <UpcomingTripOpsCard key={e.id} expedition={e} />)}
+          </div>
+        </DashboardSection>
+      )}
+
+      {/* Platform Health */}
+      <DashboardSection title="Platform Health">
         <SystemHealthCard health={systemHealth} />
       </DashboardSection>
 
-      <div className="rounded-2xl p-5 flex flex-wrap gap-3" style={{ background: "rgba(249,115,22,0.05)", border: "1px solid rgba(249,115,22,0.15)" }}>
-        <p className="text-white/60 text-sm w-full">Public website links — open to verify changes are live:</p>
-        {["/", "/trips", "/expeditions", "/special", "/videos"].map((path) => (
-          <a
-            key={path}
-            href={path}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs px-3 py-1.5 rounded-full font-medium"
-            style={{ background: "rgba(249,115,22,0.12)", color: "#F97316" }}
-          >
-            {path === "/" ? "Homepage" : path.replace("/", "")}
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
+      {/* Trending */}
+      <DashboardSection title="Trending" subtitle="Search and engagement analytics aren't wired up yet — shown for layout completeness.">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <PlaceholderStatCard label="Most Searched Destinations" />
+          <PlaceholderStatCard label="Trending Trips" />
+          <PlaceholderStatCard label="Trending Reels" />
+          <PlaceholderStatCard label="Popular Guides" />
+          <PlaceholderStatCard label="Popular Homestays" />
+        </div>
+      </DashboardSection>
 
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-      <div className="text-white/40 text-xs uppercase tracking-wide mb-1">{label}</div>
-      <div className="text-white text-xl font-bold">{value}</div>
+      {/* Quick Actions */}
+      <DashboardSection title="Quick Actions">
+        <QuickActionGrid hasPermission={hasPermission} />
+      </DashboardSection>
+
+      <DashboardFooter version={pkg.version} commit={systemHealth.deployment.commit} env={systemHealth.deployment.env} />
     </div>
   );
 }

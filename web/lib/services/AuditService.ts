@@ -1,5 +1,33 @@
 import { createClient } from '@/lib/supabase';
 
+export interface ActivityLogRow {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  actor_role: string | null;
+  reason: string | null;
+  created_at: string;
+  source: string;
+}
+
+// Read side of admin_activity_log, for the per-listing "Activity" section
+// on the guides/homestays/rentals review pages. entity_type values for
+// those three flows are the literal ApprovalEntity strings ('guides',
+// 'homestays', 'vehicles') that logAdminAction below already writes —
+// see ApprovalService.ts's CONFIG map.
+export async function getActivityForEntity(entityType: string, entityId: string, limit = 20): Promise<ActivityLogRow[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from('admin_activity_log')
+    .select('*')
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data as ActivityLogRow[]) || [];
+}
+
 interface LogActionParams {
   action: string;
   entityType: string;

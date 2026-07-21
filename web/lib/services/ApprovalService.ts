@@ -46,6 +46,18 @@ const CONFIG: Record<ApprovalEntity, EntityConfig> = {
   },
 };
 
+// Single read-by-id used by the three review pages (guides/[id],
+// homestays/[id], rentals/[id]) — reuses the same entity→table map every
+// mutation in this file already goes through, so a review page and an
+// approve/reject action can never disagree about which table an entity
+// key points to. `select` defaults to '*'; callers that need an owner
+// join (guides only — see guides/[id]/page.tsx) pass their own.
+export async function getListingById(entity: ApprovalEntity, id: string, select = '*') {
+  const cfg = CONFIG[entity];
+  const supabase = createClient();
+  return supabase.from(cfg.table).select(select).eq('id', id).maybeSingle();
+}
+
 export async function approveListing(entity: ApprovalEntity, id: string, ownerId: string | undefined, actorId: string): Promise<void> {
   const cfg = CONFIG[entity];
   const supabase = createClient();

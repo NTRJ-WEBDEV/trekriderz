@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { approveListing, rejectListing, setFeatured, setSuspended, deleteListing } from "@/lib/services/ApprovalService";
 import { useAdminPermissions } from "@/lib/adminPermissions";
@@ -15,7 +16,7 @@ interface Property {
   name: string;
   city: string | null;
   state: string | null;
-  property_type: string | null;
+  property_type: string[] | null;
   cover_photo_url: string | null;
   status: string;
   is_suspended: boolean;
@@ -24,6 +25,7 @@ interface Property {
   identity_doc_front_url: string | null;
   ownership_proof_url: string | null;
   rejection_reason: string | null;
+  created_at: string;
 }
 
 type Tab = "pending" | "approved" | "rejected" | "featured";
@@ -35,6 +37,7 @@ export default function HomestaysPage() {
   const [tab, setTab] = useState<Tab>("pending");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Property[]>([]);
+  const [startingPrices, setStartingPrices] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -55,9 +58,23 @@ export default function HomestaysPage() {
     query = query.order("created_at", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
     const { data, count } = await query;
-    setRows((data as Property[]) || []);
+    const properties = (data as Property[]) || [];
+    setRows(properties);
     setTotal(count || 0);
     setSelected(new Set());
+
+    // One bounded query for the whole page, not one per row — avoids N+1.
+    const ids = properties.map((p) => p.id);
+    if (ids.length > 0) {
+      const { data: rooms } = await supabase.from("room_types").select("property_id, base_price").in("property_id", ids);
+      const min: Record<string, number> = {};
+      (rooms || []).forEach((r: any) => {
+        if (min[r.property_id] === undefined || r.base_price < min[r.property_id]) min[r.property_id] = r.base_price;
+      });
+      setStartingPrices(min);
+    } else {
+      setStartingPrices({});
+    }
     setLoading(false);
   }, [tab, search, page]);
 
@@ -110,7 +127,7 @@ export default function HomestaysPage() {
     {
       key: "name", label: "Homestay",
       render: (p) => (
-        <div className="flex items-center gap-3">
+        <Link href={`/admin/homestays/${p.id}`} className="flex items-center gap-3 hover:opacity-80">
           <div className="w-9 h-9 rounded-lg bg-white/10 overflow-hidden flex-shrink-0">
             {p.cover_photo_url && <img src={p.cover_photo_url} alt="" className="w-full h-full object-cover" />}
           </div>
@@ -118,22 +135,19 @@ export default function HomestaysPage() {
             <div className="text-white font-medium">{p.name}</div>
             <div className="text-white/30 text-xs">{[p.city, p.state].filter(Boolean).join(", ") || "No location"}</div>
           </div>
-        </div>
+        </Link>
       ),
     },
-    { key: "type", label: "Type", render: (p) => <span className="text-white/60 capitalize">{p.property_type || "—"}</span> },
+    { key: "type", label: "Type", render: (p) => <span className="text-white/60 capitalize text-xs">{p.property_type?.join(", ") || "—"}</span> },
+    { key: "price", label: "From", render: (p) => <span className="text-white/60">{startingPrices[p.id] ? `₹${startingPrices[p.id]}` : "—"}</span> },
     { key: "commission", label: "Commission", render: (p) => <span className="text-white/60">{p.commission_rate != null ? `${p.commission_rate}%` : "—"}</span> },
     { key: "status", label: "Status", render: (p) => <div className="flex gap-1.5 flex-wrap"><StatusBadge status={p.status} />{p.is_suspended && <StatusBadge status="suspended" />}{p.is_featured && <span className="text-[11px]">⭐</span>}</div> },
-    { key: "docs", label: "Documents", render: (p) => (
-      <div className="flex gap-2 text-xs">
-        {p.identity_doc_front_url ? <a href={p.identity_doc_front_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "#F97316" }}>ID</a> : <span className="text-white/20">ID</span>}
-        {p.ownership_proof_url ? <a href={p.ownership_proof_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "#F97316" }}>Ownership</a> : <span className="text-white/20">Ownership</span>}
-      </div>
-    ) },
+    { key: "submitted", label: "Submitted", render: (p) => <span className="text-white/40 text-xs">{new Date(p.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span> },
     {
       key: "actions", label: "Actions",
       render: (p) => (
         <div className="flex gap-1.5 flex-wrap">
+          <Link href={`/admin/homestays/${p.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "rgba(249,115,22,0.15)", color: "#F97316" }}>View Details</Link>
           {p.status === "pending" && hasPermission("homestays.approve") && (
             <>
               <ActionBtn onClick={() => handleApprove(p)}>Approve</ActionBtn>
@@ -146,7 +160,7 @@ export default function HomestaysPage() {
         </div>
       ),
     },
-  ], [hasPermission]);
+  ], [hasPermission, startingPrices]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

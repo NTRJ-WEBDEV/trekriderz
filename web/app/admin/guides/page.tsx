@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { approveListing, rejectListing, setFeatured, setGuideActive, deleteListing } from "@/lib/services/ApprovalService";
 import { useAdminPermissions } from "@/lib/adminPermissions";
@@ -17,6 +18,8 @@ interface Guide {
   profile_photo_url: string | null;
   photo_url: string | null;
   location: string | null;
+  experience: string | null;
+  experience_years: number | null;
   rating: number | null;
   total_reviews: number | null;
   status: string;
@@ -25,6 +28,7 @@ interface Guide {
   identity_doc_front_url: string | null;
   identity_doc_back_url: string | null;
   rejection_reason: string | null;
+  created_at: string;
 }
 
 type Tab = "pending" | "approved" | "rejected" | "featured";
@@ -49,7 +53,7 @@ export default function GuidesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from("guides").select("*", { count: "exact" });
+    let query = supabase.from("guides").select("id, user_id, full_name, name, profile_photo_url, photo_url, location, experience, experience_years, rating, total_reviews, status, is_active, is_featured, identity_doc_front_url, identity_doc_back_url, rejection_reason, created_at", { count: "exact" });
     if (tab === "featured") query = query.eq("is_featured", true);
     else query = query.eq("status", tab);
     if (search.trim()) query = query.or(`full_name.ilike.%${search}%,name.ilike.%${search}%,location.ilike.%${search}%`);
@@ -126,7 +130,7 @@ export default function GuidesPage() {
     {
       key: "name", label: "Guide",
       render: (g) => (
-        <div className="flex items-center gap-3">
+        <Link href={`/admin/guides/${g.id}`} className="flex items-center gap-3 hover:opacity-80">
           <div className="w-9 h-9 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
             {(g.profile_photo_url || g.photo_url) && <img src={g.profile_photo_url || g.photo_url || ""} alt="" className="w-full h-full object-cover" />}
           </div>
@@ -134,21 +138,18 @@ export default function GuidesPage() {
             <div className="text-white font-medium">{g.full_name || g.name || "Unnamed"}</div>
             <div className="text-white/30 text-xs">{g.location || "No location"}</div>
           </div>
-        </div>
+        </Link>
       ),
     },
+    { key: "experience", label: "Experience", render: (g) => <span className="text-white/60 text-xs">{g.experience || (g.experience_years ? `${g.experience_years}y` : "—")}</span> },
     { key: "rating", label: "Rating", render: (g) => <span className="text-white/70">{g.rating ? `★ ${g.rating.toFixed(1)}` : "—"} <span className="text-white/30">({g.total_reviews || 0})</span></span> },
     { key: "status", label: "Status", render: (g) => <div className="flex gap-1.5 flex-wrap"><StatusBadge status={g.status} />{!g.is_active && <StatusBadge status="suspended" />}{g.is_featured && <span className="text-[11px]">⭐</span>}</div> },
-    { key: "docs", label: "Documents", render: (g) => (
-      <div className="flex gap-2 text-xs">
-        {g.identity_doc_front_url ? <a href={g.identity_doc_front_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "#F97316" }}>Front</a> : <span className="text-white/20">Front</span>}
-        {g.identity_doc_back_url ? <a href={g.identity_doc_back_url} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "#F97316" }}>Back</a> : <span className="text-white/20">Back</span>}
-      </div>
-    ) },
+    { key: "submitted", label: "Submitted", render: (g) => <span className="text-white/40 text-xs">{new Date(g.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span> },
     {
       key: "actions", label: "Actions",
       render: (g) => (
         <div className="flex gap-1.5 flex-wrap">
+          <Link href={`/admin/guides/${g.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "rgba(249,115,22,0.15)", color: "#F97316" }}>View Details</Link>
           {g.status === "pending" && hasPermission("guides.approve") && (
             <>
               <ActionBtn onClick={() => handleApprove(g)}>Approve</ActionBtn>

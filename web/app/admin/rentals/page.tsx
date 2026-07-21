@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { approveListing, rejectListing, setFeatured, setSuspended, deleteListing } from "@/lib/services/ApprovalService";
 import { useAdminPermissions } from "@/lib/adminPermissions";
@@ -17,12 +18,14 @@ interface RentalVehicle {
   model: string | null;
   price_per_day: number | null;
   location: string | null;
+  contact_phone: string | null;
   photos: string[] | null;
   images: string[] | null;
   status: string;
   is_suspended: boolean;
   is_featured: boolean;
   is_available: boolean;
+  created_at: string;
 }
 
 type Tab = "pending" | "approved" | "rejected" | "featured";
@@ -112,7 +115,7 @@ export default function RentalsPage() {
       render: (v) => {
         const photo = v.photos?.[0] || v.images?.[0];
         return (
-          <div className="flex items-center gap-3">
+          <Link href={`/admin/rentals/${v.id}`} className="flex items-center gap-3 hover:opacity-80">
             <div className="w-9 h-9 rounded-lg bg-white/10 overflow-hidden flex-shrink-0">
               {photo && <img src={photo} alt="" className="w-full h-full object-cover" />}
             </div>
@@ -120,17 +123,20 @@ export default function RentalsPage() {
               <div className="text-white font-medium">{vehicleName(v)}</div>
               <div className="text-white/30 text-xs">{v.location || "No location"}</div>
             </div>
-          </div>
+          </Link>
         );
       },
     },
     { key: "type", label: "Type", render: (v) => <span className="text-white/60 capitalize">{v.vehicle_type}</span> },
     { key: "price", label: "Price/day", render: (v) => <span className="text-white/70">{v.price_per_day ? `₹${v.price_per_day.toLocaleString("en-IN")}` : "—"}</span> },
+    { key: "owner", label: "Owner Contact", render: (v) => <span className="text-white/50 text-xs">{v.contact_phone || "—"}</span> },
     { key: "status", label: "Status", render: (v) => <div className="flex gap-1.5 flex-wrap"><StatusBadge status={v.status} />{v.is_suspended && <StatusBadge status="suspended" />}{v.is_featured && <span className="text-[11px]">⭐</span>}</div> },
+    { key: "submitted", label: "Submitted", render: (v) => <span className="text-white/40 text-xs">{new Date(v.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span> },
     {
       key: "actions", label: "Actions",
       render: (v) => (
         <div className="flex gap-1.5 flex-wrap">
+          <Link href={`/admin/rentals/${v.id}`} className="text-xs px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "rgba(249,115,22,0.15)", color: "#F97316" }}>View Details</Link>
           {v.status === "pending" && hasPermission("rentals.approve") && (
             <>
               <ActionBtn onClick={() => handleApprove(v)}>Approve</ActionBtn>

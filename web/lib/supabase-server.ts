@@ -22,9 +22,12 @@ export async function createSupabaseServer() {
 
 export async function getAdminSession() {
   const supabase = await createSupabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  // TEMP DIAGNOSTIC — remove once the production login-redirect issue is
+  // confirmed fixed. Logs shape/existence only, never tokens or cookies.
+  console.log('[admin-auth-debug] getAdminSession', { hasUser: !!user, userId: user?.id ?? null, userError: userError?.message ?? null });
   if (!user) return null;
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*, staff_role:roles(key, name)')
     .eq('id', user.id)
@@ -33,8 +36,20 @@ export async function getAdminSession() {
   // customers included) with the legacy `role` text column defaulting to
   // 'moderator' — that text value is NOT proof of staff access. Only an
   // explicitly-granted `role_id` (via the RBAC migration or Team screen) is.
-  if (!profile || !profile.role_id) return null;
-  const { data: permissionRows } = await supabase.rpc('my_permissions');
+  if (!profile || !profile.role_id) {
+    console.log('[admin-auth-debug] getAdminSession: no admin access', {
+      hasProfile: !!profile,
+      roleId: profile?.role_id ?? null,
+      profileError: profileError?.message ?? null,
+    });
+    return null;
+  }
+  const { data: permissionRows, error: permError } = await supabase.rpc('my_permissions');
   const permissions = (permissionRows || []).map((r: { permission_key: string }) => r.permission_key);
+  console.log('[admin-auth-debug] getAdminSession: granted', {
+    roleId: profile.role_id,
+    permissionCount: permissions.length,
+    permError: permError?.message ?? null,
+  });
   return { user, profile, permissions };
 }

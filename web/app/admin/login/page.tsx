@@ -1,7 +1,17 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+
+function NoAccessNotice() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("error") !== "no_access") return null;
+  return (
+    <p className="text-amber-400 text-xs mb-4 text-center">
+      This account doesn't have admin access. Contact an administrator if you believe this is a mistake.
+    </p>
+  );
+}
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
@@ -14,11 +24,20 @@ export default function AdminLogin() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const supabase = createClient();
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    if (err) { setError(err.message); setLoading(false); return; }
-    router.push("/admin");
-    router.refresh();
+    try {
+      const supabase = createClient();
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) { setError(err.message); return; }
+      router.push("/admin");
+      router.refresh();
+    } catch (e: any) {
+      // Covers a thrown Supabase client (e.g. missing env config) or a
+      // failed navigation — without this, either left the button frozen
+      // on "Signing in…" forever with no explanation.
+      setError(e?.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,6 +51,9 @@ export default function AdminLogin() {
         </div>
         <div className="rounded-2xl p-8" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
           <h1 className="text-white text-xl font-bold mb-6">Sign in</h1>
+          <Suspense fallback={null}>
+            <NoAccessNotice />
+          </Suspense>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="text-white/50 text-xs uppercase tracking-wider block mb-1.5">Email</label>

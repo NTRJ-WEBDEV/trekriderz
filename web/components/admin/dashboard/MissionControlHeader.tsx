@@ -18,10 +18,10 @@ function greeting(hour: number): string {
 }
 
 export default function MissionControlHeader({
-  name, hasPermission,
+  name, permissions,
 }: {
   name: string;
-  hasPermission: (key: string) => boolean;
+  permissions: string[];
 }) {
   const [now, setNow] = useState<Date | null>(null);
 
@@ -37,7 +37,7 @@ export default function MissionControlHeader({
     { label: "Add Homestay", href: "/admin/homestays", icon: <Home size={15} />, permission: "homestays.approve" },
     { label: "Send Notification", href: "/admin/notifications", icon: <BellPlus size={15} />, permission: null },
     { label: "Emergency Alert", href: "/admin/sos", icon: <Siren size={15} />, permission: "sos.manage" },
-  ].filter((a) => a.permission === null || hasPermission(a.permission));
+  ].filter((a) => a.permission === null || permissions.includes(a.permission));
 
   return (
     <div className="mb-10 flex items-start justify-between flex-wrap gap-6">

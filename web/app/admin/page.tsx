@@ -52,7 +52,7 @@ export default async function AdminDashboard({
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-4 mb-2">
-        <MissionControlHeader name={profile?.name || profile?.email} hasPermission={hasPermission} />
+        <MissionControlHeader name={profile?.name || profile?.email} permissions={permissions} />
       </div>
       <div className="flex justify-end -mt-6 mb-8">
         <DashboardDateFilter />

@@ -14,6 +14,15 @@ import ImageGallery from "@/components/admin/review/ImageGallery";
 import ReviewActionsPanel from "@/components/admin/review/ReviewActionsPanel";
 import ReviewSkeleton from "@/components/admin/review/ReviewSkeleton";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
+import ChangeRequestPanel from "@/components/admin/review/ChangeRequestPanel";
+import DocumentStatusPanel from "@/components/admin/review/DocumentStatusPanel";
+import InternalNotesPanel from "@/components/admin/review/InternalNotesPanel";
+import {
+  fetchChangeRequests, createChangeRequests, resolveChangeRequest,
+  fetchDocumentStatuses, setDocumentStatus,
+  fetchInternalNotes, addInternalNote,
+  type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus,
+} from "@/lib/services/ReviewWorkspaceService";
 
 interface RoomType {
   id: string; name: string; room_category: string | null; max_occupancy: number | null;
@@ -46,6 +55,9 @@ export default function HomestayDetailPage() {
   const [property, setProperty] = useState<Property | null>(null);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [activity, setActivity] = useState<ActivityLogRow[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [docStatuses, setDocStatuses] = useState<DocumentStatus[]>([]);
+  const [notes, setNotes] = useState<InternalNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -63,12 +75,18 @@ export default function HomestayDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setProperty(data as unknown as Property);
-    const [{ data: rooms }, activityRows] = await Promise.all([
+    const [{ data: rooms }, activityRows, crRows, docRows, noteRows] = await Promise.all([
       supabase.from("room_types").select("id, name, room_category, max_occupancy, total_units, base_price, is_available").eq("property_id", id),
       getActivityForEntity("homestays", id),
+      fetchChangeRequests("homestays", id),
+      fetchDocumentStatuses("homestays", id),
+      fetchInternalNotes("homestays", id),
     ]);
     setRoomTypes((rooms as RoomType[]) || []);
     setActivity(activityRows);
+    setChangeRequests(crRows);
+    setDocStatuses(docRows);
+    setNotes(noteRows);
     setLoading(false);
   }, [id]);
 
@@ -104,6 +122,28 @@ export default function HomestayDetailPage() {
     if (!property) return;
     try { await deleteListing("homestays", property.id, property); showToast("Property deleted."); router.push("/admin/homestays"); }
     catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleRequestChanges = async (items: { issue: string; instructions: string }[]) => {
+    if (!property) return;
+    try { await createChangeRequests("homestays", property.id, items); showToast("Changes requested."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleResolveChange = async (crId: string) => {
+    try { await resolveChangeRequest(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleSetDocStatus = async (documentKey: string, status: DocumentReviewStatus) => {
+    if (!property) return;
+    try { await setDocumentStatus("homestays", property.id, documentKey, status); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleAddNote = async (note: string) => {
+    if (!property) return;
+    await addInternalNote("homestays", property.id, note);
+    load();
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -217,6 +257,24 @@ export default function HomestayDetailPage() {
             />
           </section>
 
+          <DocumentStatusPanel
+            slots={[
+              { key: "identity_doc_front", label: "Owner Identity — Front", url: property.identity_doc_front_url },
+              { key: "identity_doc_back", label: "Owner Identity — Back", url: property.identity_doc_back_url },
+              { key: "ownership_proof", label: property.ownership_proof_type || "Ownership Proof", url: property.ownership_proof_url },
+            ]}
+            statuses={docStatuses}
+            onSetStatus={handleSetDocStatus}
+            canManage={hasPermission("homestays.approve")}
+          />
+
+          <ChangeRequestPanel
+            requests={changeRequests}
+            onSubmit={handleRequestChanges}
+            onResolve={handleResolveChange}
+            canManage={hasPermission("homestays.approve")}
+          />
+
           {property.status === "rejected" && property.rejection_reason && (
             <section className="rounded-xl p-4" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
               <div className="text-red-400 text-xs uppercase tracking-wide mb-1">Rejection Reason</div>
@@ -249,6 +307,9 @@ export default function HomestayDetailPage() {
             onEdit={() => setEditOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
+          <div className="mt-4">
+            <InternalNotesPanel notes={notes} onAddNote={handleAddNote} canManage={hasPermission("homestays.approve")} />
+          </div>
         </div>
       </div>
 

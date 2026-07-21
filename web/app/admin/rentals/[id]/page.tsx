@@ -14,6 +14,13 @@ import ImageGallery from "@/components/admin/review/ImageGallery";
 import ReviewActionsPanel from "@/components/admin/review/ReviewActionsPanel";
 import ReviewSkeleton from "@/components/admin/review/ReviewSkeleton";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
+import ChangeRequestPanel from "@/components/admin/review/ChangeRequestPanel";
+import InternalNotesPanel from "@/components/admin/review/InternalNotesPanel";
+import {
+  fetchChangeRequests, createChangeRequests, resolveChangeRequest,
+  fetchInternalNotes, addInternalNote,
+  type ChangeRequest, type InternalNote,
+} from "@/lib/services/ReviewWorkspaceService";
 
 interface RentalVehicle {
   id: string; owner_id: string;
@@ -38,6 +45,8 @@ export default function RentalDetailPage() {
 
   const [vehicle, setVehicle] = useState<RentalVehicle | null>(null);
   const [activity, setActivity] = useState<ActivityLogRow[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [notes, setNotes] = useState<InternalNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -55,7 +64,14 @@ export default function RentalDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setVehicle(data as unknown as RentalVehicle);
-    setActivity(await getActivityForEntity("vehicles", id));
+    const [activityRows, crRows, noteRows] = await Promise.all([
+      getActivityForEntity("vehicles", id),
+      fetchChangeRequests("vehicles", id),
+      fetchInternalNotes("vehicles", id),
+    ]);
+    setActivity(activityRows);
+    setChangeRequests(crRows);
+    setNotes(noteRows);
     setLoading(false);
   }, [id]);
 
@@ -91,6 +107,22 @@ export default function RentalDetailPage() {
     if (!vehicle) return;
     try { await deleteListing("vehicles", vehicle.id, vehicle); showToast("Vehicle deleted."); router.push("/admin/rentals"); }
     catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleRequestChanges = async (items: { issue: string; instructions: string }[]) => {
+    if (!vehicle) return;
+    try { await createChangeRequests("vehicles", vehicle.id, items); showToast("Changes requested."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleResolveChange = async (crId: string) => {
+    try { await resolveChangeRequest(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleAddNote = async (note: string) => {
+    if (!vehicle) return;
+    await addInternalNote("vehicles", vehicle.id, note);
+    load();
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -180,6 +212,13 @@ export default function RentalDetailPage() {
             </p>
           </section>
 
+          <ChangeRequestPanel
+            requests={changeRequests}
+            onSubmit={handleRequestChanges}
+            onResolve={handleResolveChange}
+            canManage={hasPermission("rentals.approve")}
+          />
+
           {activity.length > 0 && (
             <section className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
               <h3 className="text-white font-semibold text-sm mb-3">Activity</h3>
@@ -205,6 +244,9 @@ export default function RentalDetailPage() {
             onEdit={() => setEditOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
+          <div className="mt-4">
+            <InternalNotesPanel notes={notes} onAddNote={handleAddNote} canManage={hasPermission("rentals.approve")} />
+          </div>
         </div>
       </div>
 

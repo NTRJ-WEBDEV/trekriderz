@@ -15,6 +15,15 @@ import ReviewActionsPanel from "@/components/admin/review/ReviewActionsPanel";
 import ReviewSkeleton from "@/components/admin/review/ReviewSkeleton";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
 import { logAdminAction } from "@/lib/services/AuditService";
+import ChangeRequestPanel from "@/components/admin/review/ChangeRequestPanel";
+import DocumentStatusPanel from "@/components/admin/review/DocumentStatusPanel";
+import InternalNotesPanel from "@/components/admin/review/InternalNotesPanel";
+import {
+  fetchChangeRequests, createChangeRequests, resolveChangeRequest,
+  fetchDocumentStatuses, setDocumentStatus,
+  fetchInternalNotes, addInternalNote,
+  type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus,
+} from "@/lib/services/ReviewWorkspaceService";
 
 interface Guide {
   id: string; user_id: string;
@@ -41,6 +50,9 @@ export default function GuideDetailPage() {
 
   const [guide, setGuide] = useState<Guide | null>(null);
   const [activity, setActivity] = useState<ActivityLogRow[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [docStatuses, setDocStatuses] = useState<DocumentStatus[]>([]);
+  const [notes, setNotes] = useState<InternalNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -58,7 +70,16 @@ export default function GuideDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setGuide(data as unknown as Guide);
-    setActivity(await getActivityForEntity("guides", id));
+    const [activityRows, crRows, docRows, noteRows] = await Promise.all([
+      getActivityForEntity("guides", id),
+      fetchChangeRequests("guides", id),
+      fetchDocumentStatuses("guides", id),
+      fetchInternalNotes("guides", id),
+    ]);
+    setActivity(activityRows);
+    setChangeRequests(crRows);
+    setDocStatuses(docRows);
+    setNotes(noteRows);
     setLoading(false);
   }, [id]);
 
@@ -94,6 +115,28 @@ export default function GuideDetailPage() {
     if (!guide) return;
     try { await deleteListing("guides", guide.id, guide); showToast("Guide deleted."); router.push("/admin/guides"); }
     catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleRequestChanges = async (items: { issue: string; instructions: string }[]) => {
+    if (!guide) return;
+    try { await createChangeRequests("guides", guide.id, items); showToast("Changes requested."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleResolveChange = async (crId: string) => {
+    try { await resolveChangeRequest(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleSetDocStatus = async (documentKey: string, status: DocumentReviewStatus) => {
+    if (!guide) return;
+    try { await setDocumentStatus("guides", guide.id, documentKey, status); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleAddNote = async (note: string) => {
+    if (!guide) return;
+    await addInternalNote("guides", guide.id, note);
+    load();
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -202,6 +245,23 @@ export default function GuideDetailPage() {
             <DetailField label="Document Type" value={guide.identity_doc_type} />
           </section>
 
+          <DocumentStatusPanel
+            slots={[
+              { key: "identity_doc_front", label: "Identity Document — Front", url: guide.identity_doc_front_url },
+              { key: "identity_doc_back", label: "Identity Document — Back", url: guide.identity_doc_back_url },
+            ]}
+            statuses={docStatuses}
+            onSetStatus={handleSetDocStatus}
+            canManage={hasPermission("guides.approve")}
+          />
+
+          <ChangeRequestPanel
+            requests={changeRequests}
+            onSubmit={handleRequestChanges}
+            onResolve={handleResolveChange}
+            canManage={hasPermission("guides.approve")}
+          />
+
           {guide.status === "rejected" && guide.rejection_reason && (
             <section className="rounded-xl p-4" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
               <div className="text-red-400 text-xs uppercase tracking-wide mb-1">Rejection Reason</div>
@@ -234,6 +294,9 @@ export default function GuideDetailPage() {
             onEdit={() => setEditOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
+          <div className="mt-4">
+            <InternalNotesPanel notes={notes} onAddNote={handleAddNote} canManage={hasPermission("guides.approve")} />
+          </div>
         </div>
       </div>
 

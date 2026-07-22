@@ -1,74 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
 import { AppColors, Spacing } from '@/constants/theme';
 import SearchBar from '@/components/ui/SearchBar';
 import FilterChip from '@/components/ui/FilterChip';
 import EmptyState from '@/components/EmptyState';
-import GuideCard, { GuideCardData } from '@/components/adventure/GuideCard';
+import GuideCard from '@/components/adventure/GuideCard';
+import {
+  fetchGuideRows, matchesSearch, sortByKey, useDiscoveryList, discoveryEmptyState,
+  type GuideListItem, type DiscoverySortKey, SORT_LABELS,
+} from '@/lib/services/DiscoveryService';
 
-// Traveller Discovery Experience — same gap as /homestays: the Home tab's
-// "Verified Guides" section already linked "See All" to /guides, but the
-// route 404'd. Reuses GuideCard as-is.
+// Discovery Engine Consolidation — same pattern as /homestays: query,
+// mapping, sort, and search all come from DiscoveryService.
 
-type SortKey = 'rating' | 'verified' | 'budget_low' | 'budget_high';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'rating', label: 'Top Rated' },
-  { key: 'verified', label: 'Recently Verified' },
-  { key: 'budget_low', label: 'Budget: Low to High' },
-  { key: 'budget_high', label: 'Budget: High to Low' },
-];
-
-interface Row extends GuideCardData {
-  verifiedAt: string | null;
-}
+const SORTS: DiscoverySortKey[] = ['rating', 'verified', 'budget_low', 'budget_high'];
 
 export default function GuidesBrowseScreen() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortKey>('rating');
+  const [sort, setSort] = useState<DiscoverySortKey>('rating');
 
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('guides')
-      .select('id, name, full_name, location, languages, experience_years, rating, total_reviews, rate_per_day, photo_url, profile_photo_url, status, verified_at')
-      .eq('status', 'approved')
-      .limit(100);
+  const { data: rows, loading, refreshing, onRefresh } = useDiscoveryList<GuideListItem>(() => fetchGuideRows(100), []);
 
-    setRows((data || []).map((g: any) => ({
-      id: g.id,
-      photoUrl: g.photo_url || g.profile_photo_url,
-      name: g.full_name || g.name,
-      location: g.location,
-      languages: Array.isArray(g.languages) ? g.languages : null,
-      experienceYears: g.experience_years,
-      treksCompleted: null,
-      rating: g.rating,
-      totalReviews: g.total_reviews,
-      verified: true, // this query only ever fetches status='approved'
-      ratePerDay: g.rate_per_day,
-      verifiedAt: g.verified_at,
-    })));
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
+  const filtered = sortByKey(
+    rows.filter((r) => matchesSearch([r.name, r.location], search)),
+    sort,
+    { price: (r) => r.ratePerDay ?? null, createdAt: (r) => r.createdAt, verifiedAt: (r) => r.verifiedAt, rating: (r) => r.rating ?? null }
+  );
 
-  useEffect(() => { load(); }, [load]);
-
-  const q = search.toLowerCase();
-  let filtered = rows.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.location || '').toLowerCase().includes(q));
-
-  filtered = [...filtered].sort((a, b) => {
-    if (sort === 'verified') return (b.verifiedAt || '').localeCompare(a.verifiedAt || '');
-    if (sort === 'budget_low') return (a.ratePerDay ?? Infinity) - (b.ratePerDay ?? Infinity);
-    if (sort === 'budget_high') return (b.ratePerDay ?? -Infinity) - (a.ratePerDay ?? -Infinity);
-    return (b.rating ?? 0) - (a.rating ?? 0);
-  });
+  const empty = discoveryEmptyState('guide', !!search);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -87,44 +49,37 @@ export default function GuidesBrowseScreen() {
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search guides or locations…" />
       </View>
 
-      <FlatList
-        horizontal showsHorizontalScrollIndicator={false}
-        data={SORTS} keyExtractor={(s) => s.key}
-        contentContainerStyle={styles.chipsRow}
-        style={{ maxHeight: 44, marginBottom: Spacing.md }}
-        renderItem={({ item }) => <FilterChip label={item.label} selected={sort === item.key} onPress={() => setSort(item.key)} />}
-      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} style={{ maxHeight: 44, marginBottom: Spacing.md }}>
+        {SORTS.map((s) => <FilterChip key={s} label={SORT_LABELS[s]} selected={sort === s} onPress={() => setSort(s)} />)}
+      </ScrollView>
 
       {loading ? (
         <ActivityIndicator size="large" color={AppColors.primary} style={{ marginTop: 60 }} />
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(r) => r.id}
-          numColumns={2}
-          columnWrapperStyle={{ gap: Spacing.md, paddingHorizontal: Spacing.lg }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: 60 }}
+        <ScrollView
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={AppColors.primary} />}
-          ListEmptyComponent={
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppColors.primary} />}
+        >
+          {filtered.length === 0 ? (
             <EmptyState
-              icon="compass-outline"
-              title={search ? 'No guides match yet' : 'No guides listed yet'}
-              subtitle={search ? 'Try a different search term.' : 'Check back soon — new guides are verified regularly.'}
+              icon={empty.icon as any} title={empty.title} subtitle={empty.subtitle}
               actionLabel={search ? 'Clear Search' : undefined}
               onAction={search ? () => setSearch('') : undefined}
             />
-          }
-          renderItem={({ item }) => (
-            <View style={{ flex: 1 }}>
-              <GuideCard
-                item={item}
-                onPress={() => router.push(`/guide/${item.id}` as any)}
-                onBookPress={() => router.push(`/guide/${item.id}` as any)}
-              />
+          ) : (
+            <View style={styles.grid}>
+              {filtered.map((item) => (
+                <GuideCard
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(`/guide/${item.id}` as any)}
+                  onBookPress={() => router.push(`/guide/${item.id}` as any)}
+                />
+              ))}
             </View>
           )}
-        />
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -144,4 +99,6 @@ const styles = StyleSheet.create({
   },
   listBtnText: { color: AppColors.background, fontSize: 13, fontWeight: '800' },
   chipsRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: 60 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, justifyContent: 'space-between' },
 });

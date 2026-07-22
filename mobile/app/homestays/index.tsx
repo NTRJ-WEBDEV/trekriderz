@@ -1,27 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
 import { AppColors, Spacing } from '@/constants/theme';
 import SearchBar from '@/components/ui/SearchBar';
 import FilterChip from '@/components/ui/FilterChip';
 import EmptyState from '@/components/EmptyState';
-import HomestayCard, { HomestayCardData } from '@/components/adventure/HomestayCard';
+import HomestayCard from '@/components/adventure/HomestayCard';
+import {
+  fetchHomestayRows, matchesSearch, sortByKey, useDiscoveryList, discoveryEmptyState,
+  type HomestayListItem, type DiscoverySortKey, SORT_LABELS,
+} from '@/lib/services/DiscoveryService';
 
-// Traveller Discovery Experience — this screen didn't exist before; the
-// Home tab's "Handpicked Homestays" section already linked its "See All"
-// to /homestays, but the route 404'd. Reuses HomestayCard (already built
-// for the Home tab carousel) rather than a new card shape.
+// Discovery Engine Consolidation — data (query + mapping + sort + search)
+// now comes entirely from DiscoveryService, the same layer the Home tab
+// and Discover tab use. This screen only owns its own filter UI (property
+// type) and layout.
 
-type SortKey = 'recent' | 'verified' | 'budget_low' | 'budget_high';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'recent', label: 'Recently Added' },
-  { key: 'verified', label: 'Recently Verified' },
-  { key: 'budget_low', label: 'Budget: Low to High' },
-  { key: 'budget_high', label: 'Budget: High to Low' },
-];
+const SORTS: DiscoverySortKey[] = ['recent', 'verified', 'budget_low', 'budget_high'];
 
 const PROPERTY_TYPES: { value: string; label: string }[] = [
   { value: 'private_room', label: 'Private Room' },
@@ -34,60 +31,23 @@ const PROPERTY_TYPES: { value: string; label: string }[] = [
   { value: 'heritage_home', label: 'Heritage Home' },
 ];
 
-interface Row extends HomestayCardData {
-  approvedAt: string | null;
-  createdAt: string;
-  propertyType: string[];
-}
-
 export default function HomestaysBrowseScreen() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortKey>('recent');
+  const [sort, setSort] = useState<DiscoverySortKey>('recent');
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('properties')
-      .select('id, name, city, state, photos, amenities, property_type, status, created_at, approved_at, room_types(base_price)')
-      .eq('status', 'approved')
-      .limit(100);
+  const { data: rows, loading, refreshing, onRefresh } = useDiscoveryList<HomestayListItem>(() => fetchHomestayRows(100), []);
 
-    setRows((data || []).map((h: any) => {
-      const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((p: any) => typeof p === 'number');
-      return {
-        id: h.id,
-        image: Array.isArray(h.photos) ? h.photos[0] : null,
-        name: h.name,
-        location: [h.city, h.state].filter(Boolean).join(', '),
-        pricePerNight: basePrices.length > 0 ? Math.min(...basePrices) : null,
-        rating: null,
-        amenities: Array.isArray(h.amenities) ? h.amenities : null,
-        verified: true, // this query only ever fetches status='approved'
-        approvedAt: h.approved_at,
-        createdAt: h.created_at,
-        propertyType: Array.isArray(h.property_type) ? h.property_type : [],
-      };
-    }));
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
+  const filtered = sortByKey(
+    rows
+      .filter((r) => matchesSearch([r.name, r.location], search))
+      .filter((r) => !typeFilter || r.propertyType.includes(typeFilter)),
+    sort,
+    { price: (r) => r.pricePerNight ?? null, createdAt: (r) => r.createdAt, verifiedAt: (r) => r.approvedAt }
+  );
 
-  useEffect(() => { load(); }, [load]);
-
-  const q = search.toLowerCase();
-  let filtered = rows
-    .filter((r) => !q || r.name.toLowerCase().includes(q) || r.location.toLowerCase().includes(q))
-    .filter((r) => !typeFilter || r.propertyType.includes(typeFilter));
-
-  filtered = [...filtered].sort((a, b) => {
-    if (sort === 'verified') return (b.approvedAt || '').localeCompare(a.approvedAt || '');
-    if (sort === 'budget_low') return (a.pricePerNight ?? Infinity) - (b.pricePerNight ?? Infinity);
-    if (sort === 'budget_high') return (b.pricePerNight ?? -Infinity) - (a.pricePerNight ?? -Infinity);
-    return b.createdAt.localeCompare(a.createdAt);
-  });
+  const hasFilters = !!search || !!typeFilter;
+  const empty = discoveryEmptyState('homestay', hasFilters);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -106,49 +66,39 @@ export default function HomestaysBrowseScreen() {
         <SearchBar value={search} onChangeText={setSearch} placeholder="Search homestays or cities…" />
       </View>
 
-      <FlatList
-        horizontal showsHorizontalScrollIndicator={false}
-        data={SORTS} keyExtractor={(s) => s.key}
-        contentContainerStyle={styles.chipsRow}
-        style={{ maxHeight: 44, marginBottom: Spacing.sm }}
-        renderItem={({ item }) => <FilterChip label={item.label} selected={sort === item.key} onPress={() => setSort(item.key)} />}
-      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} style={{ maxHeight: 44, marginBottom: Spacing.sm }}>
+        {SORTS.map((s) => <FilterChip key={s} label={SORT_LABELS[s]} selected={sort === s} onPress={() => setSort(s)} />)}
+      </ScrollView>
 
-      <FlatList
-        horizontal showsHorizontalScrollIndicator={false}
-        data={PROPERTY_TYPES} keyExtractor={(t) => t.value}
-        contentContainerStyle={styles.chipsRow}
-        style={{ maxHeight: 44, marginBottom: Spacing.md }}
-        ListHeaderComponent={<FilterChip label="All Types" selected={!typeFilter} onPress={() => setTypeFilter(null)} />}
-        renderItem={({ item }) => <FilterChip label={item.label} selected={typeFilter === item.value} onPress={() => setTypeFilter(item.value)} />}
-      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow} style={{ maxHeight: 44, marginBottom: Spacing.md }}>
+        <FilterChip label="All Types" selected={!typeFilter} onPress={() => setTypeFilter(null)} />
+        {PROPERTY_TYPES.map((t) => (
+          <FilterChip key={t.value} label={t.label} selected={typeFilter === t.value} onPress={() => setTypeFilter(t.value)} />
+        ))}
+      </ScrollView>
 
       {loading ? (
         <ActivityIndicator size="large" color={AppColors.primary} style={{ marginTop: 60 }} />
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(r) => r.id}
-          numColumns={2}
-          columnWrapperStyle={{ gap: Spacing.md, paddingHorizontal: Spacing.lg }}
-          contentContainerStyle={{ gap: Spacing.md, paddingBottom: 60 }}
+        <ScrollView
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={AppColors.primary} />}
-          ListEmptyComponent={
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AppColors.primary} />}
+        >
+          {filtered.length === 0 ? (
             <EmptyState
-              icon="home-outline"
-              title={search || typeFilter ? 'No homestays match yet' : 'No homestays listed yet'}
-              subtitle={search || typeFilter ? 'Try a broader search or clear the type filter.' : 'Be the first to list a homestay on TrekRiderz.'}
-              actionLabel={search || typeFilter ? 'Clear Filters' : 'List Your Property'}
-              onAction={() => { if (search || typeFilter) { setSearch(''); setTypeFilter(null); } else { router.push('/host/create' as any); } }}
+              icon={empty.icon as any} title={empty.title} subtitle={empty.subtitle}
+              actionLabel={hasFilters ? 'Clear Filters' : 'List Your Property'}
+              onAction={() => { if (hasFilters) { setSearch(''); setTypeFilter(null); } else { router.push('/host/create' as any); } }}
             />
-          }
-          renderItem={({ item }) => (
-            <View style={{ flex: 1 }}>
-              <HomestayCard item={item} onPress={() => router.push(`/homestay/${item.id}` as any)} />
+          ) : (
+            <View style={styles.grid}>
+              {filtered.map((item) => (
+                <HomestayCard key={item.id} item={item} onPress={() => router.push(`/homestay/${item.id}` as any)} />
+              ))}
             </View>
           )}
-        />
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -168,4 +118,10 @@ const styles = StyleSheet.create({
   },
   listBtnText: { color: AppColors.background, fontSize: 13, fontWeight: '800' },
   chipsRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  scrollContent: { paddingHorizontal: Spacing.lg, paddingBottom: 60 },
+  // flexWrap grid, not a fixed numColumns FlatList — HomestayCard has its
+  // own intrinsic width (built for horizontal carousels), so it wraps
+  // naturally to however many fit per row instead of being forced into
+  // uneven fixed columns that clip or leave gaps on narrower screens.
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md, justifyContent: 'space-between' },
 });

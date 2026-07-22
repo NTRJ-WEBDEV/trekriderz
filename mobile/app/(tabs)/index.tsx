@@ -6,10 +6,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { fetchExpeditions, GuidedExpedition } from '@/lib/expeditions';
+import { GuidedExpedition } from '@/lib/expeditions';
+import {
+  fetchTripRows, fetchHomestayRows, fetchGuideRows, fetchVehicleRows, fetchExpeditionRows,
+  mapTripToAdventureCard, mapTripToListingCard,
+} from '@/lib/services/DiscoveryService';
 import { AppColors, Spacing } from '@/constants/theme';
 import Wordmark from '@/components/ui/Wordmark';
 import EmptyState from '@/components/EmptyState';
@@ -99,17 +102,6 @@ const COMING_SOON: ComingSoonItem[] = [
   { icon: 'compass-outline', title: 'Local Finds', subtitle: 'Hidden spots, local tips' },
 ];
 
-function perPersonBudgetOf(trip: { budget?: number | null; budget_type?: string; group_size?: number | null }) {
-  const budget = trip.budget || 0;
-  if (trip.budget_type === 'per_person') return budget;
-  return Math.round(budget / (trip.group_size || 1));
-}
-
-function durationLabelOf(start: string, end: string) {
-  const days = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1;
-  return days > 0 ? `${days}D/${Math.max(days - 1, 0)}N` : null;
-}
-
 export default function AdventureScreen() {
   const { user } = useAuthStore();
   const unreadCount = useNotificationStore((s) => s.unreadCount);
@@ -133,100 +125,27 @@ export default function AdventureScreen() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const [tripsRes, featuredRes, guidesRes, homestaysRes, rentalsRes, expeditionsRes] = await Promise.all([
-        supabase.from('trips')
-          .select('id, title, destination, cover_photo_url, photos, experience_level, start_date, end_date, budget, budget_type, group_size')
-          .eq('is_public', true).eq('is_featured', false)
-          .in('status', ['planning', 'confirmed']).gte('end_date', today)
-          .order('start_date', { ascending: true }).limit(20),
-        supabase.from('trips')
-          .select('id, title, destination, cover_photo_url, photos, start_date, end_date')
-          .eq('is_public', true).eq('is_featured', true)
-          .in('status', ['planning', 'confirmed']).gte('end_date', today)
-          .order('start_date', { ascending: true }).limit(10),
-        supabase.from('guides')
-          .select('id, name, location, languages, experience_years, rating, total_reviews, rate_per_day, photo_url, profile_photo_url, status, verified_at')
-          .eq('status', 'approved').order('rating', { ascending: false }).limit(20),
-        // `properties` is the current, canonical homestay table — the
-        // legacy `homestays` table this used to query is stale and
-        // doesn't receive new admin-approved listings (see host/create.tsx,
-        // ApprovalService.ts, and every admin homestay page, all of which
-        // read/write `properties`). No `rating` column exists on
-        // `properties` today (confirmed against every migration) — omitted
-        // rather than guessed, matching this app's "no fabricated data" rule.
-        supabase.from('properties')
-          .select('id, name, city, state, photos, amenities, room_types(base_price), status')
-          .eq('status', 'approved').order('created_at', { ascending: false }).limit(20),
-        supabase.from('rental_vehicles')
-          .select('id, make, model, vehicle_type, price_per_day, photos, images, location, status, is_available')
-          .eq('status', 'approved').order('created_at', { ascending: false }).limit(30),
-        fetchExpeditions(),
+      // Every query + row→card mapping below now comes from
+      // DiscoveryService — the single shared query/mapping layer also
+      // used by the Discover tab and every browse screen (Discovery
+      // Engine Consolidation milestone). This screen only decides limits
+      // and which sections to show; it no longer knows table names or
+      // column shapes itself.
+      const [tripRows, featuredRows, guideItems, homestayItems, vehicleItems, expeditionRows] = await Promise.all([
+        fetchTripRows({ featured: false, limit: 20 }),
+        fetchTripRows({ featured: true, limit: 10 }),
+        fetchGuideRows(20),
+        fetchHomestayRows(20),
+        fetchVehicleRows(30),
+        fetchExpeditionRows(),
       ]);
 
-      setTreks((tripsRes.data || []).map((t: any) => ({
-        id: t.id,
-        image: t.cover_photo_url || (Array.isArray(t.photos) ? t.photos[0] : null),
-        title: t.title,
-        location: t.destination,
-        difficulty: t.experience_level,
-        distanceKm: null,
-        durationLabel: durationLabelOf(t.start_date, t.end_date),
-        rating: null,
-        startingPrice: perPersonBudgetOf(t) || null,
-      })));
-
-      setRecommends((featuredRes.data || []).map((t: any) => ({
-        id: t.id,
-        image: t.cover_photo_url || (Array.isArray(t.photos) ? t.photos[0] : null),
-        title: t.title,
-        subtitle: t.destination,
-        badgeLabel: 'Recommended',
-      })));
-
-      setGuides((guidesRes.data || []).map((g: any) => ({
-        id: g.id,
-        photoUrl: g.photo_url || g.profile_photo_url,
-        name: g.name,
-        location: g.location,
-        languages: Array.isArray(g.languages) ? g.languages : null,
-        experienceYears: g.experience_years,
-        treksCompleted: null,
-        rating: g.rating,
-        totalReviews: g.total_reviews,
-        verified: g.status === 'approved' || !!g.verified_at,
-        ratePerDay: g.rate_per_day,
-      })));
-
-      setHomestays((homestaysRes.data || []).map((h: any) => {
-        const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((p: any) => typeof p === 'number');
-        return {
-          id: h.id,
-          image: Array.isArray(h.photos) ? h.photos[0] : null,
-          name: h.name,
-          location: [h.city, h.state].filter(Boolean).join(', '),
-          pricePerNight: basePrices.length > 0 ? Math.min(...basePrices) : null,
-          rating: null, // no rating column on `properties` — not fabricated
-          amenities: Array.isArray(h.amenities) ? h.amenities : null,
-          verified: h.status === 'approved',
-        };
-      }));
-
-      setRentals((rentalsRes.data || []).map((v: any) => {
-        const photos: string[] = Array.isArray(v.images) && v.images.length > 0 ? v.images : (Array.isArray(v.photos) ? v.photos : []);
-        return {
-          id: v.id,
-          image: photos[0] || null,
-          title: [v.make, v.model].filter(Boolean).join(' ') || v.vehicle_type,
-          location: v.location,
-          pricePerDay: v.price_per_day,
-          available: !!v.is_available,
-          verified: v.status === 'approved',
-          vehicleType: v.vehicle_type,
-        } as RentalCardData & { vehicleType: string };
-      }));
-
-      if (expeditionsRes.data) setExpeditions(expeditionsRes.data);
+      setTreks(tripRows.map(mapTripToAdventureCard));
+      setRecommends(featuredRows.map((t) => mapTripToListingCard(t)));
+      setGuides(guideItems);
+      setHomestays(homestayItems);
+      setRentals(vehicleItems);
+      setExpeditions(expeditionRows);
     } catch (e) {
       console.error('Adventure load error:', e);
       setError(true);

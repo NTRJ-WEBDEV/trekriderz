@@ -1,15 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, RefreshControl, FlatList,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
+import EmptyState from '@/components/EmptyState';
+import GuideCard from '@/components/adventure/GuideCard';
+import HomestayCard from '@/components/adventure/HomestayCard';
+import RentalCard from '@/components/adventure/RentalCard';
+import {
+  fetchTripRows, fetchGuideRows, fetchHomestayRows, fetchVehicleRows,
+  matchesSearch, useDiscoveryList, discoveryEmptyState, perPersonBudgetOf,
+} from '@/lib/services/DiscoveryService';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -18,11 +23,11 @@ const BORDER = AppColors.border;
 
 type Section = 'trips' | 'guides' | 'homestays' | 'vehicles';
 
-const SECTIONS: { key: Section; label: string; emoji: string; icon: any }[] = [
-  { key: 'trips',     label: 'Trips',     emoji: '🗺️',  icon: 'map-outline' },
-  { key: 'guides',    label: 'Guides',    emoji: '🧭',  icon: 'compass-outline' },
-  { key: 'homestays', label: 'Homestays', emoji: '🏡',  icon: 'home-outline' },
-  { key: 'vehicles',  label: 'Vehicles',  emoji: '🏍️', icon: 'car-outline' },
+const SECTIONS: { key: Section; label: string; emoji: string }[] = [
+  { key: 'trips',     label: 'Trips',     emoji: '🗺️' },
+  { key: 'guides',    label: 'Guides',    emoji: '🧭' },
+  { key: 'homestays', label: 'Homestays', emoji: '🏡' },
+  { key: 'vehicles',  label: 'Vehicles',  emoji: '🏍️' },
 ];
 
 const TRIP_EMOJI: Record<string, string> = {
@@ -30,108 +35,62 @@ const TRIP_EMOJI: Record<string, string> = {
   weekend: '🌄', car_ride: '🚗', spiritual: '🙏', wildlife: '🦁', photography: '📸',
 };
 
-// trips.budget means different things depending on budget_type ('total' vs
-// 'per_person') — this always returns the per-person figure regardless of
-// which one a given trip was created with.
-function perPersonBudgetOf(trip: { budget?: number | null; budget_type?: string; group_size?: number | null }) {
-  const budget = trip.budget || 0;
-  if (trip.budget_type === 'per_person') return budget;
-  return Math.round(budget / (trip.group_size || 1));
-}
-
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+// Discovery Engine Consolidation — this screen used to run its own four
+// supabase queries (two of them against legacy `homestays`/`rentals`
+// tables). All four now come from DiscoveryService (same source the Home
+// tab and every browse screen use). Guides/homestays/vehicles rendering
+// also now reuses the shared adventure/*Card components instead of this
+// screen's own duplicate local versions. Trips keeps its own card: it
+// shows "Partner Wanted" status and trip-creator attribution that the
+// shared AdventureCard (built for the Home tab's read-only trek carousel)
+// has no fields for — reusing it here would silently drop that
+// information rather than just look different, so it's kept local
+// rather than forced into a shared component that doesn't fit.
+interface DiscoverData {
+  tripRows: any[];
+  guideItems: any[];
+  homestayItems: any[];
+  vehicleItems: any[];
+}
+
+const EMPTY_DATA: DiscoverData = { tripRows: [], guideItems: [], homestayItems: [], vehicleItems: [] };
+
 export default function DiscoverScreen() {
-  const { user } = useAuthStore();
   const [section, setSection] = useState<Section>('trips');
   const [search, setSearch] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
 
-  const [trips, setTrips] = useState<any[]>([]);
-  const [guides, setGuides] = useState<any[]>([]);
-  const [homestays, setHomestays] = useState<any[]>([]);
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const today = new Date().toISOString().split('T')[0];
-    const [tripsRes, guidesRes, homestaysRes, vehiclesRes] = await Promise.all([
-      supabase
-        .from('trips')
-        .select('id, title, destination, start_date, end_date, trip_type, group_size, budget, budget_type, looking_for_partner, creator:users!created_by(full_name, avatar_url)')
-        .eq('is_public', true)
-        .in('status', ['planning', 'confirmed'])
-        .gte('end_date', today)
-        .order('start_date', { ascending: true })
-        .limit(40),
-      supabase
-        .from('guides')
-        .select('id, name, location, specializations, experience_years, rate_per_day, rating, photo_url, languages')
-        .eq('status', 'approved')
-        .order('rating', { ascending: false })
-        .limit(40),
-      // `properties`/`rental_vehicles` are the current, canonical tables —
-      // this used to query legacy `homestays`/`rentals` tables that don't
-      // receive new admin-approved listings (same fix as the Home tab;
-      // see ApprovalService.ts and every admin page, all of which read/
-      // write `properties` and `rental_vehicles`).
-      supabase
-        .from('properties')
-        .select('id, name, city, state, photos, amenities, room_types(base_price)')
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(40),
-      supabase
-        .from('rental_vehicles')
-        .select('id, vehicle_type, make, model, location, price_per_day, photos, images, owner:users!owner_id(full_name)')
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(40),
+  // useDiscoveryList is array-shaped (it's built for listing screens); this
+  // screen fetches four sections in one round trip, so it's used with a
+  // singleton array holding the combined bundle rather than adding a
+  // second, near-identical hook just for this one screen.
+  const { data, loading, refreshing, onRefresh } = useDiscoveryList<DiscoverData>(async () => {
+    const [tripRows, guideItems, homestayItems, vehicleItems] = await Promise.all([
+      fetchTripRows({ limit: 40 }),
+      fetchGuideRows(40),
+      fetchHomestayRows(40),
+      fetchVehicleRows(40),
     ]);
-    setTrips(tripsRes.data || []);
-    setGuides(guidesRes.data || []);
-    setHomestays((homestaysRes.data || []).map((h: any) => {
-      const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((p: any) => typeof p === 'number');
-      return {
-        id: h.id, name: h.name, location: [h.city, h.state].filter(Boolean).join(', '),
-        price_per_night: basePrices.length > 0 ? Math.min(...basePrices) : null,
-        photos: h.photos, amenities: h.amenities, rating: null,
-      };
-    }));
-    setVehicles((vehiclesRes.data || []).map((v: any) => ({
-      ...v,
-      vehicle_name: [v.make, v.model].filter(Boolean).join(' '),
-      photos: Array.isArray(v.images) && v.images.length > 0 ? v.images : v.photos,
-    })));
-    setLoading(false);
-    setRefreshing(false);
+    return [{ tripRows, guideItems, homestayItems, vehicleItems }];
   }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const onRefresh = () => { setRefreshing(true); load(); };
+  const discoverData = data[0] || EMPTY_DATA;
 
   const q = search.toLowerCase();
+  const filteredTrips = discoverData.tripRows.filter((t) => matchesSearch([t.title, t.destination], q));
+  const filteredGuides = discoverData.guideItems.filter((g) => matchesSearch([g.name, g.location], q));
+  const filteredHomestays = discoverData.homestayItems.filter((h) => matchesSearch([h.name, h.location], q));
+  const filteredVehicles = discoverData.vehicleItems.filter((v) => matchesSearch([v.title, v.location], q));
 
-  const filteredTrips = trips.filter(t =>
-    !q || t.title?.toLowerCase().includes(q) || t.destination?.toLowerCase().includes(q)
-  );
-  const filteredGuides = guides.filter(g =>
-    !q || g.name?.toLowerCase().includes(q) || g.location?.toLowerCase().includes(q)
-  );
-  const filteredHomestays = homestays.filter(h =>
-    !q || h.name?.toLowerCase().includes(q) || h.location?.toLowerCase().includes(q)
-  );
-  const filteredVehicles = vehicles.filter(v =>
-    !q || v.vehicle_name?.toLowerCase().includes(q) || v.location?.toLowerCase().includes(q)
-  );
+  const counts: Record<Section, number> = {
+    trips: filteredTrips.length, guides: filteredGuides.length,
+    homestays: filteredHomestays.length, vehicles: filteredVehicles.length,
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Discover</Text>
         <TouchableOpacity onPress={() => router.push('/map' as any)} style={styles.mapBtn}>
@@ -140,7 +99,6 @@ export default function DiscoverScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
       <View style={styles.searchRow}>
         <Ionicons name="search-outline" size={16} color="rgba(255,255,255,0.35)" />
         <TextInput
@@ -157,7 +115,6 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {/* Section tabs */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -172,7 +129,7 @@ export default function DiscoverScreen() {
           >
             <Text style={styles.sectionEmoji}>{s.emoji}</Text>
             <Text style={[styles.sectionLabel, section === s.key && styles.sectionLabelActive]}>
-              {s.label}
+              {s.label} · {counts[s.key]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -183,39 +140,64 @@ export default function DiscoverScreen() {
           <ActivityIndicator size="large" color={GREEN} />
         </View>
       ) : (
-        <FlatList
-          data={
-            section === 'trips' ? filteredTrips
-            : section === 'guides' ? filteredGuides
-            : section === 'homestays' ? filteredHomestays
-            : filteredVehicles
-          }
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.list}
+        <ScrollView
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={GREEN} />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>
-                {SECTIONS.find(s => s.key === section)?.emoji}
-              </Text>
-              <Text style={styles.emptyText}>No {section} found</Text>
-              {section === 'trips' && (
-                <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/create' as any)}>
-                  <Text style={styles.emptyBtnText}>Plan a Trip</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
-          renderItem={({ item }) => {
-            if (section === 'trips') return <TripCard item={item} />;
-            if (section === 'guides') return <GuideCard item={item} />;
-            if (section === 'homestays') return <HomestayCard item={item} />;
-            return <VehicleCard item={item} />;
-          }}
-        />
+        >
+          <ContentForSection
+            section={section}
+            trips={filteredTrips}
+            guides={filteredGuides}
+            homestays={filteredHomestays}
+            vehicles={filteredVehicles}
+            search={search}
+          />
+        </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+function ContentForSection({ section, trips, guides, homestays, vehicles, search }: {
+  section: Section; trips: any[]; guides: any[]; homestays: any[]; vehicles: any[]; search: string;
+}) {
+  const items = section === 'trips' ? trips : section === 'guides' ? guides : section === 'homestays' ? homestays : vehicles;
+
+  if (items.length === 0) {
+    const { icon, title, subtitle } = discoveryEmptyState(
+      section === 'trips' ? 'trip' : section === 'guides' ? 'guide' : section === 'homestays' ? 'homestay' : 'vehicle',
+      !!search
+    );
+    return (
+      <EmptyState
+        icon={icon as any} title={title} subtitle={subtitle}
+        actionLabel={section === 'trips' && !search ? 'Plan a Trip' : undefined}
+        onAction={section === 'trips' && !search ? () => router.push('/create' as any) : undefined}
+      />
+    );
+  }
+
+  if (section === 'trips') {
+    return (
+      <View style={{ gap: 12 }}>
+        {trips.map((t) => <TripCard key={t.id} item={t} />)}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.grid}>
+      {section === 'guides' && guides.map((g) => (
+        <GuideCard key={g.id} item={g} onPress={() => router.push(`/guide/${g.id}` as any)} onBookPress={() => router.push(`/guide/${g.id}` as any)} />
+      ))}
+      {section === 'homestays' && homestays.map((h) => (
+        <HomestayCard key={h.id} item={h} onPress={() => router.push(`/homestay/${h.id}` as any)} />
+      ))}
+      {section === 'vehicles' && vehicles.map((v) => (
+        <RentalCard key={v.id} item={v} onPress={() => router.push(`/rentals/${v.id}` as any)} />
+      ))}
+    </View>
   );
 }
 
@@ -254,108 +236,6 @@ function TripCard({ item }: { item: any }) {
   );
 }
 
-function GuideCard({ item }: { item: any }) {
-  const specs: string[] = Array.isArray(item.specializations) ? item.specializations : [];
-  return (
-    <TouchableOpacity style={styles.card} onPress={() => router.push(`/guide/${item.id}` as any)} activeOpacity={0.8}>
-      <View style={styles.cardTop}>
-        {item.photo_url ? (
-          <Image source={{ uri: item.photo_url }} style={styles.guideAvatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.guideAvatar, styles.guideAvatarFallback]}>
-            <Text style={styles.guideInitial}>{item.name?.charAt(0) || 'G'}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={12} color={GREEN} />
-            <Text style={styles.metaText}>{item.location || 'Location not set'}</Text>
-          </View>
-          <Text style={styles.metaText}>{item.experience_years}yr exp · ₹{(item.rate_per_day || 0).toLocaleString('en-IN')}/day</Text>
-        </View>
-        {item.rating && (
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={11} color="#F59E0B" />
-            <Text style={styles.ratingText}>{Number(item.rating).toFixed(1)}</Text>
-          </View>
-        )}
-      </View>
-      {specs.length > 0 && (
-        <View style={styles.specRow}>
-          {specs.slice(0, 3).map((s, i) => (
-            <View key={i} style={styles.specChip}>
-              <Text style={styles.specText}>{s.replace(/_/g, ' ')}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-function HomestayCard({ item }: { item: any }) {
-  const photos: string[] = Array.isArray(item.photos) ? item.photos : [];
-  return (
-    <TouchableOpacity style={styles.card} onPress={() => router.push(`/homestay/${item.id}` as any)} activeOpacity={0.8}>
-      {photos[0] && (
-        <Image source={{ uri: photos[0] }} style={styles.cardImage} contentFit="cover" />
-      )}
-      <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
-            <View style={styles.metaRow}>
-              <Ionicons name="location-outline" size={12} color={GREEN} />
-              <Text style={styles.metaText}>{item.location}</Text>
-            </View>
-          </View>
-          <View style={styles.pricePill}>
-            <Text style={styles.priceText}>₹{(item.price_per_night || 0).toLocaleString('en-IN')}</Text>
-            <Text style={styles.priceUnit}>/night</Text>
-          </View>
-        </View>
-        {item.rating && (
-          <View style={styles.metaRow}>
-            <Ionicons name="star" size={12} color="#F59E0B" />
-            <Text style={styles.metaText}>{Number(item.rating).toFixed(1)}</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function VehicleCard({ item }: { item: any }) {
-  const photos: string[] = Array.isArray(item.photos) ? item.photos : [];
-  const owner = Array.isArray(item.owner) ? item.owner[0] : item.owner;
-  return (
-    <TouchableOpacity style={styles.card} onPress={() => router.push(`/rentals/${item.id}` as any)} activeOpacity={0.8}>
-      {photos[0] && (
-        <Image source={{ uri: photos[0] }} style={styles.cardImage} contentFit="cover" />
-      )}
-      <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.vehicle_name || item.vehicle_type}</Text>
-            <View style={styles.metaRow}>
-              <Ionicons name="location-outline" size={12} color={GREEN} />
-              <Text style={styles.metaText}>{item.location}</Text>
-            </View>
-            {owner?.full_name && (
-              <Text style={styles.metaText}>by {owner.full_name}</Text>
-            )}
-          </View>
-          <View style={styles.pricePill}>
-            <Text style={styles.priceText}>₹{(item.price_per_day || 0).toLocaleString('en-IN')}</Text>
-            <Text style={styles.priceUnit}>/day</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   header: {
@@ -389,19 +269,14 @@ const styles = StyleSheet.create({
   sectionEmoji: { fontSize: 14 },
   sectionLabel: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
   sectionLabelActive: { color: GREEN },
+  list: { paddingHorizontal: 16, paddingBottom: 80, paddingTop: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { paddingHorizontal: 16, paddingBottom: 80 },
-  empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyEmoji: { fontSize: 48 },
-  emptyText: { color: 'rgba(255,255,255,0.4)', fontSize: 16 },
-  emptyBtn: { backgroundColor: GREEN, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
-  emptyBtnText: { color: '#000', fontWeight: '700', fontSize: 14 },
+
   card: {
-    backgroundColor: CARD, borderRadius: 16, marginBottom: 12,
+    backgroundColor: CARD, borderRadius: 16,
     borderWidth: 1, borderColor: BORDER, overflow: 'hidden',
   },
-  cardImage: { width: '100%', height: 160 },
-  cardBody: { padding: 14, gap: 8 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14 },
   cardTitle: { color: '#FFF', fontSize: 15, fontWeight: '700', marginBottom: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
@@ -424,23 +299,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   tripEmoji: { fontSize: 24 },
-  guideAvatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: GREEN },
-  guideAvatarFallback: { backgroundColor: 'rgba(140,198,63,0.1)', justifyContent: 'center', alignItems: 'center' },
-  guideInitial: { color: GREEN, fontSize: 20, fontWeight: '800' },
-  ratingBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(245,158,11,0.12)', borderRadius: 8,
-    paddingHorizontal: 7, paddingVertical: 4,
-  },
-  ratingText: { color: '#F59E0B', fontSize: 12, fontWeight: '700' },
-  specRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 14 },
-  specChip: {
-    backgroundColor: 'rgba(140,198,63,0.08)', borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderWidth: 1, borderColor: 'rgba(140,198,63,0.2)',
-  },
-  specText: { color: GREEN, fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
-  pricePill: { alignItems: 'flex-end' },
-  priceText: { color: GREEN, fontSize: 16, fontWeight: '800' },
-  priceUnit: { color: 'rgba(255,255,255,0.35)', fontSize: 10 },
 });

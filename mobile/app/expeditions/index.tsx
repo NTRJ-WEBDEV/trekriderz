@@ -15,7 +15,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useExpeditionStore } from '@/stores/expeditionStore';
 import ExpeditionCard from '@/components/ExpeditionCard';
 import EmptyState from '@/components/EmptyState';
+import { sortByKey, minExpeditionPackagePrice, type DiscoverySortKey, SORT_LABELS } from '@/lib/services/DiscoveryService';
 
+// Discovery Engine Consolidation — sort logic (previously a local
+// minPackagePrice() + inline .sort()) now comes from DiscoveryService,
+// shared with every other discovery screen. The expedition query itself
+// was already correctly shared (useExpeditionStore → fetchExpeditions()
+// in lib/expeditions.ts) — nothing to consolidate there.
 const DIFFICULTY_FILTERS = [
   { label: 'All', value: null },
   { label: 'Easy', value: 'easy' },
@@ -24,23 +30,13 @@ const DIFFICULTY_FILTERS = [
   { label: 'Expert', value: 'expert' },
 ];
 
-type SortKey = 'recent' | 'budget_low' | 'budget_high';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'recent', label: 'Recently Added' },
-  { key: 'budget_low', label: 'Budget: Low to High' },
-  { key: 'budget_high', label: 'Budget: High to Low' },
-];
-
-function minPackagePrice(expedition: any): number | null {
-  const prices = (expedition.packages || []).map((p: any) => p.price_per_person).filter((p: any) => typeof p === 'number');
-  return prices.length > 0 ? Math.min(...prices) : null;
-}
+const SORTS: DiscoverySortKey[] = ['recent', 'budget_low', 'budget_high'];
 
 export default function BrowseExpeditionsScreen() {
   const { expeditions, loading, error, fetchExpeditions, setFilters, filters } =
     useExpeditionStore();
   const [activeDifficulty, setActiveDifficulty] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortKey>('recent');
+  const [sort, setSort] = useState<DiscoverySortKey>('recent');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -112,14 +108,14 @@ export default function BrowseExpeditionsScreen() {
           style={[styles.filtersContainer, { marginTop: -4 }]}
         >
           {SORTS.map((s) => {
-            const isActive = sort === s.key;
+            const isActive = sort === s;
             return (
               <TouchableOpacity
-                key={s.key}
+                key={s}
                 style={[styles.filterChip, isActive && styles.filterChipActive]}
-                onPress={() => setSort(s.key)}
+                onPress={() => setSort(s)}
               >
-                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{s.label}</Text>
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{SORT_LABELS[s]}</Text>
               </TouchableOpacity>
             );
           })}
@@ -163,11 +159,7 @@ export default function BrowseExpeditionsScreen() {
               />
             ) : (
               <View style={styles.cardList}>
-                {[...expeditions].sort((a, b) => {
-                  if (sort === 'budget_low') return (minPackagePrice(a) ?? Infinity) - (minPackagePrice(b) ?? Infinity);
-                  if (sort === 'budget_high') return (minPackagePrice(b) ?? -Infinity) - (minPackagePrice(a) ?? -Infinity);
-                  return b.created_at.localeCompare(a.created_at);
-                }).map((expedition) => (
+                {sortByKey(expeditions, sort, { price: minExpeditionPackagePrice, createdAt: (e) => e.created_at }).map((expedition) => (
                   <ExpeditionCard key={expedition.id} expedition={expedition} onPress={() => router.push(`/expeditions/${expedition.id}` as any)} />
                 ))}
               </View>

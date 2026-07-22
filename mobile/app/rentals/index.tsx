@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, RefreshControl,
@@ -8,16 +8,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
 import FilterChip from '@/components/ui/FilterChip';
 import EmptyState from '@/components/EmptyState';
+import { supabase } from '@/lib/supabase';
+import { matchesSearch, sortByKey, useDiscoveryList, discoveryEmptyState, type DiscoverySortKey, SORT_LABELS } from '@/lib/services/DiscoveryService';
 
-type SortKey = 'recent' | 'budget_low' | 'budget_high';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'recent', label: 'Recently Added' },
-  { key: 'budget_low', label: 'Budget: Low to High' },
-  { key: 'budget_high', label: 'Budget: High to Low' },
-];
+// Discovery Engine Consolidation — query + search + sort now come from
+// DiscoveryService (matching every other discovery screen). This
+// screen's own richer card markup (year, fuel-included, type badge) is
+// kept as-is rather than swapped for the compact adventure/RentalCard —
+// that component is a smaller carousel-shaped card missing those fields,
+// and replacing it here would remove information travellers currently
+// see, which is a UX change outside this milestone's scope.
+const SORTS: DiscoverySortKey[] = ['recent', 'budget_low', 'budget_high'];
 // No "Recently Verified" sort here — rental_vehicles has no approved_at/
 // verified_at column (confirmed against ApprovalService.ts's vehicle
 // config, which sets no extra fields on approval), unlike homestays/
@@ -48,52 +51,47 @@ interface RentalVehicle {
   photos: string[];
   features: string[];
   fuel_included: boolean;
+  is_available: boolean;
+  created_at: string;
   seats: number | null;
   contact_phone: string;
   contact_whatsapp: string | null;
 }
 
+const RENTAL_VEHICLE_DETAIL_SELECT = 'id, vehicle_type, make, model, year, price_per_day, location, photos, features, fuel_included, is_available, created_at, seats, contact_phone, contact_whatsapp, status';
+
+async function fetchAvailableVehicles(): Promise<RentalVehicle[]> {
+  // This screen (unlike the Home tab / Discover tab) only ever shows
+  // vehicles currently available to rent — a real, pre-existing behavior
+  // difference, preserved exactly rather than folded into the shared
+  // fetchVehicleRows(), which intentionally returns both available and
+  // booked vehicles for contexts that show an "Available"/"Booked" badge.
+  const { data } = await supabase
+    .from('rental_vehicles')
+    .select(RENTAL_VEHICLE_DETAIL_SELECT)
+    .eq('status', 'approved')
+    .eq('is_available', true)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  return (data as RentalVehicle[]) || [];
+}
+
 export default function RentalsScreen() {
-  const [vehicles, setVehicles] = useState<RentalVehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [sort, setSort] = useState<SortKey>('recent');
+  const [sort, setSort] = useState<DiscoverySortKey>('recent');
 
-  useEffect(() => { fetchVehicles(); }, [typeFilter]);
+  const { data: vehicles, loading, refreshing, onRefresh } = useDiscoveryList<RentalVehicle>(fetchAvailableVehicles, []);
 
-  const fetchVehicles = async () => {
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('rental_vehicles')
-        .select('*')
-        .eq('status', 'approved')
-        .eq('is_available', true)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (typeFilter) query = query.eq('vehicle_type', typeFilter);
-      const { data } = await query;
-      setVehicles(data || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const filtered = [...vehicles.filter((v) =>
-    !search ||
-    v.make?.toLowerCase().includes(search.toLowerCase()) ||
-    v.model?.toLowerCase().includes(search.toLowerCase()) ||
-    v.location?.toLowerCase().includes(search.toLowerCase())
-  )].sort((a, b) => {
-    if (sort === 'budget_low') return (a.price_per_day ?? Infinity) - (b.price_per_day ?? Infinity);
-    if (sort === 'budget_high') return (b.price_per_day ?? -Infinity) - (a.price_per_day ?? -Infinity);
-    return 0; // already ordered by created_at desc from the query
-  });
+  const filtered = sortByKey(
+    vehicles
+      .filter((v) => matchesSearch([v.make, v.model, v.location], search))
+      .filter((v) => !typeFilter || v.vehicle_type === typeFilter),
+    sort,
+    { price: (v) => v.price_per_day ?? null, createdAt: (v) => v.created_at }
+  );
+  const hasFilters = !!(search || typeFilter);
+  const empty = discoveryEmptyState('vehicle', hasFilters);
 
   return (
     <View style={styles.container}>
@@ -165,10 +163,10 @@ export default function RentalsScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           data={SORTS}
-          keyExtractor={(s) => s.key}
+          keyExtractor={(s) => s}
           contentContainerStyle={styles.pillsRow}
           style={[styles.pillsScroll, { marginBottom: 4 }]}
-          renderItem={({ item }) => <FilterChip label={item.label} selected={sort === item.key} onPress={() => setSort(item.key)} />}
+          renderItem={({ item }) => <FilterChip label={SORT_LABELS[item]} selected={sort === item} onPress={() => setSort(item)} />}
         />
 
         {/* Count */}
@@ -191,17 +189,17 @@ export default function RentalsScreen() {
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={() => { setRefreshing(true); fetchVehicles(); }}
+                onRefresh={onRefresh}
                 tintColor="#F97316"
               />
             }
             ListEmptyComponent={
               <EmptyState
-                icon="car-outline"
-                title={search || typeFilter ? 'No vehicles match yet' : 'No vehicles listed yet'}
-                subtitle={search || typeFilter ? 'Try a broader search or a different vehicle type.' : 'Be the first to list your vehicle for rent!'}
-                actionLabel={search || typeFilter ? 'Clear Filters' : 'List Your Vehicle'}
-                onAction={() => { if (search || typeFilter) { setSearch(''); setTypeFilter(''); } else { router.push('/rentals/register' as any); } }}
+                icon={empty.icon as any}
+                title={empty.title}
+                subtitle={hasFilters ? 'Try a broader search or a different vehicle type.' : 'Be the first to list your vehicle for rent!'}
+                actionLabel={hasFilters ? 'Clear Filters' : 'List Your Vehicle'}
+                onAction={() => { if (hasFilters) { setSearch(''); setTypeFilter(''); } else { router.push('/rentals/register' as any); } }}
               />
             }
             renderItem={({ item }) => (

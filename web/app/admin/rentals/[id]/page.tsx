@@ -17,9 +17,9 @@ import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
 import ChangeRequestPanel from "@/components/admin/review/ChangeRequestPanel";
 import InternalNotesPanel from "@/components/admin/review/InternalNotesPanel";
 import {
-  fetchChangeRequests, createChangeRequests, resolveChangeRequest,
+  fetchChangeRequests, createChangeRequests, markChangeResolved, markChangeVerified, reopenChangeRequest,
   fetchInternalNotes, addInternalNote,
-  type ChangeRequest, type InternalNote,
+  type ChangeRequest, type InternalNote, type ChangeRequestPriority,
 } from "@/lib/services/ReviewWorkspaceService";
 
 interface RentalVehicle {
@@ -109,14 +109,22 @@ export default function RentalDetailPage() {
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
-  const handleRequestChanges = async (items: { issue: string; instructions: string }[]) => {
+  const handleRequestChanges = async (items: { issue: string; instructions: string; priority: ChangeRequestPriority; field_key: string | null }[]) => {
     if (!vehicle) return;
-    try { await createChangeRequests("vehicles", vehicle.id, items); showToast("Changes requested."); load(); }
+    try { await createChangeRequests("vehicles", vehicle.id, vehicle.owner_id, items); showToast("Changes requested."); load(); }
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
-  const handleResolveChange = async (crId: string) => {
-    try { await resolveChangeRequest(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  const handleMarkResolved = async (crId: string) => {
+    try { await markChangeResolved(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleMarkVerified = async (crId: string) => {
+    try { await markChangeVerified(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleReopen = async (crId: string, note: string) => {
+    try { await reopenChangeRequest(crId, note); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
   const handleAddNote = async (note: string) => {
@@ -215,7 +223,9 @@ export default function RentalDetailPage() {
           <ChangeRequestPanel
             requests={changeRequests}
             onSubmit={handleRequestChanges}
-            onResolve={handleResolveChange}
+            onMarkResolved={handleMarkResolved}
+            onMarkVerified={handleMarkVerified}
+            onReopen={handleReopen}
             canManage={hasPermission("rentals.approve")}
           />
 

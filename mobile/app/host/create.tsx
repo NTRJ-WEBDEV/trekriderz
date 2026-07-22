@@ -620,6 +620,10 @@ export default function CreatePropertyScreen() {
       const { error: roomErr } = await supabase.from('room_types').insert(roomPayload);
       if (roomErr) throw roomErr;
 
+      // 'system' isn't a valid notifications.type (see notifications_type_check) —
+      // this insert was silently failing on every submission. 'ready_for_review'
+      // is the same "something needs staff attention" event the Review
+      // Resolution workflow already uses for a partner's resubmission.
       const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
       if (admins?.length) {
         await supabase.from('notifications').insert(
@@ -627,7 +631,8 @@ export default function CreatePropertyScreen() {
             user_id: a.id,
             title: 'New Property Application',
             message: `${name.trim()} has applied for property listing approval.`,
-            type: 'system',
+            type: 'ready_for_review',
+            related_id: property.id,
           }))
         );
       }

@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
 import EmptyState from '@/components/EmptyState';
+import ReviewSummaryBanner from '@/components/partner/ReviewSummaryBanner';
+import { fetchChangeRequests } from '@/lib/services/ReviewWorkspaceService';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -48,6 +50,7 @@ export default function PropertyStatusScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
+  const [openChangeCount, setOpenChangeCount] = useState(0);
 
   const fetchStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -67,6 +70,10 @@ export default function PropertyStatusScreen() {
       const { data, error } = await query.limit(1).maybeSingle();
       if (error) throw error;
       setProperty(data as unknown as Property | null);
+      if (data) {
+        const changes = await fetchChangeRequests('homestays', (data as any).id);
+        setOpenChangeCount(changes.filter((c) => !['resolved', 'verified'].includes(c.status)).length);
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
@@ -118,6 +125,7 @@ export default function PropertyStatusScreen() {
           <Text style={s.headerTitle}>Property Status</Text>
         </View>
         <ScrollView contentContainerStyle={s.content}>
+          <ReviewSummaryBanner entityType="homestays" entityId={property.id} openCount={openChangeCount} />
           <View style={s.approvedCard}>
             <View style={s.approvedBadge}>
               <Ionicons name="checkmark-circle" size={32} color={GREEN} />
@@ -174,6 +182,7 @@ export default function PropertyStatusScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.content}>
+        <ReviewSummaryBanner entityType="homestays" entityId={property.id} openCount={openChangeCount} />
         <View style={s.profileRow}>
           {property.cover_photo_url ? (
             <Image source={{ uri: property.cover_photo_url }} style={s.statusAvatar} contentFit="cover" />

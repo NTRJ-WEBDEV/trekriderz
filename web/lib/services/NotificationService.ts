@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase';
 export type NotificationType =
   | 'trip_invite' | 'homestay_approved' | 'guide_approved' | 'booking' | 'booking_cancelled'
   | 'community_join_request' | 'community_join_approved' | 'community_join_rejected'
-  | 'like' | 'comment' | 'follow' | 'sos_alert' | 'other';
+  | 'like' | 'comment' | 'follow' | 'sos_alert' | 'other'
+  | 'changes_requested' | 'ready_for_review';
 
 interface NotifyParams {
   userId: string;

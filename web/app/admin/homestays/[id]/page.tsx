@@ -18,10 +18,10 @@ import ChangeRequestPanel from "@/components/admin/review/ChangeRequestPanel";
 import DocumentStatusPanel from "@/components/admin/review/DocumentStatusPanel";
 import InternalNotesPanel from "@/components/admin/review/InternalNotesPanel";
 import {
-  fetchChangeRequests, createChangeRequests, resolveChangeRequest,
+  fetchChangeRequests, createChangeRequests, markChangeResolved, markChangeVerified, reopenChangeRequest,
   fetchDocumentStatuses, setDocumentStatus,
   fetchInternalNotes, addInternalNote,
-  type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus,
+  type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus, type ChangeRequestPriority,
 } from "@/lib/services/ReviewWorkspaceService";
 
 interface RoomType {
@@ -124,14 +124,22 @@ export default function HomestayDetailPage() {
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
-  const handleRequestChanges = async (items: { issue: string; instructions: string }[]) => {
+  const handleRequestChanges = async (items: { issue: string; instructions: string; priority: ChangeRequestPriority; field_key: string | null }[]) => {
     if (!property) return;
-    try { await createChangeRequests("homestays", property.id, items); showToast("Changes requested."); load(); }
+    try { await createChangeRequests("homestays", property.id, property.owner_id, items); showToast("Changes requested."); load(); }
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
-  const handleResolveChange = async (crId: string) => {
-    try { await resolveChangeRequest(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  const handleMarkResolved = async (crId: string) => {
+    try { await markChangeResolved(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleMarkVerified = async (crId: string) => {
+    try { await markChangeVerified(crId); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
+  };
+
+  const handleReopen = async (crId: string, note: string) => {
+    try { await reopenChangeRequest(crId, note); load(); } catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
   const handleSetDocStatus = async (documentKey: string, status: DocumentReviewStatus) => {
@@ -271,7 +279,9 @@ export default function HomestayDetailPage() {
           <ChangeRequestPanel
             requests={changeRequests}
             onSubmit={handleRequestChanges}
-            onResolve={handleResolveChange}
+            onMarkResolved={handleMarkResolved}
+            onMarkVerified={handleMarkVerified}
+            onReopen={handleReopen}
             canManage={hasPermission("homestays.approve")}
           />
 

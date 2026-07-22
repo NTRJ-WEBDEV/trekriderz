@@ -426,6 +426,10 @@ export default function GuideRegisterScreen() {
 
       if (error) throw error;
 
+      // 'system' isn't a valid notifications.type (see notifications_type_check) —
+      // this insert was silently failing on every submission. 'ready_for_review'
+      // is the same "something needs staff attention" event the Review
+      // Resolution workflow already uses for a partner's resubmission.
       const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
       if (admins?.length) {
         await supabase.from('notifications').insert(
@@ -433,7 +437,7 @@ export default function GuideRegisterScreen() {
             user_id: a.id,
             title: 'New Guide Application',
             message: `${fullName.trim()} has applied to become a certified guide.`,
-            type: 'system',
+            type: 'ready_for_review',
           }))
         );
       }

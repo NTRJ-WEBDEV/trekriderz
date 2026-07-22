@@ -218,6 +218,7 @@ export default function RootLayout() {
         <Stack.Screen name="host/my-properties" />
         <Stack.Screen name="guide/register" />
         <Stack.Screen name="guide/application-status" />
+        <Stack.Screen name="partner/review" />
         <Stack.Screen name="profile/edit" />
         <Stack.Screen name="post/create" />
         <Stack.Screen name="create-post" />

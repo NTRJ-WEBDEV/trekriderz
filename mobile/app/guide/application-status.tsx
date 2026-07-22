@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
+import ReviewSummaryBanner from '@/components/partner/ReviewSummaryBanner';
+import { fetchChangeRequests } from '@/lib/services/ReviewWorkspaceService';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -52,6 +54,7 @@ export default function ApplicationStatusScreen() {
   const [guide, setGuide] = useState<GuideApplication | null>(null);
   const [loading, setLoading] = useState(true);
   const [resubmitting, setResubmitting] = useState(false);
+  const [openChangeCount, setOpenChangeCount] = useState(0);
 
   const fetchStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -64,6 +67,10 @@ export default function ApplicationStatusScreen() {
         .maybeSingle();
       if (error) throw error;
       setGuide(data as GuideApplication | null);
+      if (data) {
+        const changes = await fetchChangeRequests('guides', (data as any).id);
+        setOpenChangeCount(changes.filter((c) => !['resolved', 'verified'].includes(c.status)).length);
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {
@@ -144,6 +151,7 @@ export default function ApplicationStatusScreen() {
           <Text style={s.headerTitle}>Guide Profile</Text>
         </View>
         <ScrollView contentContainerStyle={s.content}>
+          <ReviewSummaryBanner entityType="guides" entityId={guide.id} openCount={openChangeCount} />
           <View style={s.approvedCard}>
             <View style={s.approvedBadge}>
               <Ionicons name="checkmark-circle" size={32} color={GREEN} />
@@ -215,6 +223,7 @@ export default function ApplicationStatusScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.content}>
+        <ReviewSummaryBanner entityType="guides" entityId={guide.id} openCount={openChangeCount} />
         {/* Profile row */}
         <View style={s.profileRow}>
           {photoUrl ? (

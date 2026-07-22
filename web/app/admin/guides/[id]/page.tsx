@@ -24,6 +24,11 @@ import {
   fetchInternalNotes, addInternalNote,
   type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus, type ChangeRequestPriority,
 } from "@/lib/services/ReviewWorkspaceService";
+import AuditHistoryPanel from "@/components/admin/review/AuditHistoryPanel";
+import {
+  fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
+  type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
+} from "@/lib/services/AuditWorkspaceService";
 
 interface Guide {
   id: string; user_id: string;
@@ -53,6 +58,8 @@ export default function GuideDetailPage() {
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [docStatuses, setDocStatuses] = useState<DocumentStatus[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
+  const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
+  const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -70,16 +77,20 @@ export default function GuideDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setGuide(data as unknown as Guide);
-    const [activityRows, crRows, docRows, noteRows] = await Promise.all([
+    const [activityRows, crRows, docRows, noteRows, schedule, auditHistory] = await Promise.all([
       getActivityForEntity("guides", id),
       fetchChangeRequests("guides", id),
       fetchDocumentStatuses("guides", id),
       fetchInternalNotes("guides", id),
+      fetchScheduleFor("guides", id),
+      fetchAuditHistory("guides", id),
     ]);
     setActivity(activityRows);
     setChangeRequests(crRows);
     setDocStatuses(docRows);
     setNotes(noteRows);
+    setAuditSchedule(schedule);
+    setAuditRecords(auditHistory);
     setLoading(false);
   }, [id]);
 
@@ -145,6 +156,14 @@ export default function GuideDetailPage() {
     if (!guide) return;
     await addInternalNote("guides", guide.id, note);
     load();
+  };
+
+  const handleRecordAudit = async (input: { audit_type: AuditType; checklist: AuditChecklist; photo_set: string[]; outcome: AuditOutcome; notes?: string }) => {
+    if (!guide) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try { await recordAuditOutcome("guides", guide.id, guide.user_id, input, user.id); showToast("Audit recorded."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -277,6 +296,16 @@ export default function GuideDetailPage() {
               <div className="text-red-400 text-xs uppercase tracking-wide mb-1">Rejection Reason</div>
               <p className="text-white/70 text-sm">{guide.rejection_reason}</p>
             </section>
+          )}
+
+          {guide.status === "approved" && (
+            <AuditHistoryPanel
+              schedule={auditSchedule}
+              records={auditRecords}
+              entityName={displayName}
+              canManage={hasPermission("guides.approve")}
+              onRecordAudit={handleRecordAudit}
+            />
           )}
 
           {activity.length > 0 && (

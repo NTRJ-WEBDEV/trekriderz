@@ -23,6 +23,11 @@ import {
   fetchInternalNotes, addInternalNote,
   type ChangeRequest, type DocumentStatus, type InternalNote, type DocumentReviewStatus, type ChangeRequestPriority,
 } from "@/lib/services/ReviewWorkspaceService";
+import AuditHistoryPanel from "@/components/admin/review/AuditHistoryPanel";
+import {
+  fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
+  type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
+} from "@/lib/services/AuditWorkspaceService";
 
 interface RoomType {
   id: string; name: string; room_category: string | null; max_occupancy: number | null;
@@ -58,6 +63,8 @@ export default function HomestayDetailPage() {
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [docStatuses, setDocStatuses] = useState<DocumentStatus[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
+  const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
+  const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -75,18 +82,22 @@ export default function HomestayDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setProperty(data as unknown as Property);
-    const [{ data: rooms }, activityRows, crRows, docRows, noteRows] = await Promise.all([
+    const [{ data: rooms }, activityRows, crRows, docRows, noteRows, schedule, auditHistory] = await Promise.all([
       supabase.from("room_types").select("id, name, room_category, max_occupancy, total_units, base_price, is_available").eq("property_id", id),
       getActivityForEntity("homestays", id),
       fetchChangeRequests("homestays", id),
       fetchDocumentStatuses("homestays", id),
       fetchInternalNotes("homestays", id),
+      fetchScheduleFor("homestays", id),
+      fetchAuditHistory("homestays", id),
     ]);
     setRoomTypes((rooms as RoomType[]) || []);
     setActivity(activityRows);
     setChangeRequests(crRows);
     setDocStatuses(docRows);
     setNotes(noteRows);
+    setAuditSchedule(schedule);
+    setAuditRecords(auditHistory);
     setLoading(false);
   }, [id]);
 
@@ -152,6 +163,14 @@ export default function HomestayDetailPage() {
     if (!property) return;
     await addInternalNote("homestays", property.id, note);
     load();
+  };
+
+  const handleRecordAudit = async (input: { audit_type: AuditType; checklist: AuditChecklist; photo_set: string[]; outcome: AuditOutcome; notes?: string }) => {
+    if (!property) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try { await recordAuditOutcome("homestays", property.id, property.owner_id, input, user.id); showToast("Audit recorded."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -290,6 +309,16 @@ export default function HomestayDetailPage() {
               <div className="text-red-400 text-xs uppercase tracking-wide mb-1">Rejection Reason</div>
               <p className="text-white/70 text-sm">{property.rejection_reason}</p>
             </section>
+          )}
+
+          {property.status === "approved" && (
+            <AuditHistoryPanel
+              schedule={auditSchedule}
+              records={auditRecords}
+              entityName={property.name}
+              canManage={hasPermission("homestays.approve")}
+              onRecordAudit={handleRecordAudit}
+            />
           )}
 
           {activity.length > 0 && (

@@ -21,6 +21,11 @@ import {
   fetchInternalNotes, addInternalNote,
   type ChangeRequest, type InternalNote, type ChangeRequestPriority,
 } from "@/lib/services/ReviewWorkspaceService";
+import AuditHistoryPanel from "@/components/admin/review/AuditHistoryPanel";
+import {
+  fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
+  type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
+} from "@/lib/services/AuditWorkspaceService";
 
 interface RentalVehicle {
   id: string; owner_id: string;
@@ -47,6 +52,8 @@ export default function RentalDetailPage() {
   const [activity, setActivity] = useState<ActivityLogRow[]>([]);
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [notes, setNotes] = useState<InternalNote[]>([]);
+  const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
+  const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -64,14 +71,18 @@ export default function RentalDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setVehicle(data as unknown as RentalVehicle);
-    const [activityRows, crRows, noteRows] = await Promise.all([
+    const [activityRows, crRows, noteRows, schedule, auditHistory] = await Promise.all([
       getActivityForEntity("vehicles", id),
       fetchChangeRequests("vehicles", id),
       fetchInternalNotes("vehicles", id),
+      fetchScheduleFor("vehicles", id),
+      fetchAuditHistory("vehicles", id),
     ]);
     setActivity(activityRows);
     setChangeRequests(crRows);
     setNotes(noteRows);
+    setAuditSchedule(schedule);
+    setAuditRecords(auditHistory);
     setLoading(false);
   }, [id]);
 
@@ -131,6 +142,14 @@ export default function RentalDetailPage() {
     if (!vehicle) return;
     await addInternalNote("vehicles", vehicle.id, note);
     load();
+  };
+
+  const handleRecordAudit = async (input: { audit_type: AuditType; checklist: AuditChecklist; photo_set: string[]; outcome: AuditOutcome; notes?: string }) => {
+    if (!vehicle) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    try { await recordAuditOutcome("vehicles", vehicle.id, vehicle.owner_id, input, user.id); showToast("Audit recorded."); load(); }
+    catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
   const handleEditSave = async (values: Record<string, string | number>) => {
@@ -228,6 +247,16 @@ export default function RentalDetailPage() {
             onReopen={handleReopen}
             canManage={hasPermission("rentals.approve")}
           />
+
+          {vehicle.status === "approved" && (
+            <AuditHistoryPanel
+              schedule={auditSchedule}
+              records={auditRecords}
+              entityName={title}
+              canManage={hasPermission("rentals.approve")}
+              onRecordAudit={handleRecordAudit}
+            />
+          )}
 
           {activity.length > 0 && (
             <section className="rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>

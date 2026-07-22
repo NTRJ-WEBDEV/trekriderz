@@ -22,6 +22,7 @@ const NAV = [
   { href: "/admin/moderation", label: "Content", icon: "🎞️", permission: "reels.moderate" },
   { href: "/admin/reports", label: "Reports", icon: "🚩", permission: "reports.resolve", badgeKey: "reports" },
   { href: "/admin/sos", label: "SOS Center", icon: "🆘", permission: "sos.manage" },
+  { href: "/admin/audits", label: "Audit Queue", icon: "🗓️", permission: null },
   { href: "/admin/users", label: "Users", icon: "👤", permission: "users.view" },
   { href: "/admin/community-champions", label: "Community Champions", icon: "🏆", permission: "reward_campaigns.view" },
   { href: "/admin/featured", label: "Featured", icon: "⭐", permission: "featured.manage" },

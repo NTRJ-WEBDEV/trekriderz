@@ -29,6 +29,11 @@ import {
   fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
   type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
 } from "@/lib/services/AuditWorkspaceService";
+import TrustPanel from "@/components/admin/review/TrustPanel";
+import {
+  fetchRawTrustFactors, fetchTrustEvents, interpretForAdmin, logPolicyViolation,
+  type RawTrustFactors, type TrustEvent, type AdminTrustBreakdown,
+} from "@/lib/services/TrustEngineService";
 
 interface Guide {
   id: string; user_id: string;
@@ -60,6 +65,8 @@ export default function GuideDetailPage() {
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [trustFactors, setTrustFactors] = useState<RawTrustFactors | null>(null);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -77,13 +84,14 @@ export default function GuideDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setGuide(data as unknown as Guide);
-    const [activityRows, crRows, docRows, noteRows, schedule, auditHistory] = await Promise.all([
+    const [activityRows, crRows, docRows, noteRows, schedule, auditHistory, trustRows] = await Promise.all([
       getActivityForEntity("guides", id),
       fetchChangeRequests("guides", id),
       fetchDocumentStatuses("guides", id),
       fetchInternalNotes("guides", id),
       fetchScheduleFor("guides", id),
       fetchAuditHistory("guides", id),
+      fetchTrustEvents("guides", id),
     ]);
     setActivity(activityRows);
     setChangeRequests(crRows);
@@ -91,6 +99,8 @@ export default function GuideDetailPage() {
     setNotes(noteRows);
     setAuditSchedule(schedule);
     setAuditRecords(auditHistory);
+    setTrustEvents(trustRows);
+    try { setTrustFactors(await fetchRawTrustFactors("guides", id)); } catch { setTrustFactors(null); }
     setLoading(false);
   }, [id]);
 
@@ -166,6 +176,13 @@ export default function GuideDetailPage() {
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
+  const handleLogPolicyViolation = async (description: string) => {
+    if (!guide) return;
+    await logPolicyViolation("guides", guide.id, description);
+    showToast("Policy note logged.");
+    load();
+  };
+
   const handleEditSave = async (values: Record<string, string | number>) => {
     if (!guide) return;
     const { error: err } = await supabase.from("guides").update(values).eq("id", guide.id);
@@ -190,6 +207,7 @@ export default function GuideDetailPage() {
 
   const images = [guide.profile_photo_url, guide.photo_url, ...(guide.photos || [])].filter(Boolean) as string[];
   const displayName = guide.full_name || guide.name || "Unnamed Guide";
+  const trustBreakdown = trustFactors ? interpretForAdmin(trustFactors) : null;
   const languages = guide.languages && guide.languages.length > 0 ? guide.languages.join(", ") : null;
   const specializations = (guide.specializations?.length ? guide.specializations : guide.specialties) || null;
   const certificates = guide.certificates && guide.certificates.length > 0 ? guide.certificates : null;
@@ -297,6 +315,14 @@ export default function GuideDetailPage() {
               <p className="text-white/70 text-sm">{guide.rejection_reason}</p>
             </section>
           )}
+
+          <TrustPanel
+            factors={trustFactors}
+            breakdown={trustBreakdown}
+            events={trustEvents}
+            canManage={hasPermission("guides.approve")}
+            onLogPolicyViolation={handleLogPolicyViolation}
+          />
 
           {guide.status === "approved" && (
             <AuditHistoryPanel

@@ -11,7 +11,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
 import ReviewSummaryBanner from '@/components/partner/ReviewSummaryBanner';
+import TrustChecklist from '@/components/partner/TrustChecklist';
 import { fetchChangeRequests } from '@/lib/services/ReviewWorkspaceService';
+import { fetchRawTrustFactors, interpretForPartner, type PartnerTrustChecklist } from '@/lib/services/TrustEngineService';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -55,6 +57,7 @@ export default function ApplicationStatusScreen() {
   const [loading, setLoading] = useState(true);
   const [resubmitting, setResubmitting] = useState(false);
   const [openChangeCount, setOpenChangeCount] = useState(0);
+  const [trustChecklist, setTrustChecklist] = useState<PartnerTrustChecklist | null>(null);
 
   const fetchStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -70,6 +73,7 @@ export default function ApplicationStatusScreen() {
       if (data) {
         const changes = await fetchChangeRequests('guides', (data as any).id);
         setOpenChangeCount(changes.filter((c) => !['resolved', 'verified'].includes(c.status)).length);
+        try { setTrustChecklist(interpretForPartner(await fetchRawTrustFactors('guides', (data as any).id))); } catch { setTrustChecklist(null); }
       }
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -152,6 +156,7 @@ export default function ApplicationStatusScreen() {
         </View>
         <ScrollView contentContainerStyle={s.content}>
           <ReviewSummaryBanner entityType="guides" entityId={guide.id} openCount={openChangeCount} />
+        <TrustChecklist checklist={trustChecklist} />
           <View style={s.approvedCard}>
             <View style={s.approvedBadge}>
               <Ionicons name="checkmark-circle" size={32} color={GREEN} />
@@ -224,6 +229,7 @@ export default function ApplicationStatusScreen() {
 
       <ScrollView contentContainerStyle={s.content}>
         <ReviewSummaryBanner entityType="guides" entityId={guide.id} openCount={openChangeCount} />
+        <TrustChecklist checklist={trustChecklist} />
         {/* Profile row */}
         <View style={s.profileRow}>
           {photoUrl ? (

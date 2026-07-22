@@ -28,6 +28,11 @@ import {
   fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
   type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
 } from "@/lib/services/AuditWorkspaceService";
+import TrustPanel from "@/components/admin/review/TrustPanel";
+import {
+  fetchRawTrustFactors, fetchTrustEvents, interpretForAdmin, logPolicyViolation,
+  type RawTrustFactors, type TrustEvent,
+} from "@/lib/services/TrustEngineService";
 
 interface RoomType {
   id: string; name: string; room_category: string | null; max_occupancy: number | null;
@@ -65,6 +70,8 @@ export default function HomestayDetailPage() {
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [trustFactors, setTrustFactors] = useState<RawTrustFactors | null>(null);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -82,7 +89,7 @@ export default function HomestayDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setProperty(data as unknown as Property);
-    const [{ data: rooms }, activityRows, crRows, docRows, noteRows, schedule, auditHistory] = await Promise.all([
+    const [{ data: rooms }, activityRows, crRows, docRows, noteRows, schedule, auditHistory, trustRows] = await Promise.all([
       supabase.from("room_types").select("id, name, room_category, max_occupancy, total_units, base_price, is_available").eq("property_id", id),
       getActivityForEntity("homestays", id),
       fetchChangeRequests("homestays", id),
@@ -90,6 +97,7 @@ export default function HomestayDetailPage() {
       fetchInternalNotes("homestays", id),
       fetchScheduleFor("homestays", id),
       fetchAuditHistory("homestays", id),
+      fetchTrustEvents("homestays", id),
     ]);
     setRoomTypes((rooms as RoomType[]) || []);
     setActivity(activityRows);
@@ -98,6 +106,8 @@ export default function HomestayDetailPage() {
     setNotes(noteRows);
     setAuditSchedule(schedule);
     setAuditRecords(auditHistory);
+    setTrustEvents(trustRows);
+    try { setTrustFactors(await fetchRawTrustFactors("homestays", id)); } catch { setTrustFactors(null); }
     setLoading(false);
   }, [id]);
 
@@ -173,6 +183,13 @@ export default function HomestayDetailPage() {
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
+  const handleLogPolicyViolation = async (description: string) => {
+    if (!property) return;
+    await logPolicyViolation("homestays", property.id, description);
+    showToast("Policy note logged.");
+    load();
+  };
+
   const handleEditSave = async (values: Record<string, string | number>) => {
     if (!property) return;
     const { error: err } = await supabase.from("properties").update(values).eq("id", property.id);
@@ -197,6 +214,7 @@ export default function HomestayDetailPage() {
 
   const images = [property.cover_photo_url, ...(property.photos || [])].filter(Boolean) as string[];
   const fullAddress = [property.address, property.city, property.district, property.state, property.pincode, property.country].filter(Boolean).join(", ");
+  const trustBreakdown = trustFactors ? interpretForAdmin(trustFactors) : null;
   const policies = [
     property.smoking_allowed ? "Smoking allowed" : "No smoking",
     property.pets_allowed ? "Pets allowed" : "No pets",
@@ -302,6 +320,14 @@ export default function HomestayDetailPage() {
             onMarkVerified={handleMarkVerified}
             onReopen={handleReopen}
             canManage={hasPermission("homestays.approve")}
+          />
+
+          <TrustPanel
+            factors={trustFactors}
+            breakdown={trustBreakdown}
+            events={trustEvents}
+            canManage={hasPermission("homestays.approve")}
+            onLogPolicyViolation={handleLogPolicyViolation}
           />
 
           {property.status === "rejected" && property.rejection_reason && (

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase';
 import { notify } from './NotificationService';
 import { logAdminAction } from './AuditService';
 import type { ApprovalEntity } from './ApprovalService';
+import { logTrustEvent } from './TrustEngineService';
 
 // Admin Review Workspace — docs/architecture/PARTNER_PLATFORM.md §9.1/§10.
 // Staff-side of the Review Resolution loop; mirrors mobile/lib/services/
@@ -177,6 +178,10 @@ export async function setDocumentStatus(
     action: `${entityType}.document_reviewed`, entityType, entityId,
     metadata: { document_key: documentKey }, newValue: { status },
   });
+  if (status === 'verified' || status === 'rejected' || status === 'expired') {
+    await logTrustEvent(entityType, entityId, `document_${status}` as 'document_verified' | 'document_rejected' | 'document_expired',
+      `${documentKey.replace(/_/g, ' ')} marked ${status}.`, status === 'verified' ? 'positive' : 'negative');
+  }
 }
 
 // A staged replacement (mobile-uploaded) is stored as a raw storage path,

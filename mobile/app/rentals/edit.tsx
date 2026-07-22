@@ -15,7 +15,9 @@ import PhoneInput, { splitPhone } from '@/components/PhoneInput';
 import MapPickerModal, { PickedLocation } from '@/components/MapPickerModal';
 import { AppColors } from '@/constants/theme';
 import ReviewSummaryBanner from '@/components/partner/ReviewSummaryBanner';
+import TrustChecklist from '@/components/partner/TrustChecklist';
 import { fetchChangeRequests } from '@/lib/services/ReviewWorkspaceService';
+import { fetchRawTrustFactors, interpretForPartner, type PartnerTrustChecklist } from '@/lib/services/TrustEngineService';
 
 const GREEN = AppColors.primary;
 const RED = '#EF4444';
@@ -75,6 +77,7 @@ export default function EditVehicleScreen() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [fetching, setFetching] = useState(true);
   const [openChangeCount, setOpenChangeCount] = useState(0);
+  const [trustChecklist, setTrustChecklist] = useState<PartnerTrustChecklist | null>(null);
 
   // Existing photos (URLs from Supabase Storage)
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
@@ -143,6 +146,7 @@ export default function EditVehicleScreen() {
     fetchChangeRequests('vehicles', v.id).then((changes) =>
       setOpenChangeCount(changes.filter((c) => !['resolved', 'verified'].includes(c.status)).length)
     );
+    fetchRawTrustFactors('vehicles', v.id).then((f) => setTrustChecklist(interpretForPartner(f))).catch(() => setTrustChecklist(null));
     setExistingPhotos(allPhotos(v));
     setVehicleType(v.vehicle_type ?? 'bike');
     setMake(v.make ?? '');
@@ -392,6 +396,7 @@ export default function EditVehicleScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <ReviewSummaryBanner entityType="vehicles" entityId={id as string} openCount={openChangeCount} />
+          <TrustChecklist checklist={trustChecklist} />
 
           {/* Status Banner */}
           {statusBanner && (

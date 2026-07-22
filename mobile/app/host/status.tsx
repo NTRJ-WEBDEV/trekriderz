@@ -12,7 +12,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
 import EmptyState from '@/components/EmptyState';
 import ReviewSummaryBanner from '@/components/partner/ReviewSummaryBanner';
+import TrustChecklist from '@/components/partner/TrustChecklist';
 import { fetchChangeRequests } from '@/lib/services/ReviewWorkspaceService';
+import { fetchRawTrustFactors, interpretForPartner, type PartnerTrustChecklist } from '@/lib/services/TrustEngineService';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -51,6 +53,7 @@ export default function PropertyStatusScreen() {
   const [property, setProperty] = useState<Property | null>(null);
   const [loading, setLoading] = useState(true);
   const [openChangeCount, setOpenChangeCount] = useState(0);
+  const [trustChecklist, setTrustChecklist] = useState<PartnerTrustChecklist | null>(null);
 
   const fetchStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -73,6 +76,7 @@ export default function PropertyStatusScreen() {
       if (data) {
         const changes = await fetchChangeRequests('homestays', (data as any).id);
         setOpenChangeCount(changes.filter((c) => !['resolved', 'verified'].includes(c.status)).length);
+        try { setTrustChecklist(interpretForPartner(await fetchRawTrustFactors('homestays', (data as any).id))); } catch { setTrustChecklist(null); }
       }
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -126,6 +130,7 @@ export default function PropertyStatusScreen() {
         </View>
         <ScrollView contentContainerStyle={s.content}>
           <ReviewSummaryBanner entityType="homestays" entityId={property.id} openCount={openChangeCount} />
+          <TrustChecklist checklist={trustChecklist} />
           <View style={s.approvedCard}>
             <View style={s.approvedBadge}>
               <Ionicons name="checkmark-circle" size={32} color={GREEN} />

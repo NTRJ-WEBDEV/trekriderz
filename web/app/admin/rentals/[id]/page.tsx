@@ -26,6 +26,11 @@ import {
   fetchScheduleFor, fetchAuditHistory, recordAuditOutcome,
   type AuditSchedule, type AuditRecord, type AuditType, type AuditChecklist, type AuditOutcome,
 } from "@/lib/services/AuditWorkspaceService";
+import TrustPanel from "@/components/admin/review/TrustPanel";
+import {
+  fetchRawTrustFactors, fetchTrustEvents, interpretForAdmin, logPolicyViolation,
+  type RawTrustFactors, type TrustEvent,
+} from "@/lib/services/TrustEngineService";
 
 interface RentalVehicle {
   id: string; owner_id: string;
@@ -54,6 +59,8 @@ export default function RentalDetailPage() {
   const [notes, setNotes] = useState<InternalNote[]>([]);
   const [auditSchedule, setAuditSchedule] = useState<AuditSchedule | null>(null);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [trustFactors, setTrustFactors] = useState<RawTrustFactors | null>(null);
+  const [trustEvents, setTrustEvents] = useState<TrustEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
@@ -71,17 +78,20 @@ export default function RentalDetailPage() {
     if (err) { setError(err.message); setLoading(false); return; }
     if (!data) { setNotFound(true); setLoading(false); return; }
     setVehicle(data as unknown as RentalVehicle);
-    const [activityRows, crRows, noteRows, schedule, auditHistory] = await Promise.all([
+    const [activityRows, crRows, noteRows, schedule, auditHistory, trustRows] = await Promise.all([
       getActivityForEntity("vehicles", id),
       fetchChangeRequests("vehicles", id),
       fetchInternalNotes("vehicles", id),
       fetchScheduleFor("vehicles", id),
       fetchAuditHistory("vehicles", id),
+      fetchTrustEvents("vehicles", id),
     ]);
     setActivity(activityRows);
     setChangeRequests(crRows);
     setNotes(noteRows);
     setAuditSchedule(schedule);
+    setTrustEvents(trustRows);
+    try { setTrustFactors(await fetchRawTrustFactors("vehicles", id)); } catch { setTrustFactors(null); }
     setAuditRecords(auditHistory);
     setLoading(false);
   }, [id]);
@@ -152,6 +162,13 @@ export default function RentalDetailPage() {
     catch (e: any) { showToast(`Failed: ${e.message}`); }
   };
 
+  const handleLogPolicyViolation = async (description: string) => {
+    if (!vehicle) return;
+    await logPolicyViolation("vehicles", vehicle.id, description);
+    showToast("Policy note logged.");
+    load();
+  };
+
   const handleEditSave = async (values: Record<string, string | number>) => {
     if (!vehicle) return;
     const { error: err } = await supabase.from("rental_vehicles").update(values).eq("id", vehicle.id);
@@ -177,6 +194,7 @@ export default function RentalDetailPage() {
   const images = [...(vehicle.photos || []), ...(vehicle.images || [])].filter(Boolean) as string[];
   const title = [vehicle.make, vehicle.model, vehicle.year].filter(Boolean).join(" ") || "Untitled Vehicle";
   const location = [vehicle.location, vehicle.pickup_district, vehicle.pickup_state].filter(Boolean).join(", ");
+  const trustBreakdown = trustFactors ? interpretForAdmin(trustFactors) : null;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -246,6 +264,14 @@ export default function RentalDetailPage() {
             onMarkVerified={handleMarkVerified}
             onReopen={handleReopen}
             canManage={hasPermission("rentals.approve")}
+          />
+
+          <TrustPanel
+            factors={trustFactors}
+            breakdown={trustBreakdown}
+            events={trustEvents}
+            canManage={hasPermission("rentals.approve")}
+            onLogPolicyViolation={handleLogPolicyViolation}
           />
 
           {vehicle.status === "approved" && (

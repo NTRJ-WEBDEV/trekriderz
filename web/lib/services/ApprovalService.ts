@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase';
 import { notify } from './NotificationService';
 import { logAdminAction } from './AuditService';
+import { logTrustEvent } from './TrustEngineService';
 
 // Mirrors mobile/lib/services/ApprovalService.ts exactly — same entity
 // keys ('homestays' → properties, 'guides' → guides, 'vehicles' →
@@ -93,12 +94,19 @@ export async function setFeatured(entity: ApprovalEntity, id: string, featured: 
   await logAdminAction({ action: featured ? `${entity}.featured` : `${entity}.unfeatured`, entityType: entity, entityId: id, newValue: { is_featured: featured } });
 }
 
+// Trust events are emitted from here rather than from every caller
+// (recordAuditOutcome on audit failure, the guides/homestays/rentals
+// list pages' manual Suspend button, hideOverdueListing) — this is the
+// one place all of them already funnel through, so hooking in here
+// catches every suspend/reinstate regardless of why it happened.
 export async function setSuspended(entity: 'homestays' | 'vehicles', id: string, suspended: boolean): Promise<void> {
   const cfg = CONFIG[entity];
   const supabase = createClient();
   const { error } = await supabase.from(cfg.table).update({ is_suspended: suspended }).eq('id', id);
   if (error) throw error;
   await logAdminAction({ action: suspended ? `${entity}.suspended` : `${entity}.unsuspended`, entityType: entity, entityId: id, newValue: { is_suspended: suspended } });
+  await logTrustEvent(entity, id, suspended ? 'account_suspended' : 'account_reinstated',
+    suspended ? 'Listing suspended.' : 'Listing reinstated.', suspended ? 'negative' : 'positive');
 }
 
 // Guides has no is_suspended column — is_active already serves that role
@@ -109,6 +117,8 @@ export async function setGuideActive(id: string, active: boolean): Promise<void>
   const { error } = await supabase.from('guides').update({ is_active: active }).eq('id', id);
   if (error) throw error;
   await logAdminAction({ action: active ? 'guides.unsuspended' : 'guides.suspended', entityType: 'guides', entityId: id, newValue: { is_active: active } });
+  await logTrustEvent('guides', id, active ? 'account_reinstated' : 'account_suspended',
+    active ? 'Guide reinstated.' : 'Guide suspended.', active ? 'positive' : 'negative');
 }
 
 export async function deleteListing(entity: ApprovalEntity, id: string, previousValue?: unknown): Promise<void> {

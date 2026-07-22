@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase';
 import { notify } from './NotificationService';
 import { logAdminAction } from './AuditService';
 import { setSuspended, setGuideActive, type ApprovalEntity } from './ApprovalService';
+import { logTrustEvent } from './TrustEngineService';
 
 // Partner Audit & Reverification System — docs/architecture/
 // PARTNER_PLATFORM.md §8. NOT Trust Score — that's a later milestone
@@ -144,6 +145,16 @@ export async function recordAuditOutcome(
     outcome: input.outcome, notes: input.notes ?? null, auditor_id: auditorId, completed_at: new Date().toISOString(),
   });
   if (insertErr) throw insertErr;
+
+  await logTrustEvent(
+    entityType, entityId,
+    input.outcome === 'pass' ? 'audit_passed' : input.outcome === 'minor_issues' ? 'audit_minor_issues' : 'audit_failed',
+    `${input.audit_type.replace('_', ' ')} audit recorded: ${input.outcome.replace('_', ' ')}.`,
+    input.outcome === 'pass' ? 'positive' : input.outcome === 'minor_issues' ? 'neutral' : 'negative'
+  );
+  if (input.checklist.photos_refreshed) {
+    await logTrustEvent(entityType, entityId, 'photo_refreshed', 'Fresh photos confirmed at audit.', 'positive');
+  }
 
   const schedule = await fetchScheduleFor(entityType, entityId);
   const cadence = schedule?.cadence_months ?? 6;

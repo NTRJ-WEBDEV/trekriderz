@@ -10,8 +10,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
-import ReviewSheet from '@/components/ReviewSheet';
 import { AppColors } from '@/constants/theme';
+import TrustSignalBadges from '@/components/listing/TrustSignalBadges';
+import ReviewsSection from '@/components/listing/ReviewsSection';
+import NearbyExperiences from '@/components/listing/NearbyExperiences';
+import { fetchPublicTrustSignals, interpretPublicSignals, type PublicTrustSignal } from '@/lib/services/TrustEngineService';
 
 const { width } = Dimensions.get('window');
 const GREEN = AppColors.primary;
@@ -41,7 +44,7 @@ export default function GuideProfileScreen() {
   const [guide, setGuide] = useState<GuideData | null>(null);
   const [expeditions, setExpeditions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showReview, setShowReview] = useState(false);
+  const [trustSignals, setTrustSignals] = useState<PublicTrustSignal[]>([]);
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -65,6 +68,11 @@ export default function GuideProfileScreen() {
           .eq('status', 'published')
           .limit(5);
         setExpeditions(expData || []);
+        try {
+          setTrustSignals(interpretPublicSignals(await fetchPublicTrustSignals('guides', data.id)));
+        } catch {
+          setTrustSignals([]);
+        }
       } else {
         Alert.alert('Error', error?.message || 'Guide not found');
       }
@@ -209,6 +217,12 @@ export default function GuideProfileScreen() {
         </View>
 
         <View style={styles.body}>
+          {trustSignals.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <TrustSignalBadges signals={trustSignals} />
+            </View>
+          )}
+
           {/* Rate & Hire */}
           <View style={styles.rateCard}>
             <View>
@@ -308,18 +322,14 @@ export default function GuideProfileScreen() {
             </View>
           )}
 
-          {/* Reviews */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            {user ? (
-              <TouchableOpacity style={styles.reviewBtn} onPress={() => setShowReview(true)}>
-                <Ionicons name="star-outline" size={18} color="#FFD700" />
-                <Text style={styles.reviewBtnText}>Write a Review</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.noReviewsText}>No reviews yet. Be the first!</Text>
-            )}
-          </View>
+          <ReviewsSection targetType="guide" targetId={String(id)} targetName={displayName} reviewerId={user?.id} />
+
+          <NearbyExperiences
+            lat={locations[0]?.lat || null}
+            lng={locations[0]?.lng || null}
+            excludeType="guide"
+            excludeId={guide.id}
+          />
 
           {/* Report */}
           <TouchableOpacity style={styles.reportBtn} onPress={() => Alert.alert('Report Guide', 'To report this guide, please contact support@trekriderz.com')}>
@@ -337,16 +347,6 @@ export default function GuideProfileScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-
-      <ReviewSheet
-        visible={showReview}
-        targetId={String(id)}
-        targetType="guide"
-        targetName={displayName}
-        reviewerId={user?.id || ''}
-        onClose={() => setShowReview(false)}
-        onSubmitted={() => setShowReview(false)}
-      />
     </View>
   );
 }

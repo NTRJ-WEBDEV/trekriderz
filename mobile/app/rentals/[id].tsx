@@ -9,7 +9,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { AppColors } from '@/constants/theme';
+import TrustSignalBadges from '@/components/listing/TrustSignalBadges';
+import ReviewsSection from '@/components/listing/ReviewsSection';
+import NearbyExperiences from '@/components/listing/NearbyExperiences';
+import { fetchPublicTrustSignals, interpretPublicSignals, type PublicTrustSignal } from '@/lib/services/TrustEngineService';
 
 const TYPE_EMOJI: Record<string, string> = {
   bike: '🏍️', car: '🚗', jeep: '🚙', tempo: '🚐', auto: '🛺', bus: '🚌',
@@ -37,6 +42,10 @@ interface RentalVehicle {
   seats: number | null;
   owner_id: string;
   owner?: { full_name: string; avatar_url: string | null };
+  status: string;
+  is_available: boolean;
+  lat: number | null;
+  lng: number | null;
 }
 
 export default function RentalDetailScreen() {
@@ -44,6 +53,8 @@ export default function RentalDetailScreen() {
   const [vehicle, setVehicle] = useState<RentalVehicle | null>(null);
   const [loading, setLoading] = useState(true);
   const [photoIdx, setPhotoIdx] = useState(0);
+  const [trustSignals, setTrustSignals] = useState<PublicTrustSignal[]>([]);
+  const { user } = useAuthStore();
 
   useEffect(() => {
     if (!id) return;
@@ -55,6 +66,13 @@ export default function RentalDetailScreen() {
         .single();
       setVehicle(data as any);
       setLoading(false);
+      if (data) {
+        try {
+          setTrustSignals(interpretPublicSignals(await fetchPublicTrustSignals('vehicles', (data as any).id)));
+        } catch {
+          setTrustSignals([]);
+        }
+      }
     };
     load();
   }, [id]);
@@ -158,8 +176,24 @@ export default function RentalDetailScreen() {
               <Text style={styles.infoText}>{vehicle.location}</Text>
             </View>
 
+            {trustSignals.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <TrustSignalBadges signals={trustSignals} />
+              </View>
+            )}
+
             {/* Specs row */}
             <View style={styles.specsRow}>
+              <View style={[styles.specChip, vehicle.is_available && styles.specChipGreen]}>
+                <Ionicons
+                  name={vehicle.is_available ? 'checkmark-circle' : 'close-circle-outline'}
+                  size={14}
+                  color={vehicle.is_available ? '#4ADE80' : 'rgba(255,255,255,0.4)'}
+                />
+                <Text style={[styles.specText, vehicle.is_available && { color: '#4ADE80' }]}>
+                  {vehicle.is_available ? 'Available now' : 'Currently unavailable'}
+                </Text>
+              </View>
               {vehicle.seats && (
                 <View style={styles.specChip}>
                   <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.6)" />
@@ -219,6 +253,10 @@ export default function RentalDetailScreen() {
                 </View>
               </View>
             )}
+
+            <ReviewsSection targetType="vehicle" targetId={vehicle.id} targetName={[vehicle.make, vehicle.model].filter(Boolean).join(' ')} reviewerId={user?.id} />
+
+            <NearbyExperiences lat={vehicle.lat} lng={vehicle.lng} excludeType="vehicle" excludeId={vehicle.id} />
 
             <View style={{ height: 24 }} />
           </View>

@@ -73,23 +73,39 @@ export default function DiscoverScreen() {
         .eq('status', 'approved')
         .order('rating', { ascending: false })
         .limit(40),
+      // `properties`/`rental_vehicles` are the current, canonical tables —
+      // this used to query legacy `homestays`/`rentals` tables that don't
+      // receive new admin-approved listings (same fix as the Home tab;
+      // see ApprovalService.ts and every admin page, all of which read/
+      // write `properties` and `rental_vehicles`).
       supabase
-        .from('homestays')
-        .select('id, name, location, price_per_night, photos, amenities, rating')
+        .from('properties')
+        .select('id, name, city, state, photos, amenities, room_types(base_price)')
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(40),
       supabase
-        .from('rentals')
-        .select('id, vehicle_type, vehicle_name, location, price_per_day, photos, owner:users!owner_id(full_name)')
+        .from('rental_vehicles')
+        .select('id, vehicle_type, make, model, location, price_per_day, photos, images, owner:users!owner_id(full_name)')
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
         .limit(40),
     ]);
     setTrips(tripsRes.data || []);
     setGuides(guidesRes.data || []);
-    setHomestays(homestaysRes.data || []);
-    setVehicles(vehiclesRes.data || []);
+    setHomestays((homestaysRes.data || []).map((h: any) => {
+      const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((p: any) => typeof p === 'number');
+      return {
+        id: h.id, name: h.name, location: [h.city, h.state].filter(Boolean).join(', '),
+        price_per_night: basePrices.length > 0 ? Math.min(...basePrices) : null,
+        photos: h.photos, amenities: h.amenities, rating: null,
+      };
+    }));
+    setVehicles((vehiclesRes.data || []).map((v: any) => ({
+      ...v,
+      vehicle_name: [v.make, v.model].filter(Boolean).join(' '),
+      photos: Array.isArray(v.images) && v.images.length > 0 ? v.images : v.photos,
+    })));
     setLoading(false);
     setRefreshing(false);
   }, []);

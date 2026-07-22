@@ -14,6 +14,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { cacheHomestayRoute } from '@/lib/offline-safety';
 import { AppColors } from '@/constants/theme';
+import TrustSignalBadges from '@/components/listing/TrustSignalBadges';
+import ReviewsSection from '@/components/listing/ReviewsSection';
+import NearbyExperiences from '@/components/listing/NearbyExperiences';
+import { fetchPublicTrustSignals, interpretPublicSignals, type PublicTrustSignal } from '@/lib/services/TrustEngineService';
 
 const { width } = Dimensions.get('window');
 const GREEN = AppColors.primary;
@@ -71,6 +75,7 @@ export default function HomestayDetailScreen() {
   const { id } = useLocalSearchParams();
   const [property, setProperty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [trustSignals, setTrustSignals] = useState<PublicTrustSignal[]>([]);
   const { user } = useAuthStore();
 
   const [calcRoom, setCalcRoom] = useState<any | null>(null);
@@ -87,7 +92,7 @@ export default function HomestayDetailScreen() {
     try {
       const { data, error } = await supabase
         .from('properties')
-        .select('*, room_types(*)')
+        .select('*, room_types(*), owner:users!owner_id(full_name, avatar_url)')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -98,6 +103,12 @@ export default function HomestayDetailScreen() {
       // to if signal drops before they reach it.
       if (data?.lat && data?.lng) {
         cacheRouteToShelter(data).catch(() => {});
+      }
+
+      try {
+        setTrustSignals(interpretPublicSignals(await fetchPublicTrustSignals('homestays', data.id)));
+      } catch {
+        setTrustSignals([]);
       }
     } catch (error) {
       console.error('Error fetching property:', error);
@@ -263,10 +274,6 @@ export default function HomestayDetailScreen() {
             <View style={{ flex: 1 }}>
               <View style={styles.nameRow}>
                 <Text style={styles.name}>{property.name}</Text>
-                <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark-circle" size={13} color={GREEN} />
-                  <Text style={styles.verifiedText}>Verified</Text>
-                </View>
               </View>
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={14} color={GREEN} />
@@ -274,6 +281,12 @@ export default function HomestayDetailScreen() {
               </View>
             </View>
           </View>
+
+          {trustSignals.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <TrustSignalBadges signals={trustSignals} />
+            </View>
+          )}
 
           {propertyTypes.length > 0 && (
             <View style={styles.statsRow}>
@@ -378,26 +391,27 @@ export default function HomestayDetailScreen() {
             <Text style={styles.description}>Located in {property.city}, {property.state}. Exact address shared after booking confirmation.</Text>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            <View style={styles.emptyReviews}>
-              <Ionicons name="star-outline" size={28} color="rgba(255,255,255,0.15)" />
-              <Text style={styles.description}>No reviews yet</Text>
-            </View>
-          </View>
+          <ReviewsSection targetType="homestay" targetId={property.id} targetName={property.name} reviewerId={user?.id} />
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Host</Text>
-            <View style={styles.hostCard}>
-              <View style={[styles.hostAvatar, styles.hostAvatarFallback]}>
-                <Ionicons name="shield-checkmark" size={22} color={GREEN} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.hostName}>Managed by TrekRiderz Team</Text>
-                <Text style={styles.hostBio}>Response time: usually within 24 hours</Text>
+          {property.owner?.full_name && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Your Host</Text>
+              <View style={styles.hostCard}>
+                {property.owner.avatar_url ? (
+                  <Image source={{ uri: property.owner.avatar_url }} style={styles.hostAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[styles.hostAvatar, styles.hostAvatarFallback]}>
+                    <Ionicons name="person" size={22} color={GREEN} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.hostName}>{property.owner.full_name}</Text>
+                </View>
               </View>
             </View>
-          </View>
+          )}
+
+          <NearbyExperiences lat={property.lat} lng={property.lng} excludeType="homestay" excludeId={property.id} />
         </View>
       </ScrollView>
 

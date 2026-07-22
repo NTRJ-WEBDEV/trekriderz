@@ -9,6 +9,19 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import FilterChip from '@/components/ui/FilterChip';
+import EmptyState from '@/components/EmptyState';
+
+type SortKey = 'recent' | 'budget_low' | 'budget_high';
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'recent', label: 'Recently Added' },
+  { key: 'budget_low', label: 'Budget: Low to High' },
+  { key: 'budget_high', label: 'Budget: High to Low' },
+];
+// No "Recently Verified" sort here — rental_vehicles has no approved_at/
+// verified_at column (confirmed against ApprovalService.ts's vehicle
+// config, which sets no extra fields on approval), unlike homestays/
+// guides. Not fabricated.
 
 const VEHICLE_FILTERS = [
   { id: '',       label: 'All',    emoji: '🚦' },
@@ -46,6 +59,7 @@ export default function RentalsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [sort, setSort] = useState<SortKey>('recent');
 
   useEffect(() => { fetchVehicles(); }, [typeFilter]);
 
@@ -70,12 +84,16 @@ export default function RentalsScreen() {
     }
   };
 
-  const filtered = vehicles.filter((v) =>
+  const filtered = [...vehicles.filter((v) =>
     !search ||
     v.make?.toLowerCase().includes(search.toLowerCase()) ||
     v.model?.toLowerCase().includes(search.toLowerCase()) ||
     v.location?.toLowerCase().includes(search.toLowerCase())
-  );
+  )].sort((a, b) => {
+    if (sort === 'budget_low') return (a.price_per_day ?? Infinity) - (b.price_per_day ?? Infinity);
+    if (sort === 'budget_high') return (b.price_per_day ?? -Infinity) - (a.price_per_day ?? -Infinity);
+    return 0; // already ordered by created_at desc from the query
+  });
 
   return (
     <View style={styles.container}>
@@ -142,6 +160,17 @@ export default function RentalsScreen() {
           )}
         />
 
+        {/* Sort */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={SORTS}
+          keyExtractor={(s) => s.key}
+          contentContainerStyle={styles.pillsRow}
+          style={[styles.pillsScroll, { marginBottom: 4 }]}
+          renderItem={({ item }) => <FilterChip label={item.label} selected={sort === item.key} onPress={() => setSort(item.key)} />}
+        />
+
         {/* Count */}
         {!loading && (
           <Text style={styles.countText}>
@@ -167,20 +196,13 @@ export default function RentalsScreen() {
               />
             }
             ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>🚗</Text>
-                <Text style={styles.emptyTitle}>No vehicles listed yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  Be the first to list your vehicle for rent!
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyBtn}
-                  onPress={() => router.push('/rentals/register' as any)}
-                >
-                  <Ionicons name="add-circle-outline" size={16} color="#000" />
-                  <Text style={styles.emptyBtnText}>List Your Vehicle</Text>
-                </TouchableOpacity>
-              </View>
+              <EmptyState
+                icon="car-outline"
+                title={search || typeFilter ? 'No vehicles match yet' : 'No vehicles listed yet'}
+                subtitle={search || typeFilter ? 'Try a broader search or a different vehicle type.' : 'Be the first to list your vehicle for rent!'}
+                actionLabel={search || typeFilter ? 'Clear Filters' : 'List Your Vehicle'}
+                onAction={() => { if (search || typeFilter) { setSearch(''); setTypeFilter(''); } else { router.push('/rentals/register' as any); } }}
+              />
             }
             renderItem={({ item }) => (
               <TouchableOpacity

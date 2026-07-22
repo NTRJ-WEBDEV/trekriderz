@@ -148,8 +148,15 @@ export default function AdventureScreen() {
         supabase.from('guides')
           .select('id, name, location, languages, experience_years, rating, total_reviews, rate_per_day, photo_url, profile_photo_url, status, verified_at')
           .eq('status', 'approved').order('rating', { ascending: false }).limit(20),
-        supabase.from('homestays')
-          .select('id, name, location, price_per_night, photos, amenities, rating, status')
+        // `properties` is the current, canonical homestay table — the
+        // legacy `homestays` table this used to query is stale and
+        // doesn't receive new admin-approved listings (see host/create.tsx,
+        // ApprovalService.ts, and every admin homestay page, all of which
+        // read/write `properties`). No `rating` column exists on
+        // `properties` today (confirmed against every migration) — omitted
+        // rather than guessed, matching this app's "no fabricated data" rule.
+        supabase.from('properties')
+          .select('id, name, city, state, photos, amenities, room_types(base_price), status')
           .eq('status', 'approved').order('created_at', { ascending: false }).limit(20),
         supabase.from('rental_vehicles')
           .select('id, make, model, vehicle_type, price_per_day, photos, images, location, status, is_available')
@@ -191,16 +198,19 @@ export default function AdventureScreen() {
         ratePerDay: g.rate_per_day,
       })));
 
-      setHomestays((homestaysRes.data || []).map((h: any) => ({
-        id: h.id,
-        image: Array.isArray(h.photos) ? h.photos[0] : null,
-        name: h.name,
-        location: h.location,
-        pricePerNight: h.price_per_night,
-        rating: h.rating,
-        amenities: Array.isArray(h.amenities) ? h.amenities : null,
-        verified: h.status === 'approved',
-      })));
+      setHomestays((homestaysRes.data || []).map((h: any) => {
+        const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((p: any) => typeof p === 'number');
+        return {
+          id: h.id,
+          image: Array.isArray(h.photos) ? h.photos[0] : null,
+          name: h.name,
+          location: [h.city, h.state].filter(Boolean).join(', '),
+          pricePerNight: basePrices.length > 0 ? Math.min(...basePrices) : null,
+          rating: null, // no rating column on `properties` — not fabricated
+          amenities: Array.isArray(h.amenities) ? h.amenities : null,
+          verified: h.status === 'approved',
+        };
+      }));
 
       setRentals((rentalsRes.data || []).map((v: any) => {
         const photos: string[] = Array.isArray(v.images) && v.images.length > 0 ? v.images : (Array.isArray(v.photos) ? v.photos : []);

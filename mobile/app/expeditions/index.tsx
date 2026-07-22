@@ -24,10 +24,23 @@ const DIFFICULTY_FILTERS = [
   { label: 'Expert', value: 'expert' },
 ];
 
+type SortKey = 'recent' | 'budget_low' | 'budget_high';
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'recent', label: 'Recently Added' },
+  { key: 'budget_low', label: 'Budget: Low to High' },
+  { key: 'budget_high', label: 'Budget: High to Low' },
+];
+
+function minPackagePrice(expedition: any): number | null {
+  const prices = (expedition.packages || []).map((p: any) => p.price_per_person).filter((p: any) => typeof p === 'number');
+  return prices.length > 0 ? Math.min(...prices) : null;
+}
+
 export default function BrowseExpeditionsScreen() {
   const { expeditions, loading, error, fetchExpeditions, setFilters, filters } =
     useExpeditionStore();
   const [activeDifficulty, setActiveDifficulty] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>('recent');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -91,6 +104,27 @@ export default function BrowseExpeditionsScreen() {
           })}
         </ScrollView>
 
+        {/* Sort Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersScroll}
+          style={[styles.filtersContainer, { marginTop: -4 }]}
+        >
+          {SORTS.map((s) => {
+            const isActive = sort === s.key;
+            return (
+              <TouchableOpacity
+                key={s.key}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                onPress={() => setSort(s.key)}
+              >
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>{s.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         {/* Content */}
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
@@ -129,7 +163,11 @@ export default function BrowseExpeditionsScreen() {
               />
             ) : (
               <View style={styles.cardList}>
-                {expeditions.map((expedition) => (
+                {[...expeditions].sort((a, b) => {
+                  if (sort === 'budget_low') return (minPackagePrice(a) ?? Infinity) - (minPackagePrice(b) ?? Infinity);
+                  if (sort === 'budget_high') return (minPackagePrice(b) ?? -Infinity) - (minPackagePrice(a) ?? -Infinity);
+                  return b.created_at.localeCompare(a.created_at);
+                }).map((expedition) => (
                   <ExpeditionCard key={expedition.id} expedition={expedition} onPress={() => router.push(`/expeditions/${expedition.id}` as any)} />
                 ))}
               </View>

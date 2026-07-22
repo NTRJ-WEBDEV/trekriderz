@@ -10,7 +10,7 @@ import { haptic } from '@/lib/haptics';
 interface Props {
   visible: boolean;
   targetId: string;
-  targetType: 'guide' | 'homestay' | 'expedition';
+  targetType: 'guide' | 'homestay' | 'expedition' | 'vehicle';
   targetName: string;
   reviewerId: string;
   onClose: () => void;

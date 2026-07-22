@@ -24,6 +24,10 @@ import PackageTierCard from '@/components/PackageTierCard';
 import ItineraryTimeline from '@/components/ItineraryTimeline';
 import { ExpeditionPackage } from '@/lib/expeditions';
 import { AppColors } from '@/constants/theme';
+import TrustSignalBadges from '@/components/listing/TrustSignalBadges';
+import ReviewsSection from '@/components/listing/ReviewsSection';
+import NearbyExperiences from '@/components/listing/NearbyExperiences';
+import { fetchPublicTrustSignals, interpretPublicSignals, type PublicTrustSignal } from '@/lib/services/TrustEngineService';
 
 const { width } = Dimensions.get('window');
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80';
@@ -35,12 +39,23 @@ export default function ExpeditionDetailScreen() {
   const { user } = useAuthStore();
   const [selectedPackage, setSelectedPackage] = useState<ExpeditionPackage | null>(null);
   const [joining, setJoining] = useState(false);
+  const [trustSignals, setTrustSignals] = useState<PublicTrustSignal[]>([]);
 
   useEffect(() => {
     if (id) {
       fetchExpeditionById(id);
     }
   }, [id]);
+
+  // Trust comes from the guide running this expedition, not the
+  // expedition row itself — expeditions aren't their own ApprovalEntity
+  // (PARTNER_PLATFORM.md §7 covers guides/homestays/vehicles only).
+  useEffect(() => {
+    if (!expedition?.guide_id) return;
+    fetchPublicTrustSignals('guides', expedition.guide_id)
+      .then((f) => setTrustSignals(interpretPublicSignals(f)))
+      .catch(() => setTrustSignals([]));
+  }, [expedition?.guide_id]);
 
   useEffect(() => {
     if (expedition?.packages && expedition.packages.length > 0 && !selectedPackage) {
@@ -331,8 +346,25 @@ export default function ExpeditionDetailScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
               </TouchableOpacity>
+              {trustSignals.length > 0 && (
+                <View style={{ marginTop: 12 }}>
+                  <TrustSignalBadges signals={trustSignals} />
+                </View>
+              )}
             </View>
           )}
+
+          {/* Cancellation Policy */}
+          {expedition.cancellation_policy && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cancellation Policy</Text>
+              <Text style={styles.description}>{expedition.cancellation_policy}</Text>
+            </View>
+          )}
+
+          <ReviewsSection targetType="expedition" targetId={expedition.id} targetName={expedition.title} reviewerId={user?.id} />
+
+          <NearbyExperiences lat={expedition.lat} lng={expedition.lng} excludeType="expedition" excludeId={expedition.id} />
         </View>
       </ScrollView>
 

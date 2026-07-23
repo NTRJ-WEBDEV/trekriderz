@@ -9,6 +9,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { AppColors } from '@/constants/theme';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const GREEN = AppColors.primary;
 const BG = AppColors.background;
@@ -21,6 +22,16 @@ const TYPE_EMOJI: Record<string, string> = {
 
 export default function VehicleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Reachable directly via deep link/router.push by any signed-in user
+  // regardless of role — the nav entry point being staff-only isn't
+  // enough. Mirrors admin/index.tsx's guard.
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('rentals.approve')) {
+      router.replace('/(tabs)/explore');
+    }
+  }, [permissionsLoading, hasPermission]);
 
   const [vehicle, setVehicle] = useState<any>(null);
   const [loading, setLoading] = useState(true);

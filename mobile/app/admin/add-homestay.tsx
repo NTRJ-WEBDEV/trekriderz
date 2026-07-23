@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function AddHomestayScreen() {
   const { user } = useAuthStore();
+  // Reachable directly via deep link/router.push by any signed-in user
+  // regardless of role — the nav entry point being staff-only isn't
+  // enough. Mirrors admin/index.tsx's guard.
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
+  useEffect(() => {
+    if (!permissionsLoading && !hasPermission('homestays.approve')) {
+      router.replace('/(tabs)/explore');
+    }
+  }, [permissionsLoading, hasPermission]);
+
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({

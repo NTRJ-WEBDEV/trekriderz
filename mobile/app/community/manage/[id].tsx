@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, ActivityIndicator, Alert,
@@ -8,6 +8,7 @@ import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import { AppColors } from '@/constants/theme';
 
 const BG = AppColors.background;
@@ -26,6 +27,7 @@ interface MemberRow {
 export default function CommunityManageScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuthStore();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
 
   const [tab, setTab] = useState<ManageTab>('requests');
   const [community, setCommunity] = useState<any>(null);
@@ -34,6 +36,16 @@ export default function CommunityManageScreen() {
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(useCallback(() => { fetchData(); }, [id]));
+
+  // Client-side ownership check — RLS is the real backstop, but this
+  // screen had zero guard at all, letting any signed-in user approve/
+  // reject join requests for a community they don't own.
+  useEffect(() => {
+    if (!community || !user?.id || permissionsLoading) return;
+    if (community.created_by === user.id || hasPermission('communities.manage')) return;
+    Alert.alert('Not authorized', 'You do not manage this community.');
+    router.canGoBack() ? router.back() : router.replace('/(tabs)');
+  }, [community, user?.id, permissionsLoading, hasPermission]);
 
   const fetchData = async () => {
     setLoading(true);

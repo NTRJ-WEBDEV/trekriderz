@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   fetchExpeditionBookings,
   fetchExpeditionWaitlist,
@@ -24,6 +26,8 @@ type ActiveTab = 'participants' | 'waitlist';
 
 export default function ManageExpeditionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuthStore();
+  const { hasPermission, loading: permissionsLoading } = usePermissions();
 
   const [expedition, setExpedition] = useState<GuidedExpedition | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -34,6 +38,20 @@ export default function ManageExpeditionScreen() {
   useEffect(() => {
     if (id) loadData();
   }, [id]);
+
+  // Client-side ownership check — RLS is the real backstop, but this
+  // screen had zero guard at all, letting any signed-in user confirm
+  // bookings or cancel someone else's expedition just by navigating here.
+  useEffect(() => {
+    if (!expedition || !user?.id || permissionsLoading) return;
+    if (hasPermission('expeditions.manage')) return;
+    supabase.from('guides').select('id').eq('user_id', user.id).single().then(({ data }) => {
+      if (data?.id !== expedition.guide_id) {
+        Alert.alert('Not authorized', 'You do not manage this expedition.');
+        router.canGoBack() ? router.back() : router.replace('/(tabs)');
+      }
+    });
+  }, [expedition, user?.id, permissionsLoading, hasPermission]);
 
   const loadData = async () => {
     setLoading(true);

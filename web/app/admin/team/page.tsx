@@ -2,12 +2,11 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 
-const ROLES = ["super_admin", "moderator"];
-
 export default function TeamPage() {
   const supabase = createClient();
   const [members, setMembers] = useState<any[]>([]);
   const [invites, setInvites] = useState<any[]>([]);
+  const [roles, setRoles] = useState<{ id: string; key: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", role: "moderator", name: "" });
@@ -18,12 +17,16 @@ export default function TeamPage() {
 
   const load = async () => {
     setLoading(true);
-    const [m, i] = await Promise.all([
-      supabase.from("profiles").select("*").order("created_at"),
+    const [m, i, r] = await Promise.all([
+      // role_id, not the legacy `role` text column — profiles.role isn't
+      // read by middleware.ts/getAdminSession() anymore, only role_id is.
+      supabase.from("profiles").select("*, roles:role_id(id,key,name)").order("created_at"),
       supabase.from("admin_invites").select("*").order("created_at", { ascending: false }),
+      supabase.from("roles").select("id,key,name").order("name"),
     ]);
     setMembers(m.data || []);
     setInvites(i.data?.filter(inv => !inv.accepted_at) || []);
+    setRoles(r.data || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -45,8 +48,8 @@ export default function TeamPage() {
     load();
   };
 
-  const changeRole = async (id: string, role: string) => {
-    await supabase.from("profiles").update({ role }).eq("id", id);
+  const changeRole = async (id: string, roleId: string) => {
+    await supabase.from("profiles").update({ role_id: roleId || null }).eq("id", id);
     load();
     showToast("Role updated!");
   };
@@ -135,10 +138,12 @@ export default function TeamPage() {
               <div className="text-center py-8 text-white/30">No members yet</div>
             ) : (
               <div className="space-y-3">
-                {members.map(m => (
+                {members.map(m => {
+                  const isSuperAdmin = m.roles?.key === "super_admin";
+                  return (
                   <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "rgba(255,255,255,0.03)" }}>
                     <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                      style={{ background: m.role === "super_admin" ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.08)", color: m.role === "super_admin" ? "#F97316" : "#fff" }}>
+                      style={{ background: isSuperAdmin ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.08)", color: isSuperAdmin ? "#F97316" : "#fff" }}>
                       {(m.name || m.email || "?")[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -146,17 +151,19 @@ export default function TeamPage() {
                       <div className="text-white/40 text-xs truncate">{m.email}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <select value={m.role} onChange={e => changeRole(m.id, e.target.value)}
+                      <select value={m.role_id || ""} onChange={e => changeRole(m.id, e.target.value)}
                         className="text-xs px-2 py-1 rounded-lg outline-none"
-                        style={{ background: "rgba(255,255,255,0.08)", color: m.role === "super_admin" ? "#F97316" : "rgba(255,255,255,0.6)", border: "none" }}>
-                        {ROLES.map(r => <option key={r} value={r} style={{ background: "#0A0E27" }}>{r === "super_admin" ? "Super Admin" : "Moderator"}</option>)}
+                        style={{ background: "rgba(255,255,255,0.08)", color: isSuperAdmin ? "#F97316" : "rgba(255,255,255,0.6)", border: "none" }}>
+                        <option value="" style={{ background: "#0A0E27" }}>No access</option>
+                        {roles.map(r => <option key={r.id} value={r.id} style={{ background: "#0A0E27" }}>{r.name}</option>)}
                       </select>
                       <button onClick={() => setDeleteId(m.id)} className="text-xs px-2 py-1 rounded-lg" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>
                         Remove
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

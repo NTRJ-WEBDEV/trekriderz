@@ -91,12 +91,9 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Discover — now embedded directly in Home; route stays reachable via deep link */}
-        <Tabs.Screen name="discover" options={{ href: null }} />
-
         {/* Connect — trips, travel partners, rides, organizers, groups */}
         <Tabs.Screen
-          name="community"
+          name="connect"
           options={{
             title: 'Connect',
             tabBarIcon: ({ color, size }) => (

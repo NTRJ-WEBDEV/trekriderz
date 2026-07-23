@@ -20,7 +20,9 @@ export default function AddHomestayScreen() {
 
   const [form, setForm] = useState({
     name: '',
-    location: '',
+    address: '',
+    city: '',
+    state: '',
     description: '',
     price_per_night: '',
     capacity: '',
@@ -30,7 +32,7 @@ export default function AddHomestayScreen() {
   });
 
   const handleAddHomestay = async () => {
-    if (!form.name || !form.location || !form.price_per_night) {
+    if (!form.name || !form.address || !form.city || !form.state || !form.price_per_night) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -40,22 +42,37 @@ export default function AddHomestayScreen() {
     try {
       const amenitiesArray = form.amenities.split(',').map((s) => s.trim()).filter(Boolean);
 
-      const { error } = await supabase.from('homestays').insert({
-        owner_id: user?.id,
-        name: form.name,
-        location: form.location,
-        description: form.description,
-        price_per_night: parseInt(form.price_per_night),
-        capacity: parseInt(form.capacity) || 2,
-        rooms: parseInt(form.rooms) || 1,
-        contact_phone: form.contact_phone,
-        amenities: amenitiesArray,
-        status: 'approved',
-        is_active: true,
-        rating: 5.0,
-      });
+      const { data: property, error } = await supabase
+        .from('properties')
+        .insert({
+          owner_id: user?.id,
+          name: form.name,
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          description: form.description,
+          contact_phone: form.contact_phone,
+          amenities: amenitiesArray,
+          status: 'approved',
+          approved_by: user?.id,
+          approved_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
+
+      const { error: roomTypeError } = await supabase.from('room_types').insert({
+        property_id: property.id,
+        name: 'Standard Room',
+        room_category: 'private_room',
+        base_price: parseInt(form.price_per_night),
+        max_occupancy: parseInt(form.capacity) || 2,
+        total_units: parseInt(form.rooms) || 1,
+        amenities: amenitiesArray,
+      });
+
+      if (roomTypeError) throw roomTypeError;
 
       Alert.alert('Success', 'Homestay added successfully!', [
         { text: 'OK', onPress: () => (router.canGoBack() ? router.back() : router.replace('/(tabs)')) },
@@ -87,14 +104,37 @@ export default function AddHomestayScreen() {
           onChangeText={(t) => setForm({ ...form, name: t })}
         />
 
-        <Text style={styles.label}>Location *</Text>
+        <Text style={styles.label}>Address *</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Manali, HP"
+          placeholder="e.g. Old Manali Road, near river"
           placeholderTextColor="#6B7280"
-          value={form.location}
-          onChangeText={(t) => setForm({ ...form, location: t })}
+          value={form.address}
+          onChangeText={(t) => setForm({ ...form, address: t })}
         />
+
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Text style={styles.label}>City *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Manali"
+              placeholderTextColor="#6B7280"
+              value={form.city}
+              onChangeText={(t) => setForm({ ...form, city: t })}
+            />
+          </View>
+          <View style={styles.half}>
+            <Text style={styles.label}>State *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Himachal Pradesh"
+              placeholderTextColor="#6B7280"
+              value={form.state}
+              onChangeText={(t) => setForm({ ...form, state: t })}
+            />
+          </View>
+        </View>
 
         <Text style={styles.label}>Price per Night (₹) *</Text>
         <TextInput

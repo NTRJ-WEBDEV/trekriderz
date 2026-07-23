@@ -64,24 +64,26 @@ export default function ExploreMapScreen() {
     // Homestays (have lat/lng in DB)
     try {
       const { data: homestays } = await supabase
-        .from('homestays')
-        .select('id, name, location, lat, lng, category, price_per_night, rating')
+        .from('properties')
+        .select('id, name, city, state, lat, lng, property_type, room_types(base_price)')
         .eq('status', 'approved')
         .not('lat', 'is', null)
         .limit(50);
 
       for (const h of homestays || []) {
         if (!h.lat || !h.lng) continue;
+        const basePrices = (h.room_types || []).map((r: any) => r.base_price).filter((v: any) => typeof v === 'number');
+        const pricePerNight = basePrices.length > 0 ? Math.min(...basePrices) : undefined;
+        const category = h.property_type?.[0];
         markers.push({
           id: h.id,
           kind: 'homestay',
           name: h.name,
           lat: h.lat,
           lng: h.lng,
-          sublabel: h.location || h.category,
-          price: h.price_per_night ? `₹${h.price_per_night}/night` : undefined,
-          rating: h.rating,
-          extra: { category: h.category, price_per_night: h.price_per_night },
+          sublabel: [h.city, h.state].filter(Boolean).join(', ') || category,
+          price: pricePerNight ? `₹${pricePerNight}/night` : undefined,
+          extra: { category, price_per_night: pricePerNight },
         });
       }
     } catch (_) {}

@@ -463,18 +463,21 @@ export async function getChampionsPreview(
 }
 
 // Real booking-type breakdown from the existing generic `bookings` table
-// (resource_type: 'homestay' | 'guide' | 'gear') plus a real pending-
-// payments sum. Revenue/commission are NOT computed — Razorpay is in
-// offline/mock mode (see CLAUDE.md), so those stay `tracked: false`
-// rather than showing a number backed by fake payment data.
+// (resource_type: 'guide' | 'gear') plus a real pending-payments sum.
+// Homestays moved off `bookings` entirely to the properties/room_types
+// system's `property_inquiries` table (WhatsApp-inquiry flow, no direct
+// booking) — counting `resource_type = 'homestay'` here would only ever
+// show stale pre-migration rows. Revenue/commission are NOT computed —
+// Razorpay is in offline/mock mode (see CLAUDE.md), so those stay
+// `tracked: false` rather than showing a number backed by fake payment data.
 export async function getBusinessKpis(hasPermission: (key: string) => boolean): Promise<KPI[]> {
   if (!hasPermission('bookings.view')) return [];
   const supabase = await createSupabaseServer();
 
-  const [tripBookings, rentalBookings, homestayBookings, pendingPaymentRows, appUsers] = await Promise.all([
+  const [tripBookings, rentalBookings, propertyInquiries, pendingPaymentRows, appUsers] = await Promise.all([
     headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'guide')),
     headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'gear')),
-    headCount(supabase, 'bookings', (q) => q.eq('resource_type', 'homestay')),
+    headCount(supabase, 'property_inquiries', (q) => q),
     supabase.from('bookings').select('total_price').eq('payment_status', 'unpaid'),
     hasPermission('users.view') ? headCount(supabase, 'users', (q) => q) : Promise.resolve(0),
   ]);
@@ -484,7 +487,7 @@ export async function getBusinessKpis(hasPermission: (key: string) => boolean): 
   const kpis: KPI[] = [
     { key: 'trip_bookings', label: 'Trip Bookings', value: tripBookings, delta: null, href: '/admin/trips' },
     { key: 'rental_bookings', label: 'Rental Bookings', value: rentalBookings, delta: null, href: '/admin/rentals' },
-    { key: 'homestay_bookings', label: 'Homestay Bookings', value: homestayBookings, delta: null, href: '/admin/homestays' },
+    { key: 'property_inquiries', label: 'Property Inquiries', value: propertyInquiries, delta: null, href: '/admin/homestays' },
     { key: 'pending_payments', label: 'Pending Payments (Rs.)', value: Math.round(pendingTotal), delta: null, href: '/admin/trips' },
     { key: 'revenue', label: 'Revenue', value: 0, delta: null, tracked: false },
     { key: 'commission', label: 'Commission', value: 0, delta: null, tracked: false },

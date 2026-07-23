@@ -99,10 +99,10 @@ export default function AIPlannerScreen() {
         .eq('status', 'approved')
         .limit(10),
       supabase
-        .from('homestays')
-        .select('id, name, location, price_per_night, amenities, photos')
+        .from('properties')
+        .select('id, name, city, state, location_name, amenities, photos, room_types(base_price)')
         .eq('status', 'approved')
-        .ilike('location', `%${dest}%`)
+        .or(`city.ilike.%${dest}%,state.ilike.%${dest}%,location_name.ilike.%${dest}%`)
         .limit(8),
       supabase
         .from('guided_expeditions')
@@ -118,9 +118,21 @@ export default function AIPlannerScreen() {
       return regions.includes(dest) || dest.length < 4;
     });
 
+    const homestays = (homestaysRes.data || []).map((p: any) => {
+      const basePrices = (p.room_types || []).map((r: any) => r.base_price).filter((v: any) => typeof v === 'number');
+      return {
+        id: p.id,
+        name: p.name,
+        location: [p.city, p.state].filter(Boolean).join(', ') || p.location_name,
+        price_per_night: basePrices.length > 0 ? Math.min(...basePrices) : undefined,
+        amenities: p.amenities,
+        photos: p.photos,
+      };
+    });
+
     return {
       guides: guides.length > 0 ? guides : (guidesRes.data || []).slice(0, 6),
-      homestays: homestaysRes.data || [],
+      homestays,
       packages: packagesRes.data || [],
     };
   };

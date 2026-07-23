@@ -82,6 +82,7 @@ ALTER TABLE public.partner_audit_records ENABLE ROW LEVEL SECURITY;
 -- no partner-facing policy this milestone (not asked for, and the
 -- Partner Dashboard's audit view per PARTNER_PLATFORM.md §11 is a
 -- separate, later Partner Portal milestone, not this one).
+DROP POLICY IF EXISTS "Audit schedule: staff manage" ON public.partner_audit_schedule;
 CREATE POLICY "Audit schedule: staff manage" ON public.partner_audit_schedule FOR ALL TO authenticated
   USING (
     (entity_type = 'guides' AND public.has_permission('guides.approve'))
@@ -89,6 +90,7 @@ CREATE POLICY "Audit schedule: staff manage" ON public.partner_audit_schedule FO
     OR (entity_type = 'vehicles' AND public.has_permission('rentals.approve'))
   );
 
+DROP POLICY IF EXISTS "Audit records: staff manage" ON public.partner_audit_records;
 CREATE POLICY "Audit records: staff manage" ON public.partner_audit_records FOR ALL TO authenticated
   USING (
     (entity_type = 'guides' AND public.has_permission('guides.approve'))
